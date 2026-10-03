@@ -3840,6 +3840,56 @@
           }
         }
       }
+    },
+    "The catalog contains unsupported fields. Its original data was preserved.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "项目目录包含不支持的字段，原始数据已保留。"
+          }
+        }
+      }
+    },
+    "The catalog contains conflicting or invalid projects. Its original data was preserved.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "项目目录包含冲突或无效的项目，原始数据已保留。"
+          }
+        }
+      }
+    },
+    "The catalog could not be read. Recover the original file before saving changes.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法读取项目目录。请先恢复原始文件，再保存更改。"
+          }
+        }
+      }
+    },
+    "The catalog changed outside this window. Changes are temporary; reopen MoeKit to reload the saved catalog.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "项目目录已在此窗口之外更改。当前更改仅临时保留；请重新打开 MoeKit 以重新载入已保存的目录。"
+          }
+        }
+      }
+    },
+    "The project catalog exceeds the 16 MB limit. Changes were not saved.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "项目目录超过 16 MB 限制，更改未保存。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

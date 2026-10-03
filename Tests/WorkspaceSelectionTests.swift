@@ -192,4 +192,22 @@ struct WorkspaceSelectionTests {
         store.processes.plan = nil
         #expect(store.canSearchWorkspace)
     }
+
+    @Test("Adding a project outside the current filter does not resurrect its selection")
+    func filteredAddProject() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("MoeKit-filtered-add-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = WorkspaceStore(isDemoEnabled: false, persistence: CatalogPersistence(directory: root.appendingPathComponent("catalog")))
+        store.projectSearch = "unmatched-project-name"
+        store.startDiscovery(root: root, scanChildren: false)
+        let deadline = Date.now.addingTimeInterval(10)
+        while store.isScanning && Date.now < deadline { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(!store.isScanning)
+        #expect(store.projects.count == 1)
+        #expect(store.selectedProjectID == nil)
+        store.clearProjectFilters()
+        #expect(store.selectedProjectID == nil)
+        #expect(store.selectedProject == nil)
+    }
 }

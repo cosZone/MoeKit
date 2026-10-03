@@ -250,6 +250,7 @@ final class WorkspaceStore {
                 if let parentID = record.parentID { expandedProjectIDs.insert(parentID) }
             }
         }
+        reconcileProjectSelection()
         saveCatalog()
     }
     func togglePin(_ id: UUID) {

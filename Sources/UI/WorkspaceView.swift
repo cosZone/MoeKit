@@ -31,6 +31,7 @@ struct WorkspaceView: View {
                 case .tasks: TasksView()
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .navigationTitle(store.section == .tools ? (store.registry.descriptor(id: store.selectedToolID)?.title ?? store.section.title) : store.section.title)
             .toolbar {
                 ToolbarItem(placement: .automatic) {

@@ -2940,6 +2940,586 @@
           }
         }
       }
+    },
+    "%@ (%lld)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@（%lld）"
+          }
+        }
+      }
+    },
+    "%lld exact targets · %lld protected": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 个精确目标 · %lld 个受保护"
+          }
+        }
+      }
+    },
+    "%lld project folders could not be resolved. Associations may be missing.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 个项目文件夹未能解析，可能缺少相关关联。"
+          }
+        }
+      }
+    },
+    "All processes": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全部进程"
+          }
+        }
+      }
+    },
+    "Clear filters": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清除筛选"
+          }
+        }
+      }
+    },
+    "Matched project folder": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "匹配的项目文件夹"
+          }
+        }
+      }
+    },
+    "Multiple catalog projects resolve to the same matching folder. No project was chosen.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "多个已收录项目指向同一个匹配目录，因此未选择任何项目。"
+          }
+        }
+      }
+    },
+    "No TCP listeners match these filters. Unknown port readings and unreadable processes may still hide listeners.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有匹配筛选条件的 TCP 监听进程。端口未知或无法读取的进程仍可能有监听端口。"
+          }
+        }
+      }
+    },
+    "No processes observed": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未观测到进程"
+          }
+        }
+      }
+    },
+    "No readable project folders were available for this scan. Add a project, then refresh to compare its folder.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本次扫描没有可读取的项目文件夹。添加项目后刷新，即可比较其目录。"
+          }
+        }
+      }
+    },
+    "No unknown port readings match these filters. A partial snapshot may still omit unreadable processes.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有匹配筛选条件的端口未知记录。部分快照仍可能遗漏无法读取的进程。"
+          }
+        }
+      }
+    },
+    "Port coverage": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "端口读取情况"
+          }
+        }
+      }
+    },
+    "Protected rows remain in this inspection so you can understand why they need individual review. Selecting a row does not authorize stopping it.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "受保护的记录会保留在检查中，以便了解需要单独审查的原因。选中记录不代表授权停止该进程。"
+          }
+        }
+      }
+    },
+    "Reading current-user metadata. You can cancel the scan at any time.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在读取当前用户的进程信息，随时可以取消扫描。"
+          }
+        }
+      }
+    },
+    "Reading process snapshot…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在读取进程快照…"
+          }
+        }
+      }
+    },
+    "Refresh cancelled. Showing the previous snapshot; these rows were not refreshed.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刷新已取消。当前显示上一次快照，这些记录尚未刷新。"
+          }
+        }
+      }
+    },
+    "Refresh failed. Showing the previous snapshot; these rows were not refreshed.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刷新失败。当前显示上一次快照，这些记录尚未刷新。"
+          }
+        }
+      }
+    },
+    "Refreshing. The previous snapshot remains visible until the scan finishes.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在刷新。扫描完成前继续显示上一次快照。"
+          }
+        }
+      }
+    },
+    "Scan cancelled": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "扫描已取消"
+          }
+        }
+      }
+    },
+    "Snapshot unavailable": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "快照不可用"
+          }
+        }
+      }
+    },
+    "TCP listeners": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "TCP 监听进程"
+          }
+        }
+      }
+    },
+    "The observed working directory is outside the project folders resolved for this snapshot.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "观测到的工作目录不在本次快照已解析的项目文件夹内。"
+          }
+        }
+      }
+    },
+    "The scan did not produce a snapshot. Start a new scan to retry; no processes were changed.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本次扫描未能生成快照，可重新扫描以重试；没有更改任何进程。"
+          }
+        }
+      }
+    },
+    "The scan was cancelled. No processes were changed. Start a new scan when you’re ready.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "扫描已取消，没有更改任何进程。准备好后可重新开始扫描。"
+          }
+        }
+      }
+    },
+    "Unknown ports": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "端口未知"
+          }
+        }
+      }
+    },
+    "Working directory is unavailable or unresolved. Names, ports and parent processes do not establish a project association.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工作目录不可用或未能解析。名称、端口和父进程不能作为项目关联依据。"
+          }
+        }
+      }
+    },
+    "This is not a verified linked worktree. Repository and folder removal is protected.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此目录尚未验证为关联 worktree。仓库和文件夹受到保护，不能移除。"
+          }
+        }
+      }
+    },
+    "Git marks this worktree as locked. Preserve it until the lock is reviewed.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Git 将此 worktree 标记为已锁定。请先检查锁定原因，并保留此目录。"
+          }
+        }
+      }
+    },
+    "The Git relationship is unknown or unreadable.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Git 关联关系未知或无法读取。"
+          }
+        }
+      }
+    },
+    "Uncommitted changes and untracked files have not been checked.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚未检查未提交的改动和未跟踪文件。"
+          }
+        }
+      }
+    },
+    "Unpushed commits, upstream tracking and remote reachability have not been checked.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚未检查未推送提交、上游跟踪关系和远程可达性。"
+          }
+        }
+      }
+    },
+    "Active use and ownership have not been verified. A process snapshot cannot prove a directory is unused.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚未验证使用状态和归属。进程快照无法证明某个目录已不再使用。"
+          }
+        }
+      }
+    },
+    "Discovery is a snapshot. All safety checks would need to be repeated before any future cleanup.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发现结果只是快照。未来执行任何清理前，都必须重新完成全部安全检查。"
+          }
+        }
+      }
+    },
+    "Discover repositories in up to 32 selected folders, up to 4 levels each. One shared budget applies. Dependencies and symbolic links are skipped.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在最多 32 个所选文件夹内发现仓库，每处最多搜索 4 层，所有位置共用扫描限额。跳过依赖目录和符号链接。"
+          }
+        }
+      }
+    },
+    "%lld projects found. Existing paths update metadata without changing pins or history.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发现 %lld 个项目。已有路径仅更新元数据，保留置顶状态和历史。"
+          }
+        }
+      }
+    },
+    "Filter by name, path or branch": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按名称、路径或分支筛选"
+          }
+        }
+      }
+    },
+    "Select visible": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择可见项目"
+          }
+        }
+      }
+    },
+    "Clear selection": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清空选择"
+          }
+        }
+      }
+    },
+    "%lld selected · %lld visible": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已选 %lld 项 · 可见 %lld 项"
+          }
+        }
+      }
+    },
+    "Update existing": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更新已有项目"
+          }
+        }
+      }
+    },
+    "Unknown branch": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分支未知"
+          }
+        }
+      }
+    },
+    "No repositories found": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未发现仓库"
+          }
+        }
+      }
+    },
+    "Add or update selected": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加或更新所选"
+          }
+        }
+      }
+    },
+    "%lld directories inspected · %lld/%lld folders finished": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已检查 %lld 个目录 · 完成 %lld/%lld 个文件夹"
+          }
+        }
+      }
+    },
+    "Preparing discovery…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在准备发现…"
+          }
+        }
+      }
+    },
+    "Git worktree lock observed": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "扫描时发现 Git worktree 锁定标记"
+          }
+        }
+      }
+    },
+    "Cleanup safety": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清理安全复查"
+          }
+        }
+      }
+    },
+    "Verified worktree relationship": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已验证 worktree 关联关系"
+          }
+        }
+      }
+    },
+    "Locked when scanned": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "扫描时已锁定"
+          }
+        }
+      }
+    },
+    "No lock observed": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "扫描时未发现锁定"
+          }
+        }
+      }
+    },
+    "Shared Git metadata directory": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "共享 Git 元数据目录"
+          }
+        }
+      }
+    },
+    "Cleanup safety review": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清理安全复查"
+          }
+        }
+      }
+    },
+    "Protected · not eligible for cleanup": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已保护 · 不符合清理条件"
+          }
+        }
+      }
+    },
+    "Review only. No deletion is available and no reclaimable space has been measured.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅供复查。不提供删除操作，也未测量可回收空间。"
+          }
+        }
+      }
+    },
+    "Sort": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "排序"
+          }
+        }
+      }
+    },
+    "Lock": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "锁定"
+          }
+        }
+      }
+    },
+    "Observed": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "观察时间"
+          }
+        }
+      }
+    },
+    "Done": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完成"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

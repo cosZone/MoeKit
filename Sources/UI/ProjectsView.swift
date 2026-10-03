@@ -2,7 +2,6 @@ import SwiftUI
 
 struct ProjectsView: View {
     @Environment(WorkspaceStore.self) private var store
-    @State private var cleanupProject: ProjectRecord?
     @State private var sortOrder = [KeyPathComparator(\ProjectRecord.sortDate, order: .reverse)]
 
     var body: some View {
@@ -89,7 +88,9 @@ struct ProjectsView: View {
         .onChange(of: rows.map(\.id)) { _, visibleIDs in
             if let selected = store.selectedProjectID, !visibleIDs.contains(selected) { store.selectedProjectID = nil }
         }
-        .sheet(item: $cleanupProject) { ProjectCleanupReview(project: $0) }
+        .sheet(item: Binding(get: { store.cleanupReviewProject }, set: { store.cleanupReviewProjectID = $0?.id })) { project in
+            if !store.isDemoEnabled { ProjectCleanupReview(project: project) }
+        }
         .inspector(isPresented: $store.isInspectorPresented) { ProjectInspector().inspectorColumnWidth(min: 260, ideal: 280, max: 340) }
     }
 
@@ -111,7 +112,7 @@ struct ProjectsView: View {
             }
             .disabled(store.isDemoEnabled || store.selectedProject == nil || store.selectedProject?.kind == .group)
             Button("Cleanup safety", systemImage: "shield.lefthalf.filled") {
-                cleanupProject = store.selectedProject
+                store.presentCleanupReview()
             }.disabled(store.isDemoEnabled || store.selectedProject == nil || store.selectedProject?.kind == .group)
             Button("Open tools", systemImage: "briefcase") {
                 store.selectedToolID = MoleModule.id

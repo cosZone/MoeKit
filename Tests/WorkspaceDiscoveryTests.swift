@@ -74,4 +74,24 @@ struct WorkspaceDiscoveryTests {
         store.projectSearch = "work"
         #expect(store.projectRows(sortedBy: [KeyPathComparator(\ProjectRecord.name)]).map(\.id) == [parent.id, child.id])
     }
+
+    @Test("A real cleanup review is cleared across Demo changes")
+    func cleanupReviewModeBoundary() {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let store = WorkspaceStore(isDemoEnabled: false, persistence: CatalogPersistence(directory: root))
+        let project = ProjectRecord(name: "work", path: "/fixture/private-work", kind: .worktree)
+        store.projects = [project]
+        store.selectedProjectID = project.id
+        store.presentCleanupReview()
+        #expect(store.cleanupReviewProject?.id == project.id)
+        store.isDemoEnabled = true
+        #expect(store.cleanupReviewProject == nil)
+        #expect(store.cleanupReviewProjectID == nil)
+        store.presentCleanupReview()
+        #expect(store.cleanupReviewProject == nil)
+        store.isDemoEnabled = false
+        #expect(store.cleanupReviewProject == nil)
+        #expect(store.cleanupReviewProjectID == nil)
+    }
+
 }

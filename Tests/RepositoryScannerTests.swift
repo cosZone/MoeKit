@@ -613,6 +613,22 @@ struct RepositoryScannerTests {
         #expect(together.issues.isEmpty)
     }
 
+    @Test("Absolute gitfile and backlink pointers work across selected roots with spaces")
+    func absoluteCrossRootPointers() async throws {
+        let fixture = try ScannerFixture()
+        defer { fixture.remove() }
+        let main = try fixture.repository("main repository")
+        let work = try fixture.linkedWorktree("working copy", main: "main repository")
+        try fixture.write("working copy/.git", text: "gitdir: " + main.appendingPathComponent(".git/worktrees/working copy").path + "\n")
+        try fixture.write("main repository/.git/worktrees/working copy/HEAD", text: "ref: refs/heads/topic\n")
+        let result = try await RepositoryScanner().scan(roots: [main, work])
+        let linked = try #require(result.items.first { $0.url == work })
+        #expect(linked.branch == "topic")
+        #expect(linked.metadata?.isLinkedWorktree == true)
+        #expect(linked.metadata?.commonDirectoryPath == main.appendingPathComponent(".git").path)
+        #expect(result.issues.isEmpty)
+    }
+
     @Test("A submodule-style gitfile does not imply a worktree relationship")
     func gitfileIsNotWorktree() async throws {
         let fixture = try ScannerFixture()

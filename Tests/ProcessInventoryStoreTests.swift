@@ -126,6 +126,191 @@ struct ProcessInventoryStoreTests {
         #expect(store.snapshot?.issues == snapshot.issues)
     }
 
+    @Test("Port filters constrain selected identities and invalidate an open preview")
+    func portFilterSelection() async throws {
+        let provider = ControlledProcessProvider()
+        let store = ProcessInventoryStore(provider: provider, minimumRefreshInterval: 0)
+        let snapshot = Self.portSnapshot()
+        store.startScan(projects: [])
+        await provider.waitUntilStarted()
+        await provider.complete(snapshot)
+        try await settle { !store.isScanning }
+        store.selection = Set(snapshot.records.map(\.identity))
+        store.reviewSelection()
+        #expect(store.plan?.targets.count == 3)
+        store.portFilter = .listening
+        #expect(store.rows.map(\.name) == ["listener"])
+        #expect(store.selection == [snapshot.records[0].identity])
+        #expect(store.plan == nil)
+        #expect(store.count(for: .all) == 3)
+        #expect(store.count(for: .listening) == 1)
+        #expect(store.count(for: .unknown) == 1)
+        store.reviewSelection()
+        store.portFilter = .all
+        #expect(store.plan == nil)
+        #expect(store.selection == [snapshot.records[0].identity])
+        store.portFilter = .unknown
+        #expect(store.rows.map(\.name) == ["unknown"])
+        #expect(store.selection.isEmpty)
+        store.clearFilters()
+        #expect(store.rows.count == 3)
+        #expect(!store.hasActiveFilters)
+    }
+
+    @Test("Search includes local addresses and transport without reading command arguments")
+    func portSearch() async throws {
+        let provider = ControlledProcessProvider()
+        let store = ProcessInventoryStore(provider: provider, minimumRefreshInterval: 0)
+        store.startScan(projects: [])
+        await provider.waitUntilStarted()
+        await provider.complete(Self.portSnapshot())
+        try await settle { !store.isScanning }
+        for query in ["::1", "TCP 3000", "listener ::1 3000"] {
+            store.search = query
+            #expect(store.rows.map(\.name) == ["listener"])
+            #expect(store.count(for: .all) == 1)
+            #expect(store.count(for: .unknown) == 0)
+        }
+        store.search = "3001"
+        #expect(store.rows.isEmpty)
+    }
+
+    @Test("Cancelled refresh retains the previous snapshot with an explicit notice")
+    func cancelledRefresh() async throws {
+        let provider = ControlledProcessProvider()
+        let store = ProcessInventoryStore(provider: provider, minimumRefreshInterval: 0)
+        let previous = Self.snapshot()
+        store.startScan(projects: [])
+        await provider.waitUntilStarted()
+        await provider.complete(previous)
+        try await settle { !store.isScanning }
+        #expect(store.retainedSnapshotNotice == nil)
+        store.startScan(projects: [])
+        await provider.waitUntilStarted()
+        #expect(store.retainedSnapshotNotice != nil)
+        store.cancel()
+        #expect(store.lastScanStatus == .cancelled)
+        #expect(store.snapshot?.id == previous.id)
+        #expect(store.retainedSnapshotNotice == String(localized: "Refresh cancelled. Showing the previous snapshot; these rows were not refreshed."))
+        await provider.complete(Self.portSnapshot())
+        for _ in 0..<50 { await Task.yield() }
+        #expect(store.snapshot?.id == previous.id)
+        #expect(store.lastScanStatus == .cancelled)
+    }
+
+    @Test("Failed refresh exposes retained data and a successful retry replaces it")
+    func failedRefreshThenRetry() async throws {
+        let provider = ControlledProcessProvider()
+        let store = ProcessInventoryStore(provider: provider, minimumRefreshInterval: 0)
+        let previous = Self.snapshot()
+        store.startScan(projects: [])
+        await provider.waitUntilStarted()
+        await provider.complete(previous)
+        try await settle { !store.isScanning }
+        store.startScan(projects: [])
+        await provider.waitUntilStarted()
+        await provider.fail()
+        try await settle { !store.isScanning }
+        #expect(store.lastScanStatus == .failed)
+        #expect(store.snapshot?.id == previous.id)
+        #expect(store.errorMessage != nil)
+        #expect(store.retainedSnapshotNotice == String(localized: "Refresh failed. Showing the previous snapshot; these rows were not refreshed."))
+        let replacement = Self.portSnapshot()
+        store.startScan(projects: [])
+        await provider.waitUntilStarted()
+        await provider.complete(replacement)
+        try await settle { !store.isScanning }
+        #expect(store.snapshot?.id == replacement.id)
+        #expect(store.lastScanStatus == .completed)
+        #expect(store.errorMessage == nil)
+        #expect(store.retainedSnapshotNotice == nil)
+    }
+
+    @Test("A cancelled first scan cannot turn a late provider error into failure")
+    func cancelledFirstScanIgnoresLateError() async throws {
+        let provider = ControlledProcessProvider()
+        let store = ProcessInventoryStore(provider: provider, minimumRefreshInterval: 0)
+        store.startScan(projects: [])
+        await provider.waitUntilStarted()
+        store.cancel()
+        await provider.fail()
+        for _ in 0..<50 { await Task.yield() }
+        #expect(store.snapshot == nil)
+        #expect(store.lastScanStatus == .cancelled)
+        #expect(store.retainedSnapshotNotice == nil)
+        #expect(store.errorMessage == nil)
+        store.portFilter = .unknown
+        store.resetForModeChange()
+        #expect(store.lastScanStatus == nil)
+        #expect(store.portFilter == .all)
+        #expect(store.unavailableProjectCount == 0)
+    }
+
+    @Test("Project navigation clears a prior port filter without starting a scan")
+    func projectNavigationClearsPortFilter() async {
+        let provider = ControlledProcessProvider()
+        let store = ProcessInventoryStore(provider: provider)
+        store.portFilter = .unknown
+        store.search = "hidden"
+        let project = ProjectRecord(name: "Fixture", path: "/fixture", kind: .folder)
+        store.openProject(project, projects: [])
+        #expect(store.portFilter == .all)
+        #expect(store.search.isEmpty)
+        #expect(store.projectFilterID == project.id)
+        #expect(await provider.scanCount == 0)
+    }
+
+    @Test("Unavailable project roots remain visible without converting a valid process snapshot to empty")
+    func unavailableProjectRoots() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let catalog = [
+            ProjectRecord(name: "Readable", path: root.path, kind: .folder),
+            ProjectRecord(name: "Missing", path: root.appendingPathComponent("missing").path, kind: .folder),
+            ProjectRecord(name: "Root", path: "/", kind: .folder),
+            ProjectRecord(name: "Group", path: "", kind: .group)
+        ]
+        let provider = ControlledProcessProvider()
+        let store = ProcessInventoryStore(provider: provider, minimumRefreshInterval: 0)
+        store.startScan(projects: catalog)
+        await provider.waitUntilStarted()
+        await provider.complete(Self.snapshot())
+        try await settle { !store.isScanning }
+        #expect(store.projects.map(\.id) == [catalog[0].id])
+        #expect(store.unavailableProjectCount == 2)
+        #expect(store.rows.count == 2)
+        #expect(store.lastScanStatus == .completed)
+    }
+
+    @Test("macOS temporary aliases use the same physical root as native working directories")
+    func physicalProjectRoot() async throws {
+        // macOS /tmp is an alias of /private/tmp. Use a unique fixture only.
+        let name = "moekit-process-" + UUID().uuidString
+        let alias = URL(fileURLWithPath: "/tmp").appendingPathComponent(name, isDirectory: true)
+        try FileManager.default.createDirectory(at: alias, withIntermediateDirectories: false)
+        defer { try? FileManager.default.removeItem(at: alias) }
+        let project = ProjectRecord(name: "Aliased fixture", path: alias.path, kind: .folder)
+        let resolution = try await ProcessProjectResolver().resolve([project])
+        let scope = try #require(resolution.scopes.first)
+        #expect(scope.canonicalPath == "/private/tmp/" + name)
+        #expect(resolution.unavailableCount == 0)
+        let row = ProcessInventoryRecord(identity: Self.snapshot().records[0].identity,
+            name: "fixture", parentPID: 10, processGroupID: 100,
+            workingDirectory: "/private/tmp/" + name + "/src", listeningPorts: [])
+        #expect(ProcessClassifier.association(for: row, projects: resolution.scopes).projectID == project.id)
+    }
+
+    private static func portSnapshot() -> ProcessSnapshot {
+        let ports: [[ListeningPort]?] = [[ListeningPort(port: 3_000, address: "::1", transport: "TCP")], [], nil]
+        let records = ["listener", "empty", "unknown"].enumerated().map { index, name in
+            ProcessInventoryRecord(identity: ProcessIdentity(pid: Int32(200 + index), startSeconds: 1_700_000_000,
+                startMicroseconds: 1, uid: 501, executablePath: "/fixture/\(name)"), name: name,
+                parentPID: 10, processGroupID: Int32(200 + index), workingDirectory: nil, listeningPorts: ports[index])
+        }
+        return ProcessSnapshot(records: records, currentUID: 501, observerPID: 999)
+    }
+
     private static func snapshot() -> ProcessSnapshot {
         let records = ["first", "second"].enumerated().map { index, name in
             ProcessInventoryRecord(identity: ProcessIdentity(pid: Int32(100 + index), startSeconds: 1_700_000_000,
@@ -147,13 +332,14 @@ struct ProcessInventoryStoreTests {
 /// Intentionally ignores cancellation until the test supplies a result, proving
 /// the coordinator rejects obsolete replies independently of provider behavior.
 private actor ControlledProcessProvider: ProcessInventoryProviding {
-    private var pending: CheckedContinuation<ProcessSnapshot, Never>?
+    private enum FixtureError: Error { case failed }
+    private var pending: CheckedContinuation<ProcessSnapshot, any Error>?
     private var started: CheckedContinuation<Void, Never>?
     private(set) var scanCount = 0
 
     func scan(options: ProcessScanOptions) async throws -> ProcessSnapshot {
         scanCount += 1
-        return await withCheckedContinuation { continuation in
+        return try await withCheckedThrowingContinuation { continuation in
             pending = continuation
             started?.resume(); started = nil
         }
@@ -161,6 +347,10 @@ private actor ControlledProcessProvider: ProcessInventoryProviding {
     func waitUntilStarted() async {
         if pending != nil { return }
         await withCheckedContinuation { started = $0 }
+    }
+    func fail() {
+        let continuation = pending; pending = nil
+        continuation?.resume(throwing: FixtureError.failed)
     }
     func complete(_ snapshot: ProcessSnapshot) {
         let continuation = pending; pending = nil

@@ -15,6 +15,7 @@ final class WorkspaceStore {
     var toolSearch = ""
     var selectedProjectID: ProjectRecord.ID?
     var selectedTaskID: TaskRecord.ID?
+    var cleanupReviewProjectID: ProjectRecord.ID?
     var expandedProjectIDs: Set<UUID> = [DemoData.projects[0].id]
     var isInspectorPresented = false
     var isDemoEnabled: Bool {
@@ -22,6 +23,7 @@ final class WorkspaceStore {
             processes.resetForModeChange()
             if isDemoEnabled { scanTask?.cancel(); importTask?.cancel() }
             selectedProjectID = nil
+            cleanupReviewProjectID = nil
             selectedTaskID = nil
             pendingDiscovery = nil
             importSelection = []
@@ -78,6 +80,14 @@ final class WorkspaceStore {
     var displayedProjects: [ProjectRecord] { isDemoEnabled ? DemoData.projects : projects }
     var displayedTasks: [TaskRecord] { isDemoEnabled ? DemoData.tasks : tasks }
     var selectedProject: ProjectRecord? { displayedProjects.first { $0.id == selectedProjectID } }
+    var cleanupReviewProject: ProjectRecord? {
+        guard !isDemoEnabled else { return nil }
+        return projects.first { $0.id == cleanupReviewProjectID && $0.kind != .group }
+    }
+    func presentCleanupReview() {
+        guard !isDemoEnabled, let project = selectedProject, project.kind != .group else { return }
+        cleanupReviewProjectID = project.id
+    }
     var selectedTask: TaskRecord? { displayedTasks.first { $0.id == selectedTaskID } }
     var runningTaskCount: Int { tasks.filter { $0.status == .running }.count }
     var filteredTasks: [TaskRecord] {

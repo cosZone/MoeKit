@@ -41,7 +41,8 @@ struct RepositoryScannerTests {
 
         let result = try await RepositoryScanner().scan(root: fixture.root)
 
-        #expect(result.items.map(\.url) == [fixture.root])
+        #expect(result.items.map { $0.url.path } == [fixture.root.path])
+        #expect(result.items.map(\.id) == [fixture.root.path])
         #expect(result.visitedDirectories == 1)
         #expect(result.issues.isEmpty)
         #expect(!result.wasLimited)
@@ -73,7 +74,8 @@ struct RepositoryScannerTests {
         #expect(discovery.issues.isEmpty)
         #expect(selection.items.count == 1)
         #expect(selection.items.first?.kind == .folder)
-        #expect(selection.items.first?.url == fixture.root)
+        #expect(selection.items.first?.url.path == fixture.root.path)
+        #expect(selection.items.first?.id == fixture.root.path)
         #expect(selection.items.first?.branch == nil)
         #expect(selection.visitedDirectories == 1)
     }
@@ -208,6 +210,52 @@ struct RepositoryScannerTests {
         try outside.write("metadata/HEAD", text: "ref: refs/heads/private\n")
         try fixture.link("metadata-link", to: outside.root)
         try fixture.write("work/.git", text: "gitdir: ../metadata-link/metadata\n")
+
+        let result = try await RepositoryScanner().scan(root: fixture.root)
+
+        #expect(result.items.first?.branch == nil)
+        #expect(result.issues.contains { $0.kind == .symbolicLinkSkipped })
+    }
+
+    @Test("An in-scope symlink target is still refused rather than silently normalized")
+    func skipsInScopeSymbolicPointerAncestor() async throws {
+        let fixture = try ScannerFixture()
+        defer { fixture.remove() }
+        try fixture.write("metadata/actual/HEAD", text: "ref: refs/heads/must-not-be-read\n")
+        try fixture.link("metadata-link", to: fixture.root.appendingPathComponent("metadata"))
+        try fixture.write("work/.git", text: "gitdir: ../metadata-link/actual\n")
+
+        let result = try await RepositoryScanner().scan(root: fixture.root)
+
+        #expect(result.items.count == 1)
+        #expect(result.items.first?.branch == nil)
+        #expect(result.issues.contains { $0.kind == .symbolicLinkSkipped })
+    }
+
+    @Test("A symlink preceding dot-dot cannot be erased before the safety check")
+    func skipsSymbolicComponentBeforeParentTraversal() async throws {
+        let fixture = try ScannerFixture()
+        let outside = try ScannerFixture()
+        defer { fixture.remove(); outside.remove() }
+        try fixture.write("metadata/HEAD", text: "ref: refs/heads/must-not-be-read\n")
+        try fixture.link("metadata-link", to: outside.root)
+        try fixture.write("work/.git", text: "gitdir: ../metadata-link/../metadata\n")
+
+        let result = try await RepositoryScanner().scan(root: fixture.root)
+
+        #expect(result.items.count == 1)
+        #expect(result.items.first?.branch == nil)
+        #expect(result.issues.contains { $0.kind == .symbolicLinkSkipped })
+    }
+
+    @Test("An absolute in-scope pointer also rejects symlink ancestors")
+    func skipsAbsoluteSymbolicPointerAncestor() async throws {
+        let fixture = try ScannerFixture()
+        let outside = try ScannerFixture()
+        defer { fixture.remove(); outside.remove() }
+        try outside.write("metadata/HEAD", text: "ref: refs/heads/private\n")
+        try fixture.link("metadata-link", to: outside.root)
+        try fixture.write("work/.git", text: "gitdir: \(fixture.root.path)/metadata-link/metadata\n")
 
         let result = try await RepositoryScanner().scan(root: fixture.root)
 

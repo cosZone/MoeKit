@@ -1680,6 +1680,76 @@
           }
         }
       }
+    },
+    "Mole execution is not connected in this milestone.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本阶段尚未连接 Mole 执行。"
+          }
+        }
+      }
+    },
+    "Inspect directory sizes, large files, and scan coverage.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看目录大小、大文件和扫描完整度。"
+          }
+        }
+      }
+    },
+    "Review caches, project artifacts, and installers.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "审核缓存、项目产物和安装包。"
+          }
+        }
+      }
+    },
+    "Review installed apps and their related files.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "审核已安装应用及其关联文件。"
+          }
+        }
+      }
+    },
+    "Understand maintenance tasks and their effects.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "了解维护任务及其影响。"
+          }
+        }
+      }
+    },
+    "Inspect system metrics and their freshness.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看系统指标及其时效。"
+          }
+        }
+      }
+    },
+    "A native workspace for disk analysis, cleanup, apps, maintenance, and status.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用于磁盘分析、清理、应用、维护和状态的原生工作台。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

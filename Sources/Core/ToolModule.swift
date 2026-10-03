@@ -137,7 +137,7 @@ enum MoleCapability: String, CaseIterable, Identifiable, Sendable {
     var title: String {
         switch self {
         case .space: String(localized: "Space")
-        case .clean: String(localized: "Clean")
+        case .clean: String(localized: "Cleanup")
         case .apps: String(localized: "Apps")
         case .maintenance: String(localized: "Maintenance")
         case .status: String(localized: "Status")

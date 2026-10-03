@@ -178,7 +178,10 @@ public actor RepositoryScanner {
             }
             enumeratedEntries += 1
 
-            let directory = candidate.standardizedFileURL
+            // Enumerator URLs already have explicit path components. Foundation's
+            // standardization may resolve symlinks while simplifying `..`; do not
+            // invoke it on any discovered or metadata-controlled path.
+            let directory = candidate
             guard scope.contains(directory) else {
                 enumerator.skipDescendants()
                 issues.append(ScanIssue(
@@ -276,7 +279,10 @@ public actor RepositoryScanner {
         let components: [String]
 
         func contains(_ url: URL) -> Bool {
-            url.isFileURL && url.standardizedFileURL.pathComponents.starts(with: components)
+            let candidate = url.pathComponents
+            return url.isFileURL
+                && !candidate.contains(where: { $0 == "." || $0 == ".." })
+                && candidate.starts(with: components)
         }
     }
 
@@ -288,7 +294,7 @@ public actor RepositoryScanner {
         guard input.isFileURL, input.host == nil || input.host == "" || input.host == "localhost" else {
             throw RepositoryScannerError.invalidRoot("Choose a local folder to scan.")
         }
-        let selected = input.standardizedFileURL
+        let selected = input
         do {
             let attributes = try fileManager.attributesOfItem(atPath: selected.path)
             guard attributes[.type] as? FileAttributeType == .typeDirectory else {
@@ -383,12 +389,11 @@ public actor RepositoryScanner {
     /// untrusted pointer's symlinks; inspect each component inside the scope instead.
     private func requireSafePath(_ url: URL, scope: Scope) throws {
         try Task.checkCancellation()
-        let standardized = url.standardizedFileURL
-        guard scope.contains(standardized) else {
+        guard scope.contains(url) else {
             throw metadataFailure(url, .outsideScope, "Git metadata is outside the selected folder. Branch is unknown.")
         }
         var cursor = scope.root
-        let relative = standardized.pathComponents.dropFirst(scope.components.count)
+        let relative = url.pathComponents.dropFirst(scope.components.count)
         let rootAttributes = try fileManager.attributesOfItem(atPath: cursor.path)
         guard rootAttributes[.type] as? FileAttributeType == .typeDirectory else {
             throw metadataFailure(cursor, .symbolicLinkSkipped, "The selected folder changed during discovery; this path was skipped.")
@@ -446,13 +451,42 @@ public actor RepositoryScanner {
         guard !path.isEmpty, !path.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains) else {
             throw metadataFailure(marker, .invalidMetadata, "The Git directory pointer is empty or contains control characters.")
         }
-        let target = (path.hasPrefix("/")
-            ? URL(fileURLWithPath: path, isDirectory: true)
-            : repository.appendingPathComponent(path, isDirectory: true)).standardizedFileURL
-        guard scope.contains(target) else {
-            throw metadataFailure(marker, .outsideScope, "This worktree's Git metadata is outside the selected folder. Branch is unknown.")
+        // Walk the text lexically, never standardize or resolve an untrusted URL.
+        // Check each directory BEFORE handling the next component: `link/../safe`
+        // must reject `link`, rather than erasing it and reading a different target.
+        let components = path.split(separator: "/", omittingEmptySubsequences: true).map(String.init)
+        var cursor: URL
+        let remaining: ArraySlice<String>
+        if path.hasPrefix("/") {
+            let rootComponents = scope.components.filter { $0 != "/" }
+            guard components.starts(with: rootComponents) else {
+                throw metadataFailure(marker, .outsideScope, "This worktree's Git metadata is outside the selected folder. Branch is unknown.")
+            }
+            cursor = scope.root
+            remaining = components.dropFirst(rootComponents.count)
+        } else {
+            cursor = repository
+            remaining = components[...]
         }
-        return target
+        try requireSafePath(cursor, scope: scope)
+        for component in remaining {
+            try Task.checkCancellation()
+            if component == "." { continue }
+            if component == ".." {
+                guard cursor.pathComponents.count > scope.components.count else {
+                    throw metadataFailure(marker, .outsideScope, "This worktree's Git metadata path leaves the selected folder. Branch is unknown.")
+                }
+                cursor.deleteLastPathComponent()
+            } else {
+                cursor.appendPathComponent(component, isDirectory: true)
+            }
+            try requireSafePath(cursor, scope: scope)
+            let attributes = try fileManager.attributesOfItem(atPath: cursor.path)
+            guard attributes[.type] as? FileAttributeType == .typeDirectory else {
+                throw metadataFailure(cursor, .invalidMetadata, "The Git metadata path contains a non-directory component.")
+            }
+        }
+        return cursor
     }
 
     private func branchLabel(from contents: String, head: URL) throws -> String {

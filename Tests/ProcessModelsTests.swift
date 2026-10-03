@@ -226,6 +226,73 @@ struct ProcessAssociationTests {
     }
 }
 
+@Suite("Process inventory explanations and port filters")
+struct ProcessInventoryExplanationTests {
+    @Test("Attribution explains missing cwd without inferring from ports")
+    func missingDirectoryEvidence() {
+        let record = ProcessModelFixture.record(cwd: nil,
+            ports: [ListeningPort(port: 3_000, address: "127.0.0.1", transport: "TCP")])
+        let result = ProcessClassifier.assessment(for: record, projects: [ProcessModelFixture.project()])
+        #expect(result.association == .unknown)
+        #expect(result.canonicalProjectPath == nil)
+        #expect(result.explanation == String(localized: "Working directory is unavailable or unresolved. Names, ports and parent processes do not establish a project association."))
+    }
+
+    @Test("Empty, unmatched and ambiguous project scopes have distinct explanations")
+    func distinctUnknownReasons() {
+        let row = ProcessModelFixture.record()
+        let empty = ProcessClassifier.assessment(for: row, projects: [])
+        let invalid = ProcessClassifier.assessment(for: row, projects: [ProcessModelFixture.project(path: "/")])
+        let unmatched = ProcessClassifier.assessment(for: row, projects: [ProcessModelFixture.project(path: "/other")])
+        let duplicate = ProcessClassifier.assessment(for: row, projects: [ProcessModelFixture.project(), ProcessModelFixture.project()])
+        #expect(empty.explanation == invalid.explanation)
+        #expect(Set([empty.explanation, unmatched.explanation, duplicate.explanation]).count == 3)
+        for result in [empty, invalid, unmatched, duplicate] {
+            #expect(result.association == .unknown)
+            #expect(result.canonicalProjectPath == nil)
+        }
+    }
+
+    @Test("Matched evidence carries only the deepest unique canonical root")
+    func matchedRootEvidence() {
+        let outer = ProcessModelFixture.project(path: "/work", name: "Outer")
+        let project = ProcessModelFixture.project()
+        let row = ProcessModelFixture.record()
+        let result = ProcessClassifier.assessment(for: row, projects: [outer, project])
+        #expect(result.association.projectID == project.id)
+        #expect(result.canonicalProjectPath == project.canonicalPath)
+        #expect(result.explanation == result.association.evidence)
+        let target = ProcessModelFixture.plan([row]).targets.first
+        #expect(target?.associationEvidence == result.explanation)
+        #expect(target?.canonicalProjectPath == result.canonicalProjectPath)
+    }
+
+    @Test("Listener filters preserve unknown versus observed-empty coverage")
+    func portCoverageFilters() {
+        let unknown = ProcessModelFixture.record(ports: nil)
+        let empty = ProcessModelFixture.record(ports: [])
+        let listener = ProcessModelFixture.record(ports: [ListeningPort(port: 3_000, address: "::1", transport: "TCP")])
+        for row in [unknown, empty, listener] { #expect(ProcessPortFilter.all.includes(row)) }
+        #expect(ProcessPortFilter.unknown.includes(unknown))
+        #expect(!ProcessPortFilter.unknown.includes(empty))
+        #expect(!ProcessPortFilter.unknown.includes(listener))
+        #expect(ProcessPortFilter.listening.includes(listener))
+        #expect(!ProcessPortFilter.listening.includes(empty))
+        #expect(!ProcessPortFilter.listening.includes(unknown))
+    }
+
+    @Test("Protection totals do not confuse generic review risks with protection flags")
+    func protectionSummary() {
+        let worker = ProcessModelFixture.record()
+        let database = ProcessModelFixture.record(identity: ProcessModelFixture.identity(pid: 43, path: "/usr/local/bin/postgres"), name: "postgres")
+        let plan = ProcessModelFixture.plan([worker, database])
+        #expect(plan.targets.count == 2)
+        #expect(plan.targets.allSatisfy { !$0.risks.isEmpty })
+        #expect(plan.protectedTargetCount == 1)
+        #expect(!plan.canExecute)
+    }
+}
+
 @Suite("Protected process review")
 struct ProcessProtectionTests {
     @Test("Browser, IDE, database, VM, and shared-service names remain guarded", arguments: [

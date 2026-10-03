@@ -3,16 +3,23 @@ import Observation
 
 /// Resolve only already-added catalog roots. Discovery does not inspect argv,
 /// environment, browser profiles or project files to manufacture association.
+struct ProcessProjectResolution: Sendable {
+    let scopes: [ProcessProjectScope]
+    let unavailableCount: Int
+}
+
 actor ProcessProjectResolver {
-    func resolve(_ projects: [ProjectRecord]) throws -> [ProcessProjectScope] {
-        try projects.compactMap { project in
+    func resolve(_ projects: [ProjectRecord]) throws -> ProcessProjectResolution {
+        let candidates = projects.filter { $0.kind != .group }
+        let scopes: [ProcessProjectScope] = try candidates.compactMap { project in
             try Task.checkCancellation()
-            guard project.kind != .group, ProcessPath.isCanonicalAbsolute(project.path), project.path != "/" else { return nil }
+            guard ProcessPath.isCanonicalAbsolute(project.path), project.path != "/" else { return nil }
             let url = project.url.resolvingSymlinksInPath().standardizedFileURL
             guard ProcessPath.isCanonicalAbsolute(url.path), url.path != "/",
                   (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true else { return nil }
             return ProcessProjectScope(id: project.id, name: project.name, canonicalPath: url.path)
         }
+        return ProcessProjectResolution(scopes: scopes, unavailableCount: candidates.count - scopes.count)
     }
 }
 
@@ -30,6 +37,9 @@ final class ProcessInventoryStore {
     }
     var search = "" { didSet { constrainSelection(); if search != oldValue { plan = nil } } }
     var projectFilterID: UUID? { didSet { constrainSelection(); plan = nil } }
+    var portFilter: ProcessPortFilter = .all { didSet { constrainSelection(); if portFilter != oldValue { plan = nil } } }
+    private(set) var lastScanStatus: TaskStatus?
+    private(set) var unavailableProjectCount = 0
     var plan: StopPlan?
     var errorMessage: String?
     private(set) var projects: [ProcessProjectScope] = []
@@ -47,6 +57,27 @@ final class ProcessInventoryStore {
     }
 
     var rows: [ProcessInventoryRecord] {
+        matchingRows.filter { portFilter.includes($0) }
+    }
+
+    /// Counts use the same search/project scope as the table, before the port filter.
+    func count(for filter: ProcessPortFilter) -> Int {
+        matchingRows.filter { filter.includes($0) }.count
+    }
+
+    var hasActiveFilters: Bool { !search.isEmpty || projectFilterID != nil || portFilter != .all }
+
+    var retainedSnapshotNotice: String? {
+        guard snapshot != nil else { return nil }
+        if isScanning { return String(localized: "Refreshing. The previous snapshot remains visible until the scan finishes.") }
+        switch lastScanStatus {
+        case .cancelled: return String(localized: "Refresh cancelled. Showing the previous snapshot; these rows were not refreshed.")
+        case .failed: return String(localized: "Refresh failed. Showing the previous snapshot; these rows were not refreshed.")
+        default: return nil
+        }
+    }
+
+    private var matchingRows: [ProcessInventoryRecord] {
         guard let snapshot else { return [] }
         let terms = search.split(whereSeparator: \.isWhitespace).map(String.init)
         return snapshot.records.filter { record in
@@ -54,7 +85,7 @@ final class ProcessInventoryStore {
             if let projectFilterID, association.projectID != projectFilterID { return false }
             let fields = [record.name, String(record.identity.pid), record.identity.executablePath ?? "",
                           record.workingDirectory ?? "", association.projectName ?? ""]
-                + (record.listeningPorts ?? []).map { String($0.port) }
+                + (record.listeningPorts ?? []).flatMap { [String($0.port), $0.address, $0.transport] }
             return terms.allSatisfy { term in fields.contains { $0.localizedStandardContains(term) } }
         }.sorted {
             let comparison = $0.name.localizedStandardCompare($1.name)
@@ -64,6 +95,12 @@ final class ProcessInventoryStore {
 
     func association(for record: ProcessInventoryRecord) -> ProcessAssociation {
         ProcessClassifier.association(for: record, projects: projects)
+    }
+    func assessment(for record: ProcessInventoryRecord) -> ProcessAssociationAssessment {
+        ProcessClassifier.assessment(for: record, projects: projects)
+    }
+    func clearFilters() {
+        search = ""; projectFilterID = nil; portFilter = .all
     }
     func protectionReasons(for record: ProcessInventoryRecord) -> [String] {
         guard let snapshot else { return [] }
@@ -81,19 +118,20 @@ final class ProcessInventoryStore {
             return
         }
         lastScanStartedAt = now
-        errorMessage = nil
+        errorMessage = nil; lastScanStatus = nil
         selection = []; plan = nil
         let id = UUID()
         activeScanID = id; isScanning = true
         onEvent?(.started(id: id, at: now))
         scanTask = Task { [weak self, provider, resolver] in
             do {
-                let scopes = try await resolver.resolve(catalog)
+                let resolution = try await resolver.resolve(catalog)
                 try Task.checkCancellation()
                 let result = try await provider.scan(options: ProcessScanOptions())
                 try Task.checkCancellation()
                 guard let self, self.activeScanID == id else { return }
-                self.projects = scopes
+                self.projects = resolution.scopes
+                self.unavailableProjectCount = resolution.unavailableCount
                 self.snapshot = result
                 self.finish(id: id, status: result.isPartial ? .partial : .completed, count: result.records.count)
             } catch is CancellationError {
@@ -117,13 +155,14 @@ final class ProcessInventoryStore {
 
     func resetForModeChange() {
         cancel()
-        snapshot = nil; projects = []; search = ""; projectFilterID = nil
-        errorMessage = nil; lastScanStartedAt = nil
+        snapshot = nil; projects = []; unavailableProjectCount = 0
+        clearFilters()
+        errorMessage = nil; lastScanStartedAt = nil; lastScanStatus = nil
     }
 
     func openProject(_ project: ProjectRecord, projects: [ProjectRecord]) {
         // Navigation only. No implicit process inspection when a project opens.
-        search = ""; projectFilterID = project.id; selection = []; plan = nil
+        search = ""; portFilter = .all; projectFilterID = project.id; selection = []; plan = nil
     }
 
     func reviewSelection() {
@@ -138,7 +177,7 @@ final class ProcessInventoryStore {
 
     private func finish(id: UUID, status: TaskStatus, count: Int) {
         guard activeScanID == id else { return }
-        activeScanID = nil; isScanning = false; scanTask = nil
+        activeScanID = nil; isScanning = false; scanTask = nil; lastScanStatus = status
         onEvent?(.finished(id: id, status: status, count: count))
     }
 }

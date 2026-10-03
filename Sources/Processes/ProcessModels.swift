@@ -98,6 +98,33 @@ enum ProcessAssociation: Hashable, Sendable {
     }
 }
 
+/// Explanation is kept separate from the association so an unreadable path,
+/// an unmatched path, and ambiguous catalog aliases never look equivalent.
+struct ProcessAssociationAssessment: Hashable, Sendable {
+    let association: ProcessAssociation
+    let explanation: String
+    let canonicalProjectPath: String?
+}
+
+enum ProcessPortFilter: String, CaseIterable, Identifiable, Sendable {
+    case all, listening, unknown
+    var id: Self { self }
+    var title: String {
+        switch self {
+        case .all: String(localized: "All processes")
+        case .listening: String(localized: "TCP listeners")
+        case .unknown: String(localized: "Unknown ports")
+        }
+    }
+    func includes(_ record: ProcessInventoryRecord) -> Bool {
+        switch self {
+        case .all: true
+        case .listening: record.listeningPorts.map { !$0.isEmpty } == true
+        case .unknown: record.listeningPorts == nil
+        }
+    }
+}
+
 enum ProcessPath {
     static func isCanonicalAbsolute(_ path: String) -> Bool {
         guard path.hasPrefix("/"), !path.contains("\0"), !path.contains("//"),
@@ -113,13 +140,37 @@ enum ProcessPath {
 
 enum ProcessClassifier {
     static func association(for record: ProcessInventoryRecord, projects: [ProcessProjectScope]) -> ProcessAssociation {
-        guard let cwd = record.workingDirectory, ProcessPath.isCanonicalAbsolute(cwd) else { return .unknown }
-        let matches = projects.filter { ProcessPath.contains(cwd, in: $0.canonicalPath) }
-        guard let deepest = matches.max(by: { $0.canonicalPath.count < $1.canonicalPath.count }) else { return .unknown }
+        assessment(for: record, projects: projects).association
+    }
+
+    static func assessment(for record: ProcessInventoryRecord, projects: [ProcessProjectScope]) -> ProcessAssociationAssessment {
+        guard let cwd = record.workingDirectory, ProcessPath.isCanonicalAbsolute(cwd) else {
+            return ProcessAssociationAssessment(association: .unknown,
+                explanation: String(localized: "Working directory is unavailable or unresolved. Names, ports and parent processes do not establish a project association."),
+                canonicalProjectPath: nil)
+        }
+        let usableProjects = projects.filter { $0.canonicalPath != "/" && ProcessPath.isCanonicalAbsolute($0.canonicalPath) }
+        guard !usableProjects.isEmpty else {
+            return ProcessAssociationAssessment(association: .unknown,
+                explanation: String(localized: "No readable project folders were available for this scan. Add a project, then refresh to compare its folder."),
+                canonicalProjectPath: nil)
+        }
+        let matches = usableProjects.filter { ProcessPath.contains(cwd, in: $0.canonicalPath) }
+        guard let deepest = matches.max(by: { $0.canonicalPath.count < $1.canonicalPath.count }) else {
+            return ProcessAssociationAssessment(association: .unknown,
+                explanation: String(localized: "The observed working directory is outside the project folders resolved for this snapshot."),
+                canonicalProjectPath: nil)
+        }
         // Aliased catalog entries with the same canonical root are ambiguous.
-        guard matches.filter({ $0.canonicalPath == deepest.canonicalPath }).count == 1 else { return .unknown }
-        return .inferred(projectID: deepest.id, projectName: deepest.name,
-                         evidence: String(localized: "Observed working directory is inside this project's canonical folder. This is an association, not ownership."))
+        guard matches.filter({ $0.canonicalPath == deepest.canonicalPath }).count == 1 else {
+            return ProcessAssociationAssessment(association: .unknown,
+                explanation: String(localized: "Multiple catalog projects resolve to the same matching folder. No project was chosen."),
+                canonicalProjectPath: nil)
+        }
+        let explanation = String(localized: "Observed working directory is inside this project's canonical folder. This is an association, not ownership.")
+        return ProcessAssociationAssessment(
+            association: .inferred(projectID: deepest.id, projectName: deepest.name, evidence: explanation),
+            explanation: explanation, canonicalProjectPath: deepest.canonicalPath)
     }
 
     static func protectionReasons(for record: ProcessInventoryRecord, snapshot: ProcessSnapshot) -> [String] {
@@ -161,6 +212,9 @@ enum ProcessClassifier {
 struct StopPlanTarget: Identifiable, Sendable {
     let record: ProcessInventoryRecord
     let association: ProcessAssociation
+    let associationEvidence: String
+    let canonicalProjectPath: String?
+    let protectionReasons: [String]
     let risks: [String]
     var identity: ProcessIdentity { record.identity }
     var name: String { record.name }
@@ -180,6 +234,7 @@ struct StopPlan: Identifiable, Sendable {
     let targets: [StopPlanTarget]
     let warnings: [String]
     var canExecute: Bool { false }
+    var protectedTargetCount: Int { targets.filter { !$0.protectionReasons.isEmpty }.count }
 }
 
 enum StopPlanInvalidation: Hashable, Sendable {
@@ -193,8 +248,10 @@ enum ProcessStopPlanner {
 
     static func makePlan(snapshot: ProcessSnapshot, selection: Set<ProcessIdentity>, projects: [ProcessProjectScope], now: Date = .now) -> StopPlan {
         let targets = snapshot.records.filter { selection.contains($0.identity) }.sorted { $0.identity.pid < $1.identity.pid }.map { record in
-            let association = ProcessClassifier.association(for: record, projects: projects)
-            var risks = ProcessClassifier.protectionReasons(for: record, snapshot: snapshot)
+            let assessment = ProcessClassifier.assessment(for: record, projects: projects)
+            let association = assessment.association
+            let protectionReasons = ProcessClassifier.protectionReasons(for: record, snapshot: snapshot)
+            var risks = protectionReasons
             if association.projectID == nil {
                 risks.append(String(localized: "No project ownership was established."))
             }
@@ -208,7 +265,9 @@ enum ProcessStopPlanner {
             if !record.metadataIssues.isEmpty || record.workingDirectory == nil || record.listeningPorts == nil {
                 risks.append(String(localized: "Some metadata is unavailable or incomplete."))
             }
-            return StopPlanTarget(record: record, association: association, risks: risks)
+            return StopPlanTarget(record: record, association: association, associationEvidence: assessment.explanation,
+                                  canonicalProjectPath: assessment.canonicalProjectPath,
+                                  protectionReasons: protectionReasons, risks: risks)
         }
         var warnings = [String(localized: "Preview only. Stopping and force stopping are not implemented."),
                         String(localized: "Only exact selected identities are listed. Parents, children and process groups are not added automatically."),

@@ -452,5 +452,96 @@ class KeychainMembershipDiagnostic(unittest.TestCase):
         self.assertNotIn(marker, str(caught.exception))
 
 
+class KeychainSearchRegistration(unittest.TestCase):
+    def test_registers_temporary_keychain_preserving_original_entries_and_order(self):
+        keychain = Path("/tmp/synthetic-signing.keychain-db")
+        original = ["/tmp/synthetic login.keychain-db", "/tmp/synthetic-second.keychain-db"]
+        saved = original.copy()
+        events = []
+        with patch.object(release, "run", side_effect=lambda *args, **kwargs: events.append(("register", args, kwargs))):
+            with patch.object(release, "report_keychain_search_membership", side_effect=lambda path: events.append(("check", path)) or True):
+                release.register_signing_keychain(keychain, original)
+        self.assertEqual(original, saved)
+        self.assertEqual(events, [
+            ("register", ("/usr/bin/security", "list-keychains", "-d", "user", "-s", str(keychain), *saved),
+             {"operation": "keychain-register-search-list"}),
+            ("check", keychain),
+        ])
+
+    def test_empty_original_list_still_registers_only_temporary_keychain(self):
+        keychain = Path("/tmp/synthetic-signing.keychain-db")
+        with patch.object(release, "run") as command, patch.object(release, "report_keychain_search_membership", return_value=True):
+            release.register_signing_keychain(keychain, [])
+        command.assert_called_once_with("/usr/bin/security", "list-keychains", "-d", "user", "-s", str(keychain),
+                                        operation="keychain-register-search-list")
+
+    def test_missing_membership_after_registration_fails_closed(self):
+        with patch.object(release, "run") as command, patch.object(release, "report_keychain_search_membership", return_value=False):
+            with self.assertRaises(release.ReleaseError) as caught:
+                release.register_signing_keychain(Path("/tmp/synthetic-signing.keychain-db"), [])
+        self.assertEqual(command.call_count, 1)
+        self.assertEqual(str(caught.exception),
+                         "Temporary signing keychain is absent from the user search list after registration; signing stopped.")
+
+    def test_registration_failure_does_not_disclose_paths_or_command_output(self):
+        marker = "synthetic-registration-private-data"
+        result = subprocess.CompletedProcess([marker], 1, stdout=marker.encode(), stderr=marker.encode())
+        output, errors = io.StringIO(), io.StringIO()
+        with patch.object(release.subprocess, "run", return_value=result), patch.object(release, "report_keychain_search_membership") as readback:
+            with redirect_stdout(output), redirect_stderr(errors), self.assertRaises(release.ReleaseError) as caught:
+                release.register_signing_keychain(Path("/tmp/" + marker), ["/tmp/" + marker])
+        readback.assert_not_called()
+        self.assertEqual(str(caught.exception),
+                         "Operation keychain-register-search-list failed (exit code 1); command details withheld.")
+        self.assertNotIn(marker, str(caught.exception))
+        self.assertEqual(output.getvalue() + errors.getvalue(), "")
+
+    def exercise_cleanup_after_failure(self, *, registration_fails):
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp) / "moekit-preview-signing"
+            directory.mkdir()
+            keychain = directory / "preview.keychain-db"
+            keychain.write_bytes(b"synthetic fixture; not a real keychain")
+            original = ["/tmp/synthetic original-one.keychain-db", "/tmp/synthetic-original-two.keychain-db"]
+            release.write_json(directory / "original-keychains.json", original)
+            calls = []
+            def command(*args, operation):
+                calls.append((operation, args))
+                if registration_fails and operation == "keychain-register-search-list":
+                    raise release.ReleaseError("Synthetic registration failure.")
+                return b""
+            with patch.dict(os.environ, {"RUNNER_TEMP": temp}), patch.object(release, "run", side_effect=command):
+                with patch.object(release, "report_keychain_search_membership", return_value=True):
+                    with self.assertRaises(release.ReleaseError):
+                        try:
+                            release.register_signing_keychain(keychain, original)
+                            raise release.ReleaseError("Synthetic signing failure.")
+                        finally:
+                            release.cleanup()
+            self.assertEqual([operation for operation, _ in calls],
+                             ["keychain-register-search-list", "keychain-delete", "keychain-restore-search-list"])
+            self.assertEqual(calls[-1][1], ("/usr/bin/security", "list-keychains", "-d", "user", "-s", *original))
+            self.assertFalse(directory.exists())
+
+    def test_cleanup_restores_exact_list_after_later_signing_failure(self):
+        self.exercise_cleanup_after_failure(registration_fails=False)
+
+    def test_cleanup_restores_exact_list_after_registration_failure(self):
+        self.exercise_cleanup_after_failure(registration_fails=True)
+
+    def test_registration_is_immediately_before_signing_inside_cleanup_guard(self):
+        tree = ast.parse(Path(release.__file__).read_text())
+        sign = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "sign")
+        guarded = next(node for node in sign.body if isinstance(node, ast.Try))
+        registration_index = next(index for index, node in enumerate(guarded.body)
+                                  if isinstance(node, ast.Expr) and isinstance(node.value, ast.Call) and
+                                  isinstance(node.value.func, ast.Name) and node.value.func.id == "register_signing_keychain")
+        following = guarded.body[registration_index + 1].value
+        self.assertEqual(following.func.id, "run")
+        self.assertEqual(next(item.value.value for item in following.keywords if item.arg == "operation"), "codesign-sign")
+        self.assertEqual(len(guarded.finalbody), 1)
+        self.assertEqual(guarded.finalbody[0].value.func.id, "cleanup")
+
+
 if __name__ == "__main__":
     unittest.main()

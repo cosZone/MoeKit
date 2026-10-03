@@ -64,7 +64,7 @@ MoeKit 工作流直接读取上述三个名字，**不要求创建 `Prod` enviro
 
 本应用使用 SwiftUI App 生命周期，构建与产物检查拒绝 `NSMainStoryboardFile`／`NSMainNibFile`，防止打包时引入并不存在的主 storyboard／nib。此检查保证入口配置与源码一致；不代表此前已证实启动故障，也不能代替真实启动验收。
 
-搜索列表检查只读，不改变默认钥匙串、信任或密钥权限；存在有效签名身份也不等于非交互签名必定成功。根据诊断再审查最小修复，不自动扩大密钥访问、清除属性、替换证书或降低签名验证。诊断不修改 `.app`、发布资产、清理流程或上传白名单。
+签名前，将临时签名钥匙串加入当前用户的搜索列表，同时逐项保留原列表及其顺序，再只读核对临时钥匙串是否在列表中；若仍缺失则停止签名。临时项置于原列表之前，现有 finally／always 清理恢复保存的原列表。不改变默认钥匙串、信任或私钥访问控制。有效身份可被显式找到，不代表它已在 `codesign` 使用的搜索列表中；注册与 membership 检查补齐这一前置条件。其余诊断仍只提供排查线索，不会自动扩大密钥访问、清除属性、替换证书或降低签名验证，也不改变 `.app`、发布资产或上传白名单。
 
 依据：[Apple 的非交互代码签名排查](https://developer.apple.com/forums/thread/712005)、[签名证书与证书链](https://developer.apple.com/documentation/technotes/tn3161-inside-code-signing-certificates)、[bundle 扩展属性签名限制](https://developer.apple.com/library/archive/qa/qa1940/_index.html)。
 

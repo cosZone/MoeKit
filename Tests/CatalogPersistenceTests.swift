@@ -84,7 +84,12 @@ struct CatalogPersistenceTests {
         let persistence = fixture.persistence()
         #expect(throws: CatalogPersistence.CatalogError.invalidRecords) { try persistence.load() }
         #expect(throws: CatalogPersistence.CatalogError.recoveryRequired) { try persistence.save([first]) }
-        #expect(try Data(contentsOf: fixture.file) == original)
+        // Evaluate throwing I/O and byte equality as explicit local statements.
+        // The compound assertion crashed at this expression/cleanup in optimized
+        // Xcode 16.4 tests; the separate lifetime test exercises the same app path.
+        let persistedBytes = try Data(contentsOf: fixture.file)
+        let originalWasPreserved = persistedBytes == original
+        #expect(originalWasPreserved)
     }
 
     @Test("External replacement or removal after load cannot lose saved pins", arguments: 0..<4)

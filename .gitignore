@@ -21,3 +21,10 @@ Configurations/Signing.xcconfig
 *.keychain-db
 Preview/
 TestResults.xcresult/
+
+# Python tooling and release-only build products
+__pycache__/
+*.py[cod]
+DerivedDataTests/
+DerivedDataArchive/
+Unsigned/

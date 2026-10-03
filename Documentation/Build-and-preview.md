@@ -43,7 +43,7 @@ shasum -a 256 -c SHA256SUMS.txt
 
 CI 仅有 `contents: read`，不创建 tag、不创建 Release、不合并分支。它不接触证书、私钥、Developer ID 身份、Apple 账户或公证凭据，也不添加 GitHub 签名 secrets。
 
-后续 Developer ID 签名与发布工作流尚待单独配置及审核；本预览工作流不依赖任何签名 secret。签名会改变应用和 ZIP 字节，必须重新验证签名、重新计算校验和、记录原始源码 SHA；不能复用原 ad-hoc ZIP 的校验和。签名、公证和 GitHub Release 是不同步骤，均不得把前一步的成功当成后一步已完成。
+本 ad-hoc 预览工作流不依赖任何签名 secret。另有 [独立的 Apple Development 签名预览发布流程](Signed-preview-release.md)，待审核合入、配置 Secrets 并运行；Developer ID 正式分发与公证仍属后续工作。签名会改变应用和 ZIP 字节，必须重新验证签名、重新计算校验和、记录原始源码 SHA；不能复用原 ad-hoc ZIP 的校验和。签名、公证和 GitHub Release 是不同步骤，均不得把前一步的成功当成后一步已完成。
 
 ## 官方参考
 

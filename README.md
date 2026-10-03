@@ -15,7 +15,7 @@ Swift 6 · SwiftUI / AppKit · macOS 15+ · Tuist 4.148.3 · SPM
 
 尚未实现：CLI 进程执行、清理、卸载、维护、实时系统状态、提权、第三方插件加载及持久任务历史。导入报告不运行 Mole，报告数值不等于可回收空间。
 
-**验证边界：源码检查不等于可运行应用。** 初始编写环境没有 Swift、Xcode 或 Tuist；下列原生构建和测试命令尚未在该环境执行。具体提交能否构建以 GitHub Actions 记录为准；原生视觉、VoiceOver 和实际 Mac 交互仍需手动验收。
+**验证记录：** 提交 [`ba7709c`](https://github.com/cosZone/MoeKit/commit/ba7709cb81a32bdd3f6a918d7bd5cdac715972e7) 已在 [macOS CI](https://github.com/cosZone/MoeKit/actions/runs/37111995139) 上完成构建并通过 65 项 Swift 测试（Xcode 16.4 / Swift 6.1.2）。后续变更以对应提交的 CI 为准；原生视觉、VoiceOver、双架构实机运行和实际 Mac 交互仍需手动验收。
 
 ## 构建
 
@@ -37,6 +37,7 @@ open DerivedData/Build/Products/Debug/MoeKit.app
 
 - [Actions](https://github.com/cosZone/MoeKit/actions)：Native CI 构建与测试；手动运行 Preview app artifact 可下载包含 `.app` 的 ZIP、源码 SHA、SHA-256 校验和与构建信息
 - 预览包仅 **ad-hoc 签名，没有 Developer ID 签名、没有公证**，Gatekeeper 可能阻止打开；本工作流不会创建 tag 或 GitHub Release。后续 Developer ID 签名与发布工作流尚待配置与审核
+- [开发签名预览发布](Documentation/Signed-preview-release.md)：已编写独立的手动发布流程，待配置 Secrets、审核合入并实际运行；使用 Apple Development 签名，仍未公证，不等于 Developer ID 正式分发
 - [构建与交付说明](Documentation/Build-and-preview.md)
 - [架构与数据边界](Documentation/Architecture.md)
 - [原生验收清单](Documentation/Verification.md)

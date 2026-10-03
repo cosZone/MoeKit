@@ -53,7 +53,7 @@ OPERATIONS = frozenset({
     "p12-import", "keychain-partition-list", "identity-find", "archive-unpack",
     "codesign-sign", "codesign-verify", "codesign-display", "entitlements-read",
     "certificate-extract", "archive-package", "archive-round-trip",
-    "codesign-verify-packaged", "keychain-search-list-check",
+    "codesign-verify-packaged", "keychain-search-list-check", "keychain-register-search-list",
 })
 
 
@@ -305,7 +305,7 @@ def cleanup() -> None:
     require(not failed, "Temporary files removed, but keychain cleanup reported an error; do not publish.")
 
 
-def report_keychain_search_membership(keychain: Path) -> None:
+def report_keychain_search_membership(keychain: Path) -> bool:
     """Read-only diagnostic: report membership, never keychain paths or names."""
     listed = shlex.split(text_run("/usr/bin/security", "list-keychains", "-d", "user",
                                  operation="keychain-search-list-check"))
@@ -313,6 +313,15 @@ def report_keychain_search_membership(keychain: Path) -> None:
     present = any(Path(item).resolve() == expected for item in listed)
     print("temporary_keychain_in_search_list=true" if present else
           "temporary_keychain_in_search_list=false", flush=True)
+    return present
+
+
+def register_signing_keychain(keychain: Path, original: list[str]) -> None:
+    """Temporarily include the signing keychain, retaining all saved entries."""
+    run("/usr/bin/security", "list-keychains", "-d", "user", "-s", str(keychain), *original,
+        operation="keychain-register-search-list")
+    require(report_keychain_search_membership(keychain),
+            "Temporary signing keychain is absent from the user search list after registration; signing stopped.")
 
 
 def sign() -> None:
@@ -358,8 +367,9 @@ def sign() -> None:
         run("/usr/bin/ditto", "-x", "-k", str(directory / "MoeKit-unsigned.zip"), str(unpacked), operation="archive-unpack")
         app = unpacked / "MoeKit.app"
         verify_app(app, context)
-        # Observe only: do not mutate the search list or default keychain here.
-        report_keychain_search_membership(keychain)
+        # codesign also consults the user search list. Cleanup restores the saved list.
+        # This does not change the default keychain, trust, or private-key access controls.
+        register_signing_keychain(keychain, original)
         # No inherited entitlements and no --deep signing. No network timestamp or notarization.
         run("/usr/bin/codesign", "--force", "--sign", identity, "--keychain", str(keychain),
             "--options", "runtime", "--timestamp=none", str(app), operation="codesign-sign")

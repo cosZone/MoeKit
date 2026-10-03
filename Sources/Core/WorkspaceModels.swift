@@ -56,14 +56,17 @@ struct ProjectRecord: Identifiable, Codable, Hashable, Sendable {
     var parentID: UUID?
     var demoChangeCount: Int?
     var demoUnavailable: Bool
+    var gitMetadata: GitDiscoveryMetadata?
 
     init(id: UUID = UUID(), name: String, path: String, kind: ProjectKind,
          branch: String? = nil, lastOpened: Date? = nil, isPinned: Bool = false,
-         parentID: UUID? = nil, demoChangeCount: Int? = nil, demoUnavailable: Bool = false) {
+         parentID: UUID? = nil, demoChangeCount: Int? = nil, demoUnavailable: Bool = false,
+         gitMetadata: GitDiscoveryMetadata? = nil) {
         self.id = id; self.name = name; self.path = path; self.kind = kind
         self.branch = branch; self.lastOpened = lastOpened; self.isPinned = isPinned
         self.parentID = parentID; self.demoChangeCount = demoChangeCount
         self.demoUnavailable = demoUnavailable
+        self.gitMetadata = gitMetadata
     }
     var url: URL { URL(fileURLWithPath: path, isDirectory: true) }
     var sortDate: Date { lastOpened ?? .distantPast }

@@ -7,7 +7,7 @@ Swift 6 · SwiftUI / AppKit · macOS 15+ · Tuist 4.148.3 · SPM
 ## 当前预览
 
 已经写入源码：
-- **Projects**：原生表格、搜索与排序、项目详情 inspector、置顶项目、Finder 定位；选择文件夹后只读发现 Git 项目，再勾选导入
+- **Projects**：原生表格、搜索与排序、项目详情 inspector、置顶项目、Finder 定位；多根目录只读发现 Git 项目，复查筛选后导入/刷新；验证 worktree 关系后分组，展示带时间的分支/锁元数据和不可执行的清理安全复查
 - **Tools**：Mole 的 Space / Clean / Apps / Maintenance / Status 工作区；Space 可导入 Mole analyze JSON；Processes & Ports 可由用户主动读取当前用户进程和 TCP 监听端口，按工作目录展示项目关联
 - **Processes & Ports**：原生密集表格、身份与关联证据、部分读取提示、项目相关进程入口，以及不可执行的精确选择停止计划预览；不读取命令参数/环境变量，不自动扫描或发送进程信号
 - **Tasks**：本次会话的发现任务、取消、状态与底部结果详情；可展开 Diagnostics

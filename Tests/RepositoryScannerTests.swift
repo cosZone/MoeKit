@@ -683,6 +683,69 @@ struct RepositoryScannerTests {
         #expect(result.issues.contains { $0.kind == .symbolicLinkSkipped })
     }
 
+    @Test("FIFO markers and metadata never become known repository state")
+    func namedPipes() async throws {
+        let fixture = try ScannerFixture()
+        defer { fixture.remove() }
+        _ = try fixture.folder("marker")
+        _ = try fixture.folder("head/.git")
+        for path in ["marker/.git", "head/.git/HEAD"] {
+            let result = fixture.root.appendingPathComponent(path).withUnsafeFileSystemRepresentation {
+                Darwin.mkfifo($0!, 0o600)
+            }
+            try #require(result == 0)
+        }
+        let result = try await RepositoryScanner().scan(root: fixture.root)
+        #expect(result.items.map(\.name) == ["head"])
+        #expect(result.items.first?.branch == nil)
+        #expect(result.items.first?.metadata == nil)
+        #expect(result.issues.filter { $0.kind == .invalidMetadata }.count == 2)
+    }
+
+    @Test("Unicode and long path components preserve branch and worktree evidence")
+    func unicodeLongPaths() async throws {
+        let fixture = try ScannerFixture()
+        defer { fixture.remove() }
+        let mainName = "主仓库-🪻-" + String(repeating: "x", count: 120)
+        let workName = "工作副本-🌷-" + String(repeating: "y", count: 120)
+        let main = try fixture.repository(mainName, head: "ref: refs/heads/功能/原生界面\n")
+        let work = try fixture.linkedWorktree(workName, main: mainName)
+        let result = try await RepositoryScanner().scan(roots: [work, main, work])
+        #expect(result.items.count == 2)
+        #expect(result.items.first { $0.url == main }?.branch == "功能/原生界面")
+        #expect(result.items.first { $0.url == work }?.metadata?.isLinkedWorktree == true)
+        #expect(result.issues.isEmpty)
+    }
+
+    @Test("NUL and multiline pointers are rejected before traversing their targets")
+    func controlCharacterPointers() async throws {
+        let fixture = try ScannerFixture()
+        defer { fixture.remove() }
+        try fixture.write("nul/.git", text: "gitdir: ../metadata\u{0}/ignored\n")
+        try fixture.write("multiline/.git", text: "gitdir: ../metadata\nignored\n")
+        try fixture.write("metadata/HEAD", text: "ref: refs/heads/must-not-be-read\n")
+        let result = try await RepositoryScanner().scan(root: fixture.root)
+        #expect(result.items.count == 2)
+        #expect(result.items.allSatisfy { $0.branch == nil && $0.metadata == nil })
+        #expect(result.issues.filter { $0.kind == .invalidMetadata }.count == 2)
+    }
+
+    @Test("A directory removed during progress leaves a diagnostic and preserves other roots")
+    func directoryDisappearsDuringProgress() async throws {
+        let fixture = try ScannerFixture()
+        defer { fixture.remove() }
+        let changing = try fixture.folder("changing")
+        _ = try fixture.repository("changing/project")
+        let stable = try fixture.repository("stable")
+        let result = try await RepositoryScanner().scan(roots: [changing, stable], progress: { update in
+            if update.root == changing && update.enumeratedEntries == 1 {
+                try? FileManager.default.removeItem(at: changing)
+            }
+        })
+        #expect(result.items.map(\.url) == [stable])
+        #expect(result.issues.contains { $0.kind == .directoryUnreadable || $0.kind == .metadataUnreadable })
+    }
+
     @Test("Multi-root validation stays bounded")
     func multipleRootValidation() async throws {
         let fixture = try ScannerFixture()

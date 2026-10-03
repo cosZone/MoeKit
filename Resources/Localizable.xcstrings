@@ -3830,6 +3830,16 @@
           }
         }
       }
+    },
+    "The report changed while being read. Choose it again to retry.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "读取期间报告发生了变化。请重新选择后重试。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

@@ -1,0 +1,60 @@
+name: Docs CI
+
+on:
+  pull_request:
+    paths:
+      - 'website/**'
+      - '.github/workflows/docs.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'website/**'
+      - '.github/workflows/docs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  docs-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    defaults:
+      run:
+        working-directory: website
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '24.19.0'
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+      - name: Verify exact source and install locked dependencies
+        run: |
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          npm ci
+      - name: Lint, typecheck, content tests and production build
+        run: npm run check
+      - name: Build production container (no publication)
+        run: docker build --tag moekit-docs:ci .
+      - name: Verify container health, pages and Chinese search
+        run: |
+          set -euo pipefail
+          docker run --detach --name moekit-docs-ci -p 127.0.0.1:3000:3000 moekit-docs:ci
+          trap 'docker logs moekit-docs-ci; docker rm -f moekit-docs-ci' EXIT
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:3000/health; then break; fi
+            sleep 2
+          done
+          npm run smoke
+          test "$(docker exec moekit-docs-ci id -u)" != '0'

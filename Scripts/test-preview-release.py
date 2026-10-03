@@ -112,6 +112,12 @@ class Artifacts(unittest.TestCase):
             with self.subTest(key=key), self.assertRaises(release.ReleaseError):
                 release.inspect_zip(self.zip(info=valid_plist() | {key: value}), self.context)
 
+    def test_swiftui_app_rejects_legacy_main_interface_keys(self):
+        for key in ("NSMainStoryboardFile", "NSMainNibFile"):
+            for value in ("Main", "", False):
+                with self.subTest(key=key, value=value), self.assertRaises(release.ReleaseError):
+                    release.inspect_zip(self.zip(info=valid_plist() | {key: value}), self.context)
+
     def test_signed_metadata_is_required(self):
         info = release.metadata(self.context)
         with self.assertRaises(release.ReleaseError):
@@ -345,6 +351,105 @@ class SafeCommandDiagnostics(unittest.TestCase):
         self.assertEqual(len(raw_calls), 1, "All subprocesses must use the shared sanitized capture wrapper")
         wrapper = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "captured_run")
         self.assertIn(raw_calls[0], list(ast.walk(wrapper)))
+
+
+class CodesignCategories(unittest.TestCase):
+    """Pattern fixtures contain only synthetic data, never real signing logs."""
+
+    def test_every_allowlisted_pattern_has_coverage(self):
+        labels = [category for category, _ in release.CODESIGN_ERROR_PATTERNS]
+        self.assertEqual(len(labels), len(set(labels)))
+        for category, patterns in release.CODESIGN_ERROR_PATTERNS:
+            self.assertRegex(category, r"^[a-z]+(?:-[a-z]+)*$")
+            self.assertTrue(patterns)
+            for pattern in patterns:
+                with self.subTest(category=category, pattern=pattern):
+                    matches = release.codesign_failure_categories(pattern.upper())
+                    self.assertIn(category, matches)
+                    self.assertLessEqual(set(matches), set(labels))
+
+    def test_reports_all_matches_in_fixed_order(self):
+        streams = b"\n".join(patterns[0] for _, patterns in release.CODESIGN_ERROR_PATTERNS)
+        self.assertEqual(release.codesign_failure_categories(streams),
+                         tuple(category for category, _ in release.CODESIGN_ERROR_PATTERNS))
+
+    def test_unrecognized_private_text_uses_fixed_fallback(self):
+        for stream in (b"", b"synthetic-secret /private/path Person Name A123456789", b"\xff\xfe::error::synthetic-injection"):
+            with self.subTest(stream=stream):
+                self.assertEqual(release.codesign_failure_categories(stream), ("unclassified",))
+
+    def test_malformed_bytes_never_require_decoding(self):
+        self.assertEqual(release.codesign_failure_categories(b"\xffprivate\xfe errSecInternalComponent"),
+                         ("security-internal",))
+
+    def test_failed_signing_reports_categories_without_any_captured_text(self):
+        marker = "synthetic-signing-private-data-DO-NOT-LOG"
+        stderr = (marker + " /private/path: unable to build chain to self-signed root for signer \"" +
+                  marker + "\"\n/private/path: errSecInternalComponent").encode()
+        stdout = (marker + " resource fork, Finder information, or similar detritus not allowed").encode()
+        result = subprocess.CompletedProcess([marker], 1, stdout=stdout, stderr=stderr)
+        output, errors = io.StringIO(), io.StringIO()
+        with patch.object(release.subprocess, "run", return_value=result), redirect_stdout(output), redirect_stderr(errors):
+            with self.assertRaises(release.ReleaseError) as caught:
+                release.run(marker, marker, operation="codesign-sign")
+        self.assertEqual(str(caught.exception),
+                         "Operation codesign-sign failed (exit code 1; categories=certificate-chain,security-internal); command details withheld.")
+        self.assertNotIn(marker, str(caught.exception))
+        self.assertNotIn("/private/path", str(caught.exception))
+        self.assertNotIn("bundle-metadata", str(caught.exception), "Only stderr should be classified")
+        self.assertEqual(output.getvalue() + errors.getvalue(), "")
+
+    def test_successful_signing_does_not_emit_diagnostics(self):
+        result = subprocess.CompletedProcess([], 0, stdout=b"synthetic-private-output", stderr=b"errSecInternalComponent")
+        output, errors = io.StringIO(), io.StringIO()
+        with patch.object(release.subprocess, "run", return_value=result), redirect_stdout(output), redirect_stderr(errors):
+            returned = release.captured_run("synthetic-command", operation="codesign-sign")
+        self.assertIs(returned, result)
+        self.assertEqual(output.getvalue() + errors.getvalue(), "")
+
+    def test_other_operations_do_not_classify_private_output(self):
+        result = subprocess.CompletedProcess([], 1, stdout=b"", stderr=b"errSecInternalComponent")
+        with patch.object(release.subprocess, "run", return_value=result):
+            with self.assertRaises(release.ReleaseError) as caught:
+                release.run("synthetic-command", operation="p12-import")
+        self.assertEqual(str(caught.exception), "Operation p12-import failed (exit code 1); command details withheld.")
+
+
+class KeychainMembershipDiagnostic(unittest.TestCase):
+    def test_reports_only_fixed_boolean_without_mutating_search_list(self):
+        keychain = Path("/tmp/synthetic private folder/private-identity.keychain-db")
+        listings = ((f'"{keychain}"\n"/tmp/private-login.keychain-db"', "true"),
+                    ('"/tmp/private-login.keychain-db"', "false"))
+        for listing, expected in listings:
+            with self.subTest(expected=expected):
+                output, errors = io.StringIO(), io.StringIO()
+                with patch.object(release, "text_run", return_value=listing) as command:
+                    with redirect_stdout(output), redirect_stderr(errors):
+                        release.report_keychain_search_membership(keychain)
+                command.assert_called_once_with("/usr/bin/security", "list-keychains", "-d", "user",
+                                                operation="keychain-search-list-check")
+                self.assertEqual(output.getvalue(), "temporary_keychain_in_search_list=" + expected + "\n")
+                self.assertEqual(errors.getvalue(), "")
+                self.assertNotIn("private", output.getvalue())
+
+    def test_membership_normalizes_paths_without_printing_them(self):
+        keychain = Path("/tmp/synthetic-parent/../synthetic-keychain.keychain-db")
+        output = io.StringIO()
+        with patch.object(release, "text_run", return_value='"/tmp/synthetic-keychain.keychain-db"'):
+            with redirect_stdout(output):
+                release.report_keychain_search_membership(keychain)
+        self.assertEqual(output.getvalue(), "temporary_keychain_in_search_list=true\n")
+
+    def test_membership_command_failure_hides_captured_data(self):
+        marker = "synthetic-keychain-private-name"
+        result = subprocess.CompletedProcess([marker], 2, stdout=marker.encode(), stderr=marker.encode())
+        output, errors = io.StringIO(), io.StringIO()
+        with patch.object(release.subprocess, "run", return_value=result), redirect_stdout(output), redirect_stderr(errors):
+            with self.assertRaises(release.ReleaseError) as caught:
+                release.report_keychain_search_membership(Path("/tmp/" + marker))
+        self.assertEqual(str(caught.exception), "Operation keychain-search-list-check failed (exit code 2); command details withheld.")
+        self.assertEqual(output.getvalue() + errors.getvalue(), "")
+        self.assertNotIn(marker, str(caught.exception))
 
 
 if __name__ == "__main__":

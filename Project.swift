@@ -19,12 +19,24 @@ let project = Project(
             product: .app,
             bundleId: "com.yusixian.MoeKit",
             deploymentTargets: .macOS("15.0"),
-            infoPlist: .extendingDefault(with: [
+            // Tuist's macOS defaults include Main.storyboard; this app uses only
+            // the SwiftUI App lifecycle, so declare the bundle keys explicitly.
+            infoPlist: .dictionary([
                 "CFBundleDisplayName": "MoeKit",
                 "CFBundleDevelopmentRegion": "en",
+                "CFBundleExecutable": "$(EXECUTABLE_NAME)",
+                "CFBundleIdentifier": "$(PRODUCT_BUNDLE_IDENTIFIER)",
+                "CFBundleInfoDictionaryVersion": "6.0",
+                "CFBundleName": "$(PRODUCT_NAME)",
+                "CFBundlePackageType": "APPL",
                 "CFBundleShortVersionString": "$(MARKETING_VERSION)",
                 "CFBundleVersion": "$(CURRENT_PROJECT_VERSION)",
+                "CFBundleIconFile": "AppIcon",
+                "CFBundleIconName": "AppIcon",
+                "LSMinimumSystemVersion": "$(MACOSX_DEPLOYMENT_TARGET)",
                 "NSHumanReadableCopyright": "Copyright © 2026 MoeKit",
+                "NSHighResolutionCapable": true,
+                "NSPrincipalClass": "NSApplication",
                 "LSApplicationCategoryType": "public.app-category.developer-tools",
             ]),
             sources: ["Sources/**"],

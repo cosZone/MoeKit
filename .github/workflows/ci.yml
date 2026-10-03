@@ -32,6 +32,7 @@ jobs:
         run: |
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
           python3 Scripts/verify-source.py
+          python3 Scripts/test-preview-release.py
           xcodebuild -version
           swift --version
           test "$(tuist version)" = '4.148.3'
@@ -45,6 +46,44 @@ jobs:
                 CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=)
           xcodebuild "${args[@]}" build-for-testing
           xcodebuild "${args[@]}" test-without-building -resultBundlePath TestResults.xcresult
+      - name: Check SwiftUI bundle and smoke-launch explicit demo
+        run: |
+          python3 - <<'PY'
+          import os
+          import plistlib
+          from pathlib import Path
+          import subprocess
+
+          app = Path("DerivedData/Build/Products/Debug/MoeKit.app").resolve()
+          info = plistlib.loads((app / "Contents/Info.plist").read_bytes())
+          assert info["CFBundleIdentifier"] == "com.yusixian.MoeKit"
+          assert info["CFBundleExecutable"] == "MoeKit"
+          assert info["CFBundlePackageType"] == "APPL"
+          assert info["LSMinimumSystemVersion"] == "15.0"
+          assert "NSMainStoryboardFile" not in info and "NSMainNibFile" not in info
+          environment = {key: value for key, value in os.environ.items() if key in
+                         {"PATH", "HOME", "TMPDIR", "USER", "LOGNAME", "LANG", "LC_ALL",
+                          "LC_CTYPE", "__CF_USER_TEXT_ENCODING"}}
+          process = subprocess.Popen([str(app / "Contents/MacOS/MoeKit"), "--demo"],
+                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                     env=environment)
+          try:
+              try:
+                  code = process.wait(timeout=10)
+              except subprocess.TimeoutExpired:
+                  print("Explicit demo launch stayed alive for 10 seconds on the runner architecture.")
+                  print("This is a liveness check, not visual, accessibility, or user-Mac acceptance.")
+              else:
+                  raise SystemExit(f"Demo app exited before the smoke interval (exit code {code}).")
+          finally:
+              if process.poll() is None:
+                  process.terminate()
+                  try:
+                      process.wait(timeout=5)
+                  except subprocess.TimeoutExpired:
+                      process.kill()
+                      process.wait(timeout=5)
+          PY
       - name: Preserve test results
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

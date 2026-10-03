@@ -1,4 +1,8 @@
-# 品牌与原生界面设计
+> 历史专项规划：以下内容主要描述项目产物与清理安全等未来能力，不是当前已实现清单。MoeKit 的最新定位为个人 CLI 原生工具箱；当前实现和验证状态见 [README](../README.md)。
+
+# 历史品牌与清理界面设计
+
+最新采用 Projects / Tools / Tasks 密集表格工作台，默认 1280×800、178 pt 侧栏、项目检查器按需展开、任务详情位于底部。界面图标全部使用 SF Symbols；已批准 v1 幽灵品牌 SVG 和 AppIcon 资源见 [当前品牌素材](../Resources/Brand/README.md)。以下旧概念素材与专项界面规则保留用于追溯，若与最新 README 冲突，以 README 和 Sources 为准。
 
 状态：current 为品牌概念图；其余界面与交互均为 planned，没有应用截图或可运行 UI。
 
@@ -6,11 +10,11 @@
 
 已查看公开 [图标像素](https://github.com/cosZone/MoePeek/blob/main/Resources/AppIcon.icon/Assets/MoePeek.png)、[宣传图中的界面](https://github.com/cosZone/MoePeek/blob/main/Resources/MoePeek-promo.webp)，并对照 SwiftUI 源码。图标采用粉色至浅蓝渐变背景、淡紫色圆润幽灵、深紫描边、腮红和柔和高光。实际 UI 使用原生设置标签、分栏内容、系统控件、语义颜色、半透明材质与紧凑卡片。
 
-宣传图中的橙色文字属于宣传设计；其中平台、包体和依赖数量也可能滞后，不作为 MoeTidy 产品事实。MoePeek 的 AccentColor 资源没有固定自定义颜色，因此不能把粉蓝图标误写成全应用粉蓝填充。
+宣传图中的橙色文字属于宣传设计；其中平台、包体和依赖数量也可能滞后，不作为 MoeKit 产品事实。MoePeek 的 AccentColor 资源没有固定自定义颜色，因此不能把粉蓝图标误写成全应用粉蓝填充。
 
-## MoeTidy 概念素材
+## MoeKit 概念素材
 
-![MoeTidy 概念图标](../Resources/Brand/MoeTidy-AppIcon-concept.png)
+![MoeKit 概念图标](../Resources/Brand/MoeTidy-AppIcon-concept.png)
 
 淡紫色幽灵抱着蓝色收纳盒，粉、紫、蓝三份文件夹表达整理工作区；粉蓝渐变保持与 MoePeek 的家族感，星光和圆润轮廓让整理过程显得轻盈。
 
@@ -20,7 +24,7 @@
 
 - 用 SwiftUI、SF Symbols、系统字体、列表、表格、分栏导航和设置控件表达信息层级；适应浅色/深色、动态字号与辅助功能。
 - 粉蓝仅用于品牌与温和强调；警告、失败、删除等使用语义颜色和文字，不用品牌色淡化风险。
-- 参考 MoePeek 的 regularMaterial、统一内边距、紧凑卡片和适度圆角经验；实际尺寸按 MoeTidy 信息密度与系统布局验证。参考中浮窗圆角为 12pt、统一水平内边距为 14pt，不作为所有页面的固定值。
+- 参考 MoePeek 的 regularMaterial、统一内边距、紧凑卡片和适度圆角经验；实际尺寸按 MoeKit 信息密度与系统布局验证。参考中浮窗圆角为 12pt、统一水平内边距为 14pt，不作为所有页面的固定值。
 - 清理候选与 Git 工作区按用途分组，详情就地展示证据，危险动作进入专门审阅面板。
 - 工作区详情分别展示修改、未跟踪、ignored、提交、远程和关联 worktree 的状态，不以单一绿色“安全”徽章代替证据。
 - 所有扫描阶段可取消，并解释权限不足、未知大小与工具缺失；失败时保留可理解的下一步。
@@ -47,9 +51,9 @@
 
 ### 延续 MoePeek 的已验证设计语言
 
-开发参考为 [MoePeek](https://github.com/cosZone/MoePeek)，检查基线是 v0.19.2 / `ee75bd7`。已观察到的 GUI 约定包括原生分栏设置、系统蓝与语义颜色、系统字体、紧凑卡片、`.regularMaterial`、12 pt 浮动区域圆角及 14 pt 内边距。MoeTidy 将从这些实际约定出发，按工作区列表和审核界面的用途调整；这些数值是参考起点，不要求全界面机械照搬。
+开发参考为 [MoePeek](https://github.com/cosZone/MoePeek)，早期检查基线是 v0.19.2 / `ee75bd7`（当前工程参考已更新至 v0.20.0 / `f12d421`）。已观察到的 GUI 约定包括原生分栏设置、系统蓝与语义颜色、系统字体、紧凑卡片、`.regularMaterial`、12 pt 浮动区域圆角及 14 pt 内边距。MoeKit 将从这些实际约定出发，按工作区列表和审核界面的用途调整；这些数值是参考起点，不要求全界面机械照搬。
 
-MoePeek 现有图标采用粉蓝粉彩、淡紫角色、紫色轮廓和腮红。MoeTidy 已包含新的粉蓝整理主题首版概念图；AppIcon 包装、小尺寸与系统遮罩验证尚未实施。GUI 保持系统语义色和可读性，粉彩主要用于品牌图标与克制的点缀。
+MoePeek 现有图标采用粉蓝粉彩、淡紫角色、紫色轮廓和腮红。MoeKit 已包含新的粉蓝整理主题首版概念图；AppIcon 包装、小尺寸与系统遮罩验证尚未实施。GUI 保持系统语义色和可读性，粉彩主要用于品牌图标与克制的点缀。
 
 ### 两条清楚的操作路径
 

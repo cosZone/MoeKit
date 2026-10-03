@@ -1,23 +1,21 @@
-# MoeTidy 开发约定
+# MoeKit development conventions
 
-## 当前阶段
+## Product and current milestone
 
-当前仓库仅包含产品规划、开发与设计约定、品牌概念素材。没有可运行的应用、CLI 适配器或已验证的清理功能。任何文档、提交、演示或发布说明都必须区分 current、planned 和 verified；不得用占位项目或虚构测试结果表示功能完成。
+MoeKit is a native macOS home for a personal CLI toolbox. Projects, Tools and Tasks are the primary workspaces; Mole is one built-in module, not the app's whole identity. Prefer SwiftUI and AppKit with SF Symbols for interface icons. Use the approved custom artwork for the app icon.
 
-## 产品与实现边界
+The first source milestone implements navigation, explicit demo fixtures, bounded read-only project discovery, project-catalog persistence, a compiled-in tool registry, and Mole JSON report import. It does not implement CLI execution or cleanup. Read README.md and Documentation before making changes. Distinguish authored, built, tested and manually verified; never fabricate success or describe example data as a real result.
 
-- Swift 原生 macOS，优先 SwiftUI 与系统控件；需要窗口生命周期或系统集成时使用 AppKit。
-- 优先复用用户已安装的 Git、Mole CLI、Worktrunk。先探测能力与版本，再做范围明确的适配；不自动安装工具。
-- 独立编写应用与适配层，不复制第三方 GPL/AGPL 源码。项目许可证尚未决定。
-- 规划期间不执行清理、删除工作区、删除分支、重置偏好或修改用户配置。
-- 后续实现必须把只读扫描、操作规划、用户授权、执行与结果核验分开。
-- Git 的 clean、merged、pushed、abandoned 是独立状态。ignored 的 .env、本地数据库等依然可能包含唯一数据；删除 checkout 与删除分支是独立动作。
-- 不因命令包含 dry-run 或 JSON 就认为它只读。每条外部命令都需明确语义与副作用。
+## Engineering
 
-## 参考经验
+- Swift 6, macOS 15+, Tuist 4.148.3, SPM dependency management. There are currently no third-party runtime dependencies.
+- UI/coordinator state is @MainActor and @Observable. Blocking IO belongs off MainActor. Cancel obsolete work and do not let stale results cross real/demo mode boundaries.
+- No shell-string execution, project scripts/hooks, automatic CLI installation, privileged helper, or user-file mutation in this milestone.
+- Discovery is scoped to a user-selected directory, has explicit budgets, does not follow symlinks, and does not infer Git cleanliness from HEAD. Unreadable and unknown states remain visible.
+- Mole cleanup has no selected-path execution contract. Do not connect GUI selections to unbounded clean/purge commands. Old JSON without coverage is unknown, unavailable size is not zero, and overview totals may overlap.
+- Test filesystem operations only in unique temporary fixtures. Do not run deletion tests against real projects.
+- Original implementation only: do not copy GPL/AGPL application or CLI source. The project license remains undecided.
 
-参考 [MoePeek](https://github.com/cosZone/MoePeek) 的 Tuist/SPM、Swift 严格并发、SwiftUI/AppKit 分层、coordinator 状态机、协议适配、String Catalog 与 Swift Testing 经验。参考不等于继承所有依赖、权限、菜单栏形态或发布配置。
+## Verification and publishing
 
-UI 状态使用 MainActor 隔离，后台扫描与进程执行不得阻塞主线程。Observable 状态优先 stored property；外部状态同步必须有明确观察机制。异步任务支持取消，回调、计时器、事件监听与窗口资源应及时释放。
-
-具体结构与验证计划见 [开发约定](docs/development.md)，交互与品牌见 [设计约定](docs/design.md)。后续新增构建、测试、发布步骤时，只记录实际可运行并验证的命令。
+Use Scripts/verify-source.py for structural checks, then the documented macOS build/test workflow. Python checks are not Swift compilation. Report failing, unrun and passed stages separately. CI may build an ad-hoc preview artifact; public releases and signing use separately reviewed workflows. Never commit credentials, P12 data, passwords, Team IDs, personal signing identities or keychains. No secrets in pull-request jobs; no pull_request_target execution of an untrusted head. A signature is not Apple notarization.

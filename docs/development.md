@@ -1,3 +1,5 @@
+> 历史专项规划：以下内容主要描述项目产物与清理安全等未来能力，不是当前已实现清单。MoeKit 的最新定位为个人 CLI 原生工具箱；当前实现和验证状态见 [README](../README.md)。
+
 # 开发与验证约定
 
 状态：planned。当前没有 Swift 工程或可执行构建、测试、发布流水线。
@@ -6,7 +8,7 @@
 
 [MoePeek](https://github.com/cosZone/MoePeek) 使用 Tuist 生成工程、SPM 管理依赖、Swift 6 严格并发、SwiftUI/AppKit、Swift Testing，以及英文/简体中文 String Catalog。其项目指导位于 [CLAUDE.md](https://github.com/cosZone/MoePeek/blob/main/CLAUDE.md)，工程配置见 [Project.swift](https://github.com/cosZone/MoePeek/blob/main/Project.swift)。
 
-可复用的是分层、状态管理、构建配置和验证方法，不是整套翻译业务实现。MoeTidy 的最低 macOS 版本、依赖清单和签名方案仍需在实施阶段确认。
+可复用的是分层、状态管理、构建配置和验证方法，不是整套翻译业务实现。MoeKit 的最低 macOS 版本、依赖清单和签名方案仍需在实施阶段确认。
 
 ## 计划工程结构
 
@@ -40,7 +42,7 @@
 
 借鉴 MoePeek 的 SemVer、单一版本来源、忽略个人 Signing.xcconfig、保留示例配置、签名验证和 draft 测试发布经验。若未来采用 Sparkle，需单独设计密钥管理和测试期间更新器隔离。
 
-MoePeek 的现有发布 workflow 未包含测试门禁或 Apple 公证；MoeTidy 不直接沿用这一缺口。未来发布需完成 CI 构建与测试、稳定签名、合适的公证与分发验证、发布材料检查，再建立正式发布流程。当前不创建标签、发布下载链接或可用性徽章。
+MoePeek 的现有发布 workflow 未包含测试门禁或 Apple 公证；MoeKit 不直接沿用这一缺口。未来发布需完成 CI 构建与测试、稳定签名、合适的公证与分发验证、发布材料检查，再建立正式发布流程。当前不创建标签、发布下载链接或可用性徽章。
 
 许可证及分发方式未决定；对源码、工具调用、捆绑和分发分别做依赖与许可记录，不在本文推断商业分发结论。
 
@@ -48,9 +50,9 @@ MoePeek 的现有发布 workflow 未包含测试门禁或 Apple 公证；MoeTidy
 
 ## MoePeek 经验映射
 
-已检查 [cosZone/MoePeek](https://github.com/cosZone/MoePeek)，基线为 v0.19.2 / `ee75bd7`。以下是参考项目的观察结果，不是 MoeTidy 已建立的工程或已通过的构建声明。
+已检查 [cosZone/MoePeek](https://github.com/cosZone/MoePeek)，早期观察基线为 v0.19.2 / `ee75bd7`（当前工程参考已更新至 v0.20.0 / `f12d421`）。以下是参考项目的观察结果，不是 MoeKit 已建立的工程或已通过的构建声明。
 
-| MoePeek 已验证约定 | MoeTidy 计划借鉴 |
+| MoePeek 已验证约定 | MoeKit 计划借鉴 |
 | --- | --- |
 | Swift 6 strict concurrency、macOS 15+、SwiftUI/AppKit | 原生技术栈及明确的并发隔离；先验证 Git/Process 与取消流程 |
 | Tuist 4.148.3 + SPM | 评估采用同类工程生成与依赖组织，让维护方式与已有项目一致 |
@@ -62,6 +64,6 @@ MoePeek 的现有发布 workflow 未包含测试门禁或 Apple 公证；MoeTidy
 | CLAUDE.md 强调弱引用、窗口/timer 清理、异步取消 | 将窗口生命周期、资源释放和取消作为工程验收项 |
 | 签名配置以被忽略的本地文件和 `.example` 区分 | 不提交凭据或本机签名信息；提供不含秘密的配置样例 |
 
-MoePeek 的参考构建步骤是 `tuist install`、`tuist generate --no-open`，再使用 xcodebuild；这些不能直接当成 MoeTidy 当前的运行说明。工程生成并实际构建成功后，再记录 MoeTidy 自己的准确 scheme、配置和命令。
+MoePeek 的参考构建步骤是 `tuist install`、`tuist generate --no-open`，再使用 xcodebuild；这些不能直接当成 MoeKit 当前的运行说明。工程生成并实际构建成功后，再记录 MoeKit 自己的准确 scheme、配置和命令。
 
-现有参考 release workflow 没有覆盖测试与公证步骤。MoeTidy 可学习其组织方式，但应在自身发行门槛中补齐相应验证，不沿用这项缺口。参考项目的已观察结构不等于允许复制其源码；拟复用任何文件之前仍需核实许可与适用性。
+现有参考 release workflow 没有覆盖测试与公证步骤。MoeKit 可学习其组织方式，但应在自身发行门槛中补齐相应验证，不沿用这项缺口。参考项目的已观察结构不等于允许复制其源码；拟复用任何文件之前仍需核实许可与适用性。

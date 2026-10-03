@@ -1,0 +1,55 @@
+name: Native CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: macos-15
+    timeout-minutes: 25
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+        with:
+          version: '2026.3.10'
+      - name: Check source and tool versions
+        run: |
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          python3 Scripts/verify-source.py
+          xcodebuild -version
+          swift --version
+          test "$(tuist version)" = '4.148.3'
+      - name: Generate Xcode workspace
+        run: tuist generate --no-open
+      - name: Build app and tests, then run the built tests
+        run: |
+          set -euo pipefail
+          args=(-workspace MoeKit.xcworkspace -scheme MoeKit -configuration Debug
+                -destination 'platform=macOS' -derivedDataPath DerivedData
+                CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=)
+          xcodebuild "${args[@]}" build-for-testing
+          xcodebuild "${args[@]}" test-without-building -resultBundlePath TestResults.xcresult
+      - name: Preserve test results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: native-test-results-${{ env.SOURCE_SHA }}
+          path: TestResults.xcresult
+          if-no-files-found: ignore
+          retention-days: 14

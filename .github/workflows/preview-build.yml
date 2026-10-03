@@ -1,0 +1,84 @@
+name: Preview app artifact
+
+# Manual build only. This workflow never creates a tag or GitHub Release.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preview:
+    runs-on: macos-15
+    timeout-minutes: 25
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+        with:
+          version: '2026.3.10'
+      - name: Verify exact source and generate workspace
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 Scripts/verify-source.py
+          test "$(tuist version)" = '4.148.3'
+          tuist generate --no-open
+      - name: Build universal ad-hoc app and test the same build
+        run: |
+          set -euo pipefail
+          args=(-workspace MoeKit.xcworkspace -scheme MoeKit -configuration Debug
+                -destination 'platform=macOS' -derivedDataPath DerivedData
+                'ARCHS=arm64 x86_64' ONLY_ACTIVE_ARCH=NO
+                CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=)
+          xcodebuild "${args[@]}" build-for-testing
+          xcodebuild "${args[@]}" test-without-building -resultBundlePath TestResults.xcresult
+      - name: Package tested app and record provenance
+        run: |
+          set -euo pipefail
+          app=DerivedData/Build/Products/Debug/MoeKit.app
+          test -d "$app"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          codesign -dvv "$app" 2>&1 | grep -F 'Signature=adhoc'
+          lipo -verify_arch arm64 x86_64 "$app/Contents/MacOS/MoeKit"
+          mkdir -p Preview
+          zip_name="MoeKit-preview-${GITHUB_SHA:0:12}-universal.zip"
+          ditto -c -k --sequesterRsrc --keepParent "$app" "Preview/$zip_name"
+          (cd Preview && shasum -a 256 "$zip_name" > SHA256SUMS.txt)
+          printf '%s\n' "$GITHUB_SHA" > Preview/SOURCE_COMMIT.txt
+          {
+            echo 'MoeKit development preview (Debug; macOS 15+)'
+            echo "Source: https://github.com/$GITHUB_REPOSITORY/commit/$GITHUB_SHA"
+            echo "Run: https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            echo 'Architectures: arm64 and x86_64; tests ran on the runner architecture only.'
+            echo 'Ad-hoc signed. NOT Developer ID signed. NOT notarized.'
+            echo 'No App Sandbox entitlement. No signing identity or certificate was uploaded.'
+            echo 'Gatekeeper may block this app. No security-bypass commands are supplied.'
+            echo 'Developer ID signing and public release remain separate, approval-gated steps.'
+            echo 'Native visual/accessibility verification is not covered by these unit tests.'
+            xcodebuild -version
+            swift --version
+            tuist version
+            codesign -dvv "$app" 2>&1
+          } > Preview/BUILD_INFO.txt
+          cat Preview/BUILD_INFO.txt >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload downloadable preview
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: MoeKit-preview-${{ github.sha }}
+          path: Preview/
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+      - name: Preserve test results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: preview-test-results-${{ github.sha }}
+          path: TestResults.xcresult
+          if-no-files-found: ignore
+          retention-days: 14

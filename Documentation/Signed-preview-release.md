@@ -1,0 +1,75 @@
+# GitHub Actions 开发签名预览
+
+此流程交付供作者／测试者试用的 `.app` ZIP，并创建明确标为 prerelease 的 GitHub Release。它使用现有 **Apple Development** 证书，**不是 Developer ID 分发签名，也没有 Apple 公证**。Gatekeeper 仍可能阻止打开。不要把“有效签名”理解为“苹果已审核”或“任意 Mac 均可直接运行”。正式对外分发应另行配置 Developer ID 与公证；本流程不包含绕过系统安全检查的命令。
+
+## 一次性准备：由仓库所有者直接配置 Secrets
+
+凭据只由所有者在 GitHub 的安全表单中输入；不要放进聊天、Issue、PR、源码、工作流输入或构建产物。现有 P12 必须包含证书及其配套私钥，仅 `.cer` 不够；P12 使用非空密码保护。
+
+推荐把以下三个值创建为 **cosZone organization Actions secrets**，Repository access 选择 **Selected repositories** 并选中 `MoeKit`；如果希望与 MoePeek 共用，同时选中 `MoePeek`：
+
+- `SIGNING_CERTIFICATE_P12`：包含恰好一个有效 Apple Development 签名身份的 P12 文件的 base64 文本
+- `SIGNING_CERTIFICATE_PASSWORD`：该 P12 的非空导出密码
+- `DEVELOPMENT_TEAM`：证书所属的 10 位 Apple Developer Team ID
+
+入口：[cosZone → Settings → Secrets and variables → Actions](https://github.com/organizations/cosZone/settings/secrets/actions)。也可在 [MoeKit repository Actions secrets](https://github.com/cosZone/MoeKit/settings/secrets/actions) 中使用同名 Repository secrets，仅对 MoeKit 生效。不要在普通 Variables 中保存这些值。
+
+MoeKit 工作流直接读取上述三个名字，**不要求创建 `Prod` environment**。MoePeek 既有 `Prod` environment secrets 保持原样；environment 同名值优先于 repository／organization 值，因此增加组织级值不会自动替换 MoePeek 的现有签名值。不要为“同步”而导出、复制或删除现有隐藏值。
+
+工作流只报告缺失的 secret 名字，不显示内容；缺失、空密码、P12 无效、身份数量不为一、证书过期、身份类型错误或 Team ID 不匹配都会阻止签名与发布，不会退回 unsigned/ad-hoc 发布。没有 Sparkle、自动更新、公证或额外账号凭据要求。
+
+签名证书的公开部分会随正常代码签名进入 `.app`，其中可包含签名者名称和 Team ID；私钥、P12 和密码不会进入交付包。任何真实签名软件都不能把公开证书身份当成隐藏信息。
+
+## 审核并合入后才运行
+
+1. 审核 `.github/workflows/preview-release.yml`、`Scripts/preview-release.py`、测试与应用源码，并合入默认分支。GitHub 的手动 workflow dispatch 需要默认分支存在该工作流。不要临时改成 PR／tag 自动触发来绕过这一步
+2. 确认默认分支的实际 40 位 commit SHA，查看该提交的 CI 结果。通过 Actions 打开 **Signed preview release**，选择默认分支
+3. 输入 `version`，例如 `0.1.0-preview.1`，以及完整 `source_sha`。版本不带 `v`，只允许 `数字.数字.数字-preview.数字`，不接受任意 ref、shell 文本、稳定版号或其他后缀
+4. Workflow 的源 SHA、checkout SHA 和填写的 SHA 必须一致。默认分支已前进时应重新审核新的 HEAD 后填写它，不能通过指定旧分支／tag 绕过
+5. 查看 build-and-test、sign、publish 三个 job 的结果；只有全部完成后才把 Release 视为已交付
+
+最终 tag 为 `v0.1.0-preview.1`，精确指向填写并验证过的提交；Release 名称含 `preview`，始终 `prerelease: true`，不会成为 latest 正式版。版本示例只是格式示例，不表示该版本已发布。
+
+## 构建与交付内容
+
+- macOS 15 runner、Xcode 16.4、Tuist 4.148.3；各 action 固定到完整 commit SHA
+- 无签名 secrets 的独立 job 运行 Release 配置单元测试（`ENABLE_TESTABILITY=YES`），随后从相同源码单独 archive universal Release；测试只运行 runner 的当前 CPU 架构
+- 归档 `.app` 同时包含 arm64、x86_64，Bundle ID 固定为 `com.yusixian.MoeKit`，最低 macOS 15.0
+- 签名 job 不编译源码、执行应用或运行第三方安装器；它只验证同次 run/attempt 的产物，用临时 keychain 内唯一的 Apple Development 身份重新签名，核对证书指纹、预期 Team ID、两种架构、bundle 信息与 provenance
+- Hardened Runtime 开启；无额外 entitlements、无 get-task-allow、无 App Sandbox、无 provisioning profile。当前不允许嵌套可执行代码；未来新增 framework/helper/XPC 需要单独审查签名方式
+- 不使用公证或安全时间戳；证书过期／撤销可能影响后续校验。代码签名并不承诺长期分发可用性
+- 最终 ZIP 只包含 `MoeKit.app`，另有 `SHA256SUMS.txt` 和 `BUILD_INFO.json`。后者记录版本、源码／工作流运行链接、工具链、架构、验证边界，不写入 Team ID、个人身份文本或任何 secret 值
+- `.app/Contents/Info.plist` 在签名前写入同样的源码 SHA、预览版本与 run/attempt，用于交叉核对最终文件确实来自此构建
+- 测试结果单独保留 14 天；unsigned 中间产物仅用于 job 间传递，保留 1 天，不发布到 Release；signed Actions 产物保留 14 天
+
+`.app` 的版本号使用 `0.1.0` 这样的数字部分，完整 preview 版本单独保存；build number 来自 Actions run number。
+
+## 权限、清理与失败处理
+
+- 只有手动 dispatch，限本仓库默认分支；源码和 workflow 均绑定到同一完整 SHA。所有输入通过环境变量传入并作白名单校验，不插值为 shell 程序
+- build/sign token 只有 contents read；只有 publish job 有 contents write。签名 secrets 仅在 sign 的一个步骤注入，不提供给 Xcode、mise、测试或发布 job
+- P12 仅写入 runner 临时目录，导入后立刻移除；临时 keychain、证书校验副本和临时展开目录通过 finally 加 always 清理。上传列表逐个列明，只接受 ZIP、校验和与安全构建信息
+- 没有 `pull_request_target`、PR secrets、持久凭据、自动创建 Apple 凭据或远程配置修改。不要在含真实凭据的任务中启用命令追踪、打印环境、上传整个 workspace 或改变白名单上传路径
+- 并发按仓库预览发布串行化，后来的 dispatch 不会取消已开始的签名／上传
+- 已有 tag 若指向其他 SHA，立即停止，绝不移动 tag。已有同 tag 的已发布 Release **或 draft** 一律停止，不覆盖／删除其资产
+- 新 Release 先创建为 draft，逐个上传并核对服务端 SHA-256，再确认 tag 未变，最后转为 prerelease。失败时可能留下 tag 和／或 draft，便于检查；不会自动删除它们，也不会把半上传结果当成功
+- **在尚未创建 Release/draft 的阶段失败**，修复原因后选择 **Re-run all jobs** 或重新 dispatch。不要只选 Re-run failed jobs：产物名称与 provenance 绑定 run attempt，旧 attempt 的产物不能用于新的 signing/publishing attempt
+- **已留下 Release/draft 时**，先手动审核其内容再决定恢复方式，或选择新的 preview 版本重新 dispatch。此脚本不自动恢复、覆盖或删除已有 Release
+
+默认分支校验是此受审工作流的防误用措施，不能约束有权限修改其它工作流的恶意仓库写入者。必须仅向可信协作者开放写权限，并保护默认分支／发布脚本的修改；organization secret 的 Selected repositories 决定仓库可用范围。需要更强的审批隔离时，应另行设计受保护 environment，不要认为代码中的分支判断等同于 GitHub 的服务端 secret access policy。
+
+## 安装与后续版本身份
+
+下载前对照 Release 的 exact source/run 链接，并用 `SHA256SUMS.txt` 检查下载文件。解压得到 `MoeKit.app` 后按 macOS 的正常安装／安全提示处理。若系统拒绝打开，此开发预览并不保证可安装；不要通过关闭 Gatekeeper、删除 quarantine 或重签成 ad-hoc 解决。
+
+固定 Bundle ID 与一致的开发团队有助于版本身份连续性，但**不保证 TCC／辅助功能／文件访问等授权在更新后沿用**。签名类型、证书链、designated requirement、系统版本、安装位置和权限范围变化均可能影响系统判断。未来从 Apple Development 转为 Developer ID 时须实际测试权限迁移，不能提前承诺“不再弹权限提示”。
+
+首次 release 仍需真实 Mac 检查启动、导航、文件夹选择、扫描取消、Demo 切换、VoiceOver 以及两种架构的运行。CI 单元测试和签名校验不能代替这些验收。
+
+## 参考依据
+
+- [MoePeek 已有 release workflow（审查时固定提交）](https://github.com/cosZone/MoePeek/blob/f12d42122ae3129177cf7d8ce78ca0a910d419d7/.github/workflows/release.yml)：沿用 secret 命名；没有照搬输入插值、宽权限或可变 action tag
+- [GitHub Actions secure use](https://docs.github.com/en/actions/reference/security/secure-use)：输入隔离、最小权限、固定 action SHA
+- [GitHub Actions secrets](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets)：组织／仓库／environment secrets 与访问范围
+- [GitHub release asset API](https://docs.github.com/en/rest/releases/assets)：上传及 SHA-256 digest 校验
+- [Apple Developer ID](https://developer.apple.com/developer-id/) 与 [macOS 分发签名](https://developer.apple.com/documentation/xcode/creating-distribution-signed-code-for-the-mac/)：开发签名、公证、正式分发和隐私授权身份之间的边界

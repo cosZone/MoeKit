@@ -45,19 +45,42 @@ def require(condition: bool, message: str) -> None:
         raise ReleaseError(message)
 
 
-def run(*args: str) -> bytes:
-    """Never echo args, subprocess output, or exceptions containing passwords."""
+# Diagnostics may use only reviewed, fixed operation names, never argv or input.
+OPERATIONS = frozenset({
+    "source-read", "source-clean", "app-architectures", "toolchain-version",
+    "unsigned-package", "keychain-delete", "keychain-restore-search-list",
+    "keychain-list", "keychain-create", "keychain-configure", "keychain-unlock",
+    "p12-import", "keychain-partition-list", "identity-find", "archive-unpack",
+    "codesign-sign", "codesign-verify", "codesign-display", "entitlements-read",
+    "certificate-extract", "archive-package", "archive-round-trip",
+    "codesign-verify-packaged",
+})
+
+
+def captured_run(*args: str, operation: str) -> subprocess.CompletedProcess:
+    """Capture both streams; expose only a fixed label and numeric status."""
+    require(operation in OPERATIONS, "Unrecognized local operation label.")
     environment = {key: value for key, value in os.environ.items()
                    if key not in (*SECRET_NAMES, "GH_TOKEN", "GITHUB_TOKEN")}
-    result = subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                            env=environment, check=False, timeout=120)
+    try:
+        result = subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                env=environment, check=False, timeout=120)
+    except subprocess.TimeoutExpired:
+        raise ReleaseError(f"Operation {operation} timed out after 120 seconds; command details withheld.") from None
+    except OSError as error:
+        code = str(error.errno) if isinstance(error.errno, int) else "unavailable"
+        raise ReleaseError(f"Operation {operation} could not start (OS error {code}); command details withheld.") from None
     if result.returncode:
-        raise ReleaseError("A required local command failed; no command arguments or signing output were logged.")
-    return result.stdout
+        raise ReleaseError(f"Operation {operation} failed (exit code {result.returncode}); command details withheld.")
+    return result
 
 
-def text_run(*args: str) -> str:
-    return run(*args).decode("utf-8", errors="strict").strip()
+def run(*args: str, operation: str) -> bytes:
+    return captured_run(*args, operation=operation).stdout
+
+
+def text_run(*args: str, operation: str) -> str:
+    return run(*args, operation=operation).decode("utf-8", errors="strict").strip()
 
 
 def validate_inputs(environment: dict[str, str]) -> dict[str, str]:
@@ -83,9 +106,9 @@ def validate_inputs(environment: dict[str, str]) -> dict[str, str]:
 
 def validate() -> dict[str, str]:
     context = validate_inputs(dict(os.environ))
-    require(text_run("git", "rev-parse", "HEAD") == context["source_sha"], "Checkout does not match the reviewed source SHA.")
+    require(text_run("git", "rev-parse", "HEAD", operation="source-read") == context["source_sha"], "Checkout does not match the reviewed source SHA.")
     # Untracked build products are allowed; tracked source modifications are not.
-    run("git", "diff", "--exit-code", "HEAD", "--")
+    run("git", "diff", "--exit-code", "HEAD", "--", operation="source-clean")
     return context
 
 
@@ -143,7 +166,7 @@ def verify_app(app: Path, context: dict[str, str], *, provenance: bool = True) -
         validate_info(info, context)
     executable = app / "Contents/MacOS/MoeKit"
     require(executable.is_file() and os.access(executable, os.X_OK), "App executable is missing.")
-    require(set(text_run("/usr/bin/lipo", "-archs", str(executable)).split()) == {"arm64", "x86_64"},
+    require(set(text_run("/usr/bin/lipo", "-archs", str(executable), operation="app-architectures").split()) == {"arm64", "x86_64"},
             "The app must contain exactly arm64 and x86_64 slices.")
     # This milestone has no embedded frameworks, XPC services, helpers, or plugins.
     # New nested code requires its own explicit signing review instead of --deep signing.
@@ -193,7 +216,7 @@ def check_metadata(info: dict, context: dict[str, str], *, signed: bool) -> None
 
 def prepare() -> None:
     context = validate()
-    require(text_run("xcodebuild", "-version").splitlines()[0] == "Xcode 16.4", "Unexpected Xcode version.")
+    require(text_run("xcodebuild", "-version", operation="toolchain-version").splitlines()[0] == "Xcode 16.4", "Unexpected Xcode version.")
     app = Path("build/MoeKit.xcarchive/Products/Applications/MoeKit.app")
     verify_app(app, context, provenance=False)
     plist_path = app / "Contents/Info.plist"
@@ -204,7 +227,7 @@ def prepare() -> None:
     verify_app(app, context)
     directory = Path("Unsigned")
     directory.mkdir(exist_ok=False)
-    run("/usr/bin/ditto", "-c", "-k", "--sequesterRsrc", "--keepParent", str(app), str(directory / "MoeKit-unsigned.zip"))
+    run("/usr/bin/ditto", "-c", "-k", "--sequesterRsrc", "--keepParent", str(app), str(directory / "MoeKit-unsigned.zip"), operation="unsigned-package")
     inspect_zip(directory / "MoeKit-unsigned.zip", context)
     info = metadata(context)
     info.update(signing="unsigned intermediate; do not distribute", signature_verified=False)
@@ -227,7 +250,7 @@ def cleanup() -> None:
     failed = False
     if keychain.exists():
         try:
-            run("/usr/bin/security", "delete-keychain", str(keychain))
+            run("/usr/bin/security", "delete-keychain", str(keychain), operation="keychain-delete")
         except ReleaseError:
             failed = True
     original = directory / "original-keychains.json"
@@ -235,7 +258,7 @@ def cleanup() -> None:
         try:
             items = json.loads(original.read_text(encoding="utf-8"))
             require(isinstance(items, list) and all(isinstance(item, str) for item in items), "Invalid keychain cleanup state.")
-            run("/usr/bin/security", "list-keychains", "-d", "user", "-s", *items)
+            run("/usr/bin/security", "list-keychains", "-d", "user", "-s", *items, operation="keychain-restore-search-list")
         except (ReleaseError, ValueError):
             failed = True
     shutil.rmtree(directory)
@@ -256,7 +279,7 @@ def sign() -> None:
     scratch = signing_directory()
     scratch.mkdir(mode=0o700, exist_ok=False)
     try:
-        original = shlex.split(text_run("/usr/bin/security", "list-keychains", "-d", "user"))
+        original = shlex.split(text_run("/usr/bin/security", "list-keychains", "-d", "user", operation="keychain-list"))
         write_json(scratch / "original-keychains.json", original)
         keychain = scratch / "preview.keychain-db"
         password = secrets.token_urlsafe(48)
@@ -268,56 +291,53 @@ def sign() -> None:
         require(0 < len(decoded) < 4 * 1024 * 1024, "P12 payload is empty or unexpectedly large.")
         p12.write_bytes(decoded)
         p12.chmod(0o600)
-        run("/usr/bin/security", "create-keychain", "-p", password, str(keychain))
-        run("/usr/bin/security", "set-keychain-settings", "-lut", "900", str(keychain))
-        run("/usr/bin/security", "unlock-keychain", "-p", password, str(keychain))
+        run("/usr/bin/security", "create-keychain", "-p", password, str(keychain), operation="keychain-create")
+        run("/usr/bin/security", "set-keychain-settings", "-lut", "900", str(keychain), operation="keychain-configure")
+        run("/usr/bin/security", "unlock-keychain", "-p", password, str(keychain), operation="keychain-unlock")
         run("/usr/bin/security", "import", str(p12), "-k", str(keychain), "-P",
-            os.environ["SIGNING_CERTIFICATE_PASSWORD"], "-T", "/usr/bin/codesign", "-T", "/usr/bin/security")
+            os.environ["SIGNING_CERTIFICATE_PASSWORD"], "-T", "/usr/bin/codesign", "-T", "/usr/bin/security", operation="p12-import")
         p12.unlink()
         run("/usr/bin/security", "set-key-partition-list", "-S", "apple-tool:,apple:,codesign:",
-            "-s", "-k", password, str(keychain))
-        identities = text_run("/usr/bin/security", "find-identity", "-v", "-p", "codesigning", str(keychain))
+            "-s", "-k", password, str(keychain), operation="keychain-partition-list")
+        identities = text_run("/usr/bin/security", "find-identity", "-v", "-p", "codesigning", str(keychain), operation="identity-find")
         matches = re.findall(r'^\s*\d+\)\s+([A-Fa-f0-9]{40})\s+"([^"\n]+)"', identities, re.MULTILINE)
         require(len(matches) == 1, "P12 must contain exactly one currently valid code-signing certificate with its private key.")
         identity, name = matches[0]
         require(name.startswith("Apple Development:"), "This preview expects an Apple Development certificate; other identity types require a separate review.")
         unpacked = scratch / "app"
-        run("/usr/bin/ditto", "-x", "-k", str(directory / "MoeKit-unsigned.zip"), str(unpacked))
+        run("/usr/bin/ditto", "-x", "-k", str(directory / "MoeKit-unsigned.zip"), str(unpacked), operation="archive-unpack")
         app = unpacked / "MoeKit.app"
         verify_app(app, context)
         # No inherited entitlements and no --deep signing. No network timestamp or notarization.
         run("/usr/bin/codesign", "--force", "--sign", identity, "--keychain", str(keychain),
-            "--options", "runtime", "--timestamp=none", str(app))
-        run("/usr/bin/codesign", "--verify", "--deep", "--strict", "--all-architectures", str(app))
-        result = subprocess.run(("/usr/bin/codesign", "--display", "--verbose=4", str(app)),
-                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False, timeout=120,
-                                env={key: value for key, value in os.environ.items()
-                                     if key not in (*SECRET_NAMES, "GH_TOKEN", "GITHUB_TOKEN")})
-        require(result.returncode == 0, "Could not inspect the code signature.")
+            "--options", "runtime", "--timestamp=none", str(app), operation="codesign-sign")
+        run("/usr/bin/codesign", "--verify", "--deep", "--strict", "--all-architectures", str(app), operation="codesign-verify")
+        result = captured_run("/usr/bin/codesign", "--display", "--verbose=4", str(app),
+                              operation="codesign-display")
         details = (result.stdout + result.stderr).decode("utf-8", errors="strict")
         require("Signature=adhoc" not in details and "Authority=Apple Development:" in details,
                 "The final app is not signed with an Apple Development identity.")
         require(re.search(r"^TeamIdentifier=" + re.escape(os.environ["DEVELOPMENT_TEAM"]) + r"$", details, re.MULTILINE) is not None,
                 "The signing certificate does not match DEVELOPMENT_TEAM.")
         require("runtime" in details, "Hardened runtime flag is missing.")
-        entitlements = run("/usr/bin/codesign", "--display", "--entitlements", ":-", str(app))
+        entitlements = run("/usr/bin/codesign", "--display", "--entitlements", ":-", str(app), operation="entitlements-read")
         parsed = plistlib.loads(entitlements) if entitlements.strip() else {}
         require(parsed == {}, "Unexpected app entitlements; a separate entitlement review is required.")
         prefix = str(scratch / "signer")
-        run("/usr/bin/codesign", "--display", "--extract-certificates=" + prefix, str(app))
+        run("/usr/bin/codesign", "--display", "--extract-certificates=" + prefix, str(app), operation="certificate-extract")
         require(hashlib.sha1(Path(prefix + "0").read_bytes()).hexdigest().upper() == identity.upper(),
                 "The final app signer does not match the imported identity.")
         verify_app(app, context)
         destination = Path("Preview")
         destination.mkdir(exist_ok=False)
         zip_name = f"MoeKit-v{context['version']}-macOS-universal.zip"
-        run("/usr/bin/ditto", "-c", "-k", "--sequesterRsrc", "--keepParent", str(app), str(destination / zip_name))
+        run("/usr/bin/ditto", "-c", "-k", "--sequesterRsrc", "--keepParent", str(app), str(destination / zip_name), operation="archive-package")
         inspect_zip(destination / zip_name, context)
         round_trip = scratch / "round-trip"
-        run("/usr/bin/ditto", "-x", "-k", str(destination / zip_name), str(round_trip))
+        run("/usr/bin/ditto", "-x", "-k", str(destination / zip_name), str(round_trip), operation="archive-round-trip")
         packaged_app = round_trip / "MoeKit.app"
         verify_app(packaged_app, context)
-        run("/usr/bin/codesign", "--verify", "--deep", "--strict", "--all-architectures", str(packaged_app))
+        run("/usr/bin/codesign", "--verify", "--deep", "--strict", "--all-architectures", str(packaged_app), operation="codesign-verify-packaged")
         info = metadata(context)
         info.update(signing="Apple Development", signature_verified=True, expected_team_verified=True,
                     entitlements={}, hardened_runtime=True, secure_timestamp=False,

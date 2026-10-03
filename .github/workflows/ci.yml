@@ -33,7 +33,11 @@ jobs:
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
           python3 Scripts/verify-source.py
           python3 Scripts/test-preview-release.py
+          python3 Scripts/test-ui-render-artifacts.py
           xcodebuild -version
+          xcodebuild -help > XcodeHelp.txt 2>&1
+          grep -F -- '-testLanguage' XcodeHelp.txt
+          grep -F -- '-testRegion' XcodeHelp.txt
           swift --version
           test "$(tuist version)" = '4.148.3'
       - name: Generate Xcode workspace
@@ -45,7 +49,17 @@ jobs:
                 -destination 'platform=macOS' -derivedDataPath DerivedData
                 CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=)
           xcodebuild "${args[@]}" build-for-testing
-          xcodebuild "${args[@]}" test-without-building -resultBundlePath TestResults.xcresult
+          xcodebuild "${args[@]}" test-without-building -testLanguage en -testRegion US -resultBundlePath TestResults.xcresult
+      - name: Render Projects and Tasks in Simplified Chinese
+        run: |
+          set -euo pipefail
+          xcodebuild -workspace MoeKit.xcworkspace -scheme MoeKit -configuration Debug \
+            -destination 'platform=macOS' -derivedDataPath DerivedData \
+            CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= \
+            test-without-building -testLanguage zh-Hans -testRegion CN \
+            -only-testing:MoeKitTests/UISnapshotTests/testDemoProjectsRenders \
+            -only-testing:MoeKitTests/UISnapshotTests/testDemoTasksRenders \
+            -resultBundlePath ChineseRenderResults.xcresult
       - name: Check SwiftUI bundle and smoke-launch explicit demo
         run: |
           python3 - <<'PY'
@@ -89,6 +103,11 @@ jobs:
         run: |
           if [ -d TestResults.xcresult ]; then
             xcrun xcresulttool export attachments --path TestResults.xcresult --output-path UIRenderArtifacts
+            python3 Scripts/verify-ui-render-artifacts.py UIRenderArtifacts en
+          fi
+          if [ -d ChineseRenderResults.xcresult ]; then
+            xcrun xcresulttool export attachments --path ChineseRenderResults.xcresult --output-path ChineseUIRenderArtifacts
+            python3 Scripts/verify-ui-render-artifacts.py ChineseUIRenderArtifacts zh-Hans
           fi
       - name: Preserve owned-view render evidence
         if: always()
@@ -98,11 +117,21 @@ jobs:
           path: UIRenderArtifacts/
           if-no-files-found: ignore
           retention-days: 14
+      - name: Preserve Chinese owned-view render evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: native-chinese-view-renders-${{ env.SOURCE_SHA }}
+          path: ChineseUIRenderArtifacts/
+          if-no-files-found: ignore
+          retention-days: 14
       - name: Preserve test results
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: native-test-results-${{ env.SOURCE_SHA }}
-          path: TestResults.xcresult
+          path: |
+            TestResults.xcresult
+            ChineseRenderResults.xcresult
           if-no-files-found: ignore
           retention-days: 14

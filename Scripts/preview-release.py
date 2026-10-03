@@ -53,8 +53,43 @@ OPERATIONS = frozenset({
     "p12-import", "keychain-partition-list", "identity-find", "archive-unpack",
     "codesign-sign", "codesign-verify", "codesign-display", "entitlements-read",
     "certificate-extract", "archive-package", "archive-round-trip",
-    "codesign-verify-packaged",
+    "codesign-verify-packaged", "keychain-search-list-check",
 })
+
+
+# These are diagnostic hints, not proof of cause. Never return matched text.
+# Byte matching also keeps malformed or private stderr out of decoded messages.
+CODESIGN_ERROR_PATTERNS = (
+    ("certificate-chain", (b"unable to build chain to self-signed root",
+                           b"cssmerr_tp_not_trusted", b"cssmerr_tp_invalid_anchor_cert")),
+    ("certificate-validity", (b"cssmerr_tp_cert_expired", b"cssmerr_tp_cert_not_valid_yet",
+                              b"certificate has expired", b"certificate is not yet valid")),
+    ("keychain-interaction", (b"user interaction is not allowed", b"errsecinteractionnotallowed",
+                              b"cssmerr_csp_no_user_interaction", b"errsecauthfailed",
+                              b"authorization failed")),
+    ("identity-access", (b"no identity found", b"the specified item could not be found in the keychain",
+                          b"errsecitemnotfound", b"the specified keychain could not be found",
+                          b"errsecnosuchkeychain")),
+    ("bundle-metadata", (b"resource fork, finder information, or similar detritus not allowed",)),
+    ("bundle-layout", (b"bundle format unrecognized, invalid, or unsuitable",
+                        b"unsealed contents present in the bundle root",
+                        b"bundle format is ambiguous", b"main executable failed strict validation")),
+    ("executable-format", (b"file format unrecognized, invalid, or unsuitable",
+                            b"unsupported mach-o", b"invalid or unsupported format for signature")),
+    ("filesystem-access", (b"permission denied", b"operation not permitted",
+                            b"read-only file system", b"no such file or directory", b"not writable")),
+    ("tool-arguments", (b"unrecognized option", b"unknown option", b"invalid option",
+                         b"option requires an argument", b"usage: codesign", b"invalid flag")),
+    ("security-internal", (b"errsecinternalcomponent",)),
+)
+
+
+def codesign_failure_categories(stderr: bytes) -> tuple[str, ...]:
+    """Return all matching fixed labels, or a fixed fallback; never raw stderr."""
+    lowered = stderr.lower()
+    matches = tuple(category for category, patterns in CODESIGN_ERROR_PATTERNS
+                    if any(pattern in lowered for pattern in patterns))
+    return matches or ("unclassified",)
 
 
 def captured_run(*args: str, operation: str) -> subprocess.CompletedProcess:
@@ -71,7 +106,10 @@ def captured_run(*args: str, operation: str) -> subprocess.CompletedProcess:
         code = str(error.errno) if isinstance(error.errno, int) else "unavailable"
         raise ReleaseError(f"Operation {operation} could not start (OS error {code}); command details withheld.") from None
     if result.returncode:
-        raise ReleaseError(f"Operation {operation} failed (exit code {result.returncode}); command details withheld.")
+        categories = ""
+        if operation == "codesign-sign":
+            categories = "; categories=" + ",".join(codesign_failure_categories(result.stderr))
+        raise ReleaseError(f"Operation {operation} failed (exit code {result.returncode}{categories}); command details withheld.")
     return result
 
 
@@ -147,6 +185,8 @@ def validate_info(info: dict, context: dict[str, str]) -> None:
     require(info.get("CFBundleShortVersionString") == context["marketing_version"], "Unexpected app marketing version.")
     require(info.get("CFBundleVersion") == context["run_number"], "Unexpected app build number.")
     require(info.get("LSMinimumSystemVersion") == "15.0", "Unexpected macOS deployment target.")
+    require("NSMainStoryboardFile" not in info and "NSMainNibFile" not in info,
+            "SwiftUI-only app must not declare a main storyboard or nib.")
 
 
 def verify_provenance(info: dict, context: dict[str, str]) -> None:
@@ -265,6 +305,16 @@ def cleanup() -> None:
     require(not failed, "Temporary files removed, but keychain cleanup reported an error; do not publish.")
 
 
+def report_keychain_search_membership(keychain: Path) -> None:
+    """Read-only diagnostic: report membership, never keychain paths or names."""
+    listed = shlex.split(text_run("/usr/bin/security", "list-keychains", "-d", "user",
+                                 operation="keychain-search-list-check"))
+    expected = keychain.resolve()
+    present = any(Path(item).resolve() == expected for item in listed)
+    print("temporary_keychain_in_search_list=true" if present else
+          "temporary_keychain_in_search_list=false", flush=True)
+
+
 def sign() -> None:
     context = validate()
     for name in SECRET_NAMES:
@@ -308,6 +358,8 @@ def sign() -> None:
         run("/usr/bin/ditto", "-x", "-k", str(directory / "MoeKit-unsigned.zip"), str(unpacked), operation="archive-unpack")
         app = unpacked / "MoeKit.app"
         verify_app(app, context)
+        # Observe only: do not mutate the search list or default keychain here.
+        report_keychain_search_membership(keychain)
         # No inherited entitlements and no --deep signing. No network timestamp or notarization.
         run("/usr/bin/codesign", "--force", "--sign", identity, "--keychain", str(keychain),
             "--options", "runtime", "--timestamp=none", str(app), operation="codesign-sign")

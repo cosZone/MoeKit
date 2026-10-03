@@ -58,6 +58,16 @@ MoeKit 工作流直接读取上述三个名字，**不要求创建 `Prod` enviro
 
 默认分支校验是此受审工作流的防误用措施，不能约束有权限修改其它工作流的恶意仓库写入者。必须仅向可信协作者开放写权限，并保护默认分支／发布脚本的修改；organization secret 的 Selected repositories 决定仓库可用范围。需要更强的审批隔离时，应另行设计受保护 environment，不要认为代码中的分支判断等同于 GitHub 的服务端 secret access policy。
 
+### 签名失败的安全诊断
+
+本流程只公开固定操作名称、数字退出码，以及 `temporary_keychain_in_search_list=true/false`；不公开命令参数、路径、身份、环境变量或原始输出。`codesign-sign` 失败时，会从捕获的 stderr 匹配固定白名单，输出所有匹配的类别：证书链／有效期、钥匙串交互／身份访问、bundle 元数据／结构、可执行文件格式、文件访问、工具参数或内部安全错误；没有匹配时输出 `unclassified`。类别是排查线索，不是已确认原因；`security-internal` 尤其不能直接断言为密码、证书或权限问题。
+
+本应用使用 SwiftUI App 生命周期，构建与产物检查拒绝 `NSMainStoryboardFile`／`NSMainNibFile`，防止打包时引入并不存在的主 storyboard／nib。此检查保证入口配置与源码一致；不代表此前已证实启动故障，也不能代替真实启动验收。
+
+搜索列表检查只读，不改变默认钥匙串、信任或密钥权限；存在有效签名身份也不等于非交互签名必定成功。根据诊断再审查最小修复，不自动扩大密钥访问、清除属性、替换证书或降低签名验证。诊断不修改 `.app`、发布资产、清理流程或上传白名单。
+
+依据：[Apple 的非交互代码签名排查](https://developer.apple.com/forums/thread/712005)、[签名证书与证书链](https://developer.apple.com/documentation/technotes/tn3161-inside-code-signing-certificates)、[bundle 扩展属性签名限制](https://developer.apple.com/library/archive/qa/qa1940/_index.html)。
+
 ## 安装与后续版本身份
 
 下载前对照 Release 的 exact source/run 链接，并用 `SHA256SUMS.txt` 检查下载文件。解压得到 `MoeKit.app` 后按 macOS 的正常安装／安全提示处理。若系统拒绝打开，此开发预览并不保证可安装；不要通过关闭 Gatekeeper、删除 quarantine 或重签成 ad-hoc 解决。

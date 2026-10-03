@@ -150,4 +150,46 @@ struct WorkspaceSelectionTests {
         store.isDemoEnabled = true
         #expect(!store.canSearchWorkspace)
     }
+
+    @Test("Selected-project visibility matches rows for every filter and hierarchy state")
+    func visibilityMatchesRows() {
+        let store = store()
+        let parent = ProjectRecord(name: "main", path: "/fixture/main", kind: .repository)
+        let child = ProjectRecord(name: "work", path: "/fixture/work", kind: .worktree,
+                                  lastOpened: .now, isPinned: true, parentID: parent.id)
+        let orphan = ProjectRecord(name: "orphan", path: "/fixture/orphan", kind: .worktree, parentID: UUID())
+        let grandchild = ProjectRecord(name: "nested", path: "/fixture/nested", kind: .worktree, parentID: child.id)
+        let separate = ProjectRecord(name: "separate", path: "/fixture/separate", kind: .folder)
+        store.projects = [parent, child, orphan, grandchild, separate]
+        for filter in ProjectFilter.allCases {
+            store.projectFilter = filter
+            for query in ["", "work", "main", "missing", " \n "] {
+                store.projectSearch = query
+                for expanded in [Set<UUID>(), Set([parent.id, child.id])] {
+                    store.expandedProjectIDs = expanded
+                    let visible = Set(store.projectRows(sortedBy: []).map(\.id))
+                    for project in store.projects {
+                        store.selectedProjectID = project.id
+                        #expect((store.selectedProject != nil) == visible.contains(project.id))
+                    }
+                }
+            }
+        }
+    }
+
+    @Test("Find is disabled while any workspace review covers the search field")
+    func modalSearchGuard() {
+        let store = store()
+        store.pendingDiscovery = RepositoryScanResult(items: [], issues: [], visitedDirectories: 0, wasLimited: false)
+        #expect(!store.canSearchWorkspace)
+        store.pendingDiscovery = nil
+        store.cleanupReviewProjectID = UUID()
+        #expect(!store.canSearchWorkspace)
+        store.cleanupReviewProjectID = nil
+        store.processes.plan = StopPlan(id: UUID(), snapshotID: UUID(), snapshotDate: .now, createdAt: .now,
+                                       currentUID: 501, observerPID: 1, selectedIdentities: [], targets: [], warnings: [])
+        #expect(!store.canSearchWorkspace)
+        store.processes.plan = nil
+        #expect(store.canSearchWorkspace)
+    }
 }

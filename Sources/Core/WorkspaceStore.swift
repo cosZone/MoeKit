@@ -82,11 +82,24 @@ final class WorkspaceStore {
 
     var displayedProjects: [ProjectRecord] { isDemoEnabled ? DemoData.projects : projects }
     var displayedTasks: [TaskRecord] { isDemoEnabled ? DemoData.tasks : tasks }
-    var selectedProject: ProjectRecord? { projectRows(sortedBy: []).first { $0.id == selectedProjectID } }
+    var selectedProject: ProjectRecord? {
+        guard let id = selectedProjectID else { return nil }
+        let all = displayedProjects
+        guard let project = all.first(where: { $0.id == id }) else { return nil }
+        let query = projectSearch.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let parentID = project.parentID {
+            guard all.contains(where: { $0.id == parentID && $0.parentID == nil }),
+                  isProjectExpanded(parentID), projectMatches(project, query: query) else { return nil }
+        } else {
+            guard projectMatches(project, query: query)
+                || all.contains(where: { $0.parentID == id && projectMatches($0, query: query) }) else { return nil }
+        }
+        return project
+    }
     var hasProjectFilters: Bool { projectFilter != .all || !projectSearch.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     var hasTaskFilters: Bool { taskFilter != .all || !taskSearch.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     var canSearchWorkspace: Bool {
-        guard pendingDiscovery == nil else { return false }
+        guard pendingDiscovery == nil, cleanupReviewProjectID == nil, processes.plan == nil else { return false }
         return section != .tools || (selectedToolID == ProcessModule.id ? !isDemoEnabled : selectedCapability == .space)
     }
     var workspaceSearchPrompt: String {
@@ -99,7 +112,7 @@ final class WorkspaceStore {
     func clearProjectFilters() { projectSearch = ""; projectFilter = .all }
     func clearTaskFilters() { taskSearch = ""; taskFilter = .all }
     private func reconcileProjectSelection() {
-        if let id = selectedProjectID, !projectRows(sortedBy: []).contains(where: { $0.id == id }) { selectedProjectID = nil }
+        if selectedProjectID != nil && selectedProject == nil { selectedProjectID = nil }
     }
     private func reconcileTaskSelection() {
         if let id = selectedTaskID, !filteredTasks.contains(where: { $0.id == id }) { selectedTaskID = nil }
@@ -126,21 +139,26 @@ final class WorkspaceStore {
     func projectRows(sortedBy order: [KeyPathComparator<ProjectRecord>]) -> [ProjectRecord] {
         let all = displayedProjects
         let query = projectSearch.trimmingCharacters(in: .whitespacesAndNewlines)
-        let matching = all.filter { item in
-            let filterMatches = projectFilter == .all || (projectFilter == .pinned && item.isPinned)
-                || (projectFilter == .recent && item.lastOpened != nil)
-            return filterMatches && item.matches(query)
-        }
+        let matching = all.filter { projectMatches($0, query: query) }
         let matchingIDs = Set(matching.map(\.id))
+        let childrenByParent = all.reduce(into: [UUID: [ProjectRecord]]()) { children, item in
+            if let parent = item.parentID { children[parent, default: []].append(item) }
+        }
         let roots = all.filter { item in
-            item.parentID == nil && (matchingIDs.contains(item.id) || all.contains { $0.parentID == item.id && matchingIDs.contains($0.id) })
+            item.parentID == nil && (matchingIDs.contains(item.id) || (childrenByParent[item.id] ?? []).contains { matchingIDs.contains($0.id) })
         }.sorted(using: order)
         return roots.flatMap { root in
-            let children = all.filter { $0.parentID == root.id }
+            let children = childrenByParent[root.id] ?? []
             if children.isEmpty { return [root] }
             let expand = expandedProjectIDs.contains(root.id) || !query.isEmpty || projectFilter != .all
             return [root] + (expand ? children.filter { matchingIDs.contains($0.id) }.sorted(using: order) : [])
         }
+    }
+
+    private func projectMatches(_ item: ProjectRecord, query: String) -> Bool {
+        let filterMatches = projectFilter == .all || (projectFilter == .pinned && item.isPinned)
+            || (projectFilter == .recent && item.lastOpened != nil)
+        return filterMatches && item.matches(query)
     }
 
     func hasProjectChildren(_ id: UUID) -> Bool { displayedProjects.contains { $0.parentID == id } }

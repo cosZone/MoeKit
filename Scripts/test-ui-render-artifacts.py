@@ -1,16 +1,26 @@
 #!/usr/bin/env python3
 """Synthetic-only checks for the render artifact verifier."""
 
+import binascii
 import importlib.util
 import json
 from pathlib import Path
 import struct
 import tempfile
 import unittest
+import zlib
 
 spec = importlib.util.spec_from_file_location("render_verifier", Path(__file__).with_name("verify-ui-render-artifacts.py"))
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
+
+
+def png(width, height):
+    def chunk(kind, data):
+        return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", binascii.crc32(kind + data) & 0xffffffff)
+    header = struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)
+    raster = zlib.compress(bytes((width * 4 + 1) * height))
+    return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", header) + chunk(b"IDAT", raster) + chunk(b"IEND", b"")
 
 
 class RenderArtifactTests(unittest.TestCase):
@@ -23,12 +33,12 @@ class RenderArtifactTests(unittest.TestCase):
             for appearance in ("light", "dark"):
                 for width, height in ((960, 620), (1280, 800)):
                     name = f"{scenario}-{language}-{appearance}-{width}x{height}"
-                    png = name + ".png"
-                    (root / png).write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00\x00\x00\x0dIHDR" + struct.pack(">II", width, height))
+                    image = name + ".png"
+                    (root / image).write_bytes(png(width, height))
                     text = name + ".txt"
                     (root / text).write_text(f"Bundle language: {language}\nProjects title: {'项目' if language == 'zh-Hans' else 'Projects'}\nPartial-result title: {'部分结果' if language == 'zh-Hans' else 'Partial result'}\nContent size: {width} × {height} points\nProcess locale: {'zh_CN' if language == 'zh-Hans' else 'en_US'}\n")
                     attachments.extend([
-                        {"exportedFileName": png, "suggestedHumanReadableName": name + "_0_UUID.png"},
+                        {"exportedFileName": image, "suggestedHumanReadableName": name + "_0_UUID.png"},
                         {"exportedFileName": text, "suggestedHumanReadableName": name + "-scope_0_UUID.txt"},
                     ])
         manifest = [{"attachments": attachments}]
@@ -64,10 +74,24 @@ class RenderArtifactTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as path:
             root = Path(path)
             manifest = self.fixture(root, "en")
-            png = root / manifest[0]["attachments"][0]["exportedFileName"]
-            png.write_bytes(png.read_bytes()[:16] + struct.pack(">II", 960, 596))
+            image = root / manifest[0]["attachments"][0]["exportedFileName"]
+            image.write_bytes(png(960, 596))
             with self.assertRaisesRegex(ValueError, "dimensions"):
                 module.verify(root, "en")
+
+    def test_rejects_truncated_png(self):
+        with self.assertRaisesRegex(ValueError, "Truncated"):
+            module.png_dimensions(png(960, 620)[:24])
+
+    def test_rejects_corrupt_png_crc(self):
+        damaged = bytearray(png(960, 620))
+        damaged[20] ^= 1
+        with self.assertRaisesRegex(ValueError, "CRC"):
+            module.png_dimensions(damaged)
+
+    def test_rejects_missing_png_ending(self):
+        with self.assertRaisesRegex(ValueError, "Incomplete"):
+            module.png_dimensions(png(960, 620)[:-12])
 
     def test_rejects_path_escape(self):
         with tempfile.TemporaryDirectory() as path:

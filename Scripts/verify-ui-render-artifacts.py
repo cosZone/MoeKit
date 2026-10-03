@@ -2,9 +2,66 @@
 """Check render coverage and runtime language evidence, not visual correctness."""
 
 import argparse
+import binascii
 import json
 from pathlib import Path
 import struct
+import zlib
+
+
+def png_dimensions(data: bytes) -> tuple[int, int]:
+    """Validate the complete non-interlaced PNG raster emitted by AppKit."""
+    if len(data) > 64 * 1024 * 1024 or data[:8] != b"\x89PNG\r\n\x1a\n":
+        raise ValueError("Invalid PNG signature or size")
+    offset, header, ended = 8, None, False
+    compressed = bytearray()
+    while offset < len(data):
+        if offset + 12 > len(data):
+            raise ValueError("Truncated PNG chunk")
+        length = struct.unpack(">I", data[offset:offset + 4])[0]
+        end = offset + 12 + length
+        if end > len(data):
+            raise ValueError("Truncated PNG payload")
+        kind = data[offset + 4:offset + 8]
+        payload = data[offset + 8:end - 4]
+        crc = struct.unpack(">I", data[end - 4:end])[0]
+        if binascii.crc32(kind + payload) & 0xffffffff != crc:
+            raise ValueError("Invalid PNG chunk CRC")
+        if header is None and kind != b"IHDR":
+            raise ValueError("PNG must begin with IHDR")
+        if kind == b"IHDR":
+            if header is not None or length != 13:
+                raise ValueError("Invalid PNG IHDR")
+            header = struct.unpack(">IIBBBBB", payload)
+        elif kind == b"IDAT":
+            compressed.extend(payload)
+        elif kind == b"IEND":
+            if length != 0 or end != len(data):
+                raise ValueError("Invalid PNG ending")
+            ended = True
+        elif kind[0] & 32 == 0 and kind != b"PLTE":
+            raise ValueError("Unsupported critical PNG chunk")
+        offset = end
+    if not ended or header is None or not compressed:
+        raise ValueError("Incomplete PNG image")
+    width, height, depth, color, compression, filtering, interlace = header
+    channels = {0: 1, 2: 3, 4: 2, 6: 4}.get(color)
+    if not channels or depth not in (8, 16) or compression or filtering or interlace:
+        raise ValueError("Unsupported AppKit PNG format")
+    if not 0 < width <= 2560 or not 0 < height <= 1600:
+        raise ValueError("Unexpected bitmap dimensions")
+    row_bytes = width * channels * (depth // 8)
+    expected_bytes = (row_bytes + 1) * height
+    decoder = zlib.decompressobj()
+    try:
+        pixels = decoder.decompress(compressed, expected_bytes + 1)
+    except zlib.error as error:
+        raise ValueError("Invalid PNG compressed raster") from error
+    if len(pixels) != expected_bytes or not decoder.eof or decoder.unused_data or decoder.unconsumed_tail:
+        raise ValueError("Incomplete or oversized PNG raster")
+    if any(pixels[y * (row_bytes + 1)] > 4 for y in range(height)):
+        raise ValueError("Invalid PNG scanline filter")
+    return width, height
 
 
 def verify(directory: Path, language: str) -> int:
@@ -35,11 +92,9 @@ def verify(directory: Path, language: str) -> int:
                     if prefix in images:
                         raise ValueError(f"Duplicate render: {prefix}")
                     data = path.read_bytes()
-                    if len(data) < 24 or data[:8] != b"\x89PNG\r\n\x1a\n" or data[12:16] != b"IHDR":
-                        raise ValueError(f"Invalid PNG header: {prefix}")
                     # The runner may use Retina backing; point dimensions are
                     # asserted inside XCTest and also recorded in scope metadata.
-                    pixels = struct.unpack(">II", data[16:24])
+                    pixels = png_dimensions(data)
                     if pixels not in (size, (size[0] * 2, size[1] * 2)):
                         raise ValueError(f"Unexpected bitmap dimensions: {prefix}: {pixels}")
                     images[prefix] = path

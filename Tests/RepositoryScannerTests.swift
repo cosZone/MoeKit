@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 import Testing
 @testable import MoeKit
 
@@ -78,6 +79,29 @@ struct RepositoryScannerTests {
         #expect(selection.items.first?.id == fixture.root.path)
         #expect(selection.items.first?.branch == nil)
         #expect(selection.visitedDirectories == 1)
+    }
+
+    @Test("A selected /var alias uses the same physical /private/var scope as its children")
+    func selectedSystemAliasKeepsPhysicalScope() async throws {
+        let name = "MoeKit-scanner-alias-\(UUID().uuidString)"
+        let selected = URL(fileURLWithPath: "/var/tmp/\(name)", isDirectory: true)
+        let physicalPath = "/private/var/tmp/\(name)"
+        let git = selected.appendingPathComponent("project/.git", isDirectory: true)
+        try FileManager.default.createDirectory(at: git, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: selected) }
+        try Data("ref: refs/heads/system-alias\n".utf8).write(to: git.appendingPathComponent("HEAD"))
+        let scanner = RepositoryScanner()
+
+        let discovery = try await scanner.scan(root: selected)
+        let selection = try await scanner.inspectFolder(selected)
+
+        #expect(discovery.items.map { $0.url.path } == [physicalPath + "/project"])
+        #expect(discovery.items.first?.branch == "system-alias")
+        #expect(discovery.visitedDirectories == 2)
+        #expect(discovery.issues.isEmpty)
+        #expect(!discovery.wasLimited)
+        #expect(selection.items.first?.url.path == physicalPath)
+        #expect(selection.issues.isEmpty)
     }
 
     @Test("Reads an in-scope linked-worktree pointer")
@@ -513,10 +537,16 @@ private struct ScannerFixture: Sendable {
     let root: URL
 
     init() throws {
-        root = FileManager.default.temporaryDirectory
+        let temporary = FileManager.default.temporaryDirectory
             .appendingPathComponent("MoeKit-scanner-\(UUID().uuidString)", isDirectory: true)
-            .resolvingSymlinksInPath().standardizedFileURL
-        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: temporary, withIntermediateDirectories: true)
+        root = try temporary.withUnsafeFileSystemRepresentation { path -> URL in
+            guard let path, let resolved = Darwin.realpath(path, nil) else {
+                throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno))
+            }
+            defer { Darwin.free(resolved) }
+            return URL(fileURLWithPath: String(cString: resolved), isDirectory: true)
+        }
     }
 
     func remove() {
@@ -525,7 +555,7 @@ private struct ScannerFixture: Sendable {
 
     @discardableResult
     func folder(_ relative: String) throws -> URL {
-        let url = root.appendingPathComponent(relative, isDirectory: true).standardizedFileURL
+        let url = relative == "." ? root : root.appendingPathComponent(relative, isDirectory: true)
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         return url
     }

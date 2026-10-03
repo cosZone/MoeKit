@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 
 public struct DiscoveredRepository: Identifiable, Sendable, Hashable {
     public enum Kind: String, Sendable, Hashable {
@@ -300,9 +301,20 @@ public actor RepositoryScanner {
             guard attributes[.type] as? FileAttributeType == .typeDirectory else {
                 throw RepositoryScannerError.invalidRoot("The selected path must be a folder, not a file or symbolic link.")
             }
-            // Normalize system aliases in ancestors (for example /var on macOS).
-            // The selected folder itself was checked above and may not be a symlink.
-            let root = selected.resolvingSymlinksInPath().standardizedFileURL
+            // Canonicalize only this explicitly selected root. Foundation URL path
+            // normalization can shorten /private/var back to /var on macOS, while
+            // directory enumeration returns /private/var, breaking exact containment.
+            // realpath gives one physical spelling without that alias rewrite.
+            let root = try selected.withUnsafeFileSystemRepresentation { path -> URL in
+                guard let path else {
+                    throw RepositoryScannerError.invalidRoot("The selected folder has no filesystem path.")
+                }
+                guard let resolved = Darwin.realpath(path, nil) else {
+                    throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno))
+                }
+                defer { Darwin.free(resolved) }
+                return URL(fileURLWithPath: String(cString: resolved), isDirectory: true)
+            }
             return Scope(root: root, components: root.pathComponents)
         } catch let error as RepositoryScannerError {
             throw error

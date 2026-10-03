@@ -7,7 +7,17 @@ build/
 *.xcworkspace/
 xcuserdata/
 .swiftpm/
+Tuist/.build/
+Tuist/Dependencies/
+*.xcuserstate
 Configurations/Signing.xcconfig
 .env
 .env.*
 !.env.example
+*.p12
+*.p8
+*.mobileprovision
+*.keychain
+*.keychain-db
+Preview/
+TestResults.xcresult/

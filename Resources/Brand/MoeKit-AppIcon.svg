@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">MoeKit — a little keeper</title>
+  <desc id="desc">A soft lavender ghost holding a blue inbox with one pink file, on a pink-to-blue background sampled from the MoePeek family palette. Editable vector concept for a macOS workspace organizer.</desc>
+  <defs>
+    <!-- Background samples: x=64, y=64/512/1024/1536/1984 in the 2048px MoePeek reference. -->
+    <linearGradient id="background" x1="0" y1="0" x2="0" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F4B5CD"/>
+      <stop offset="0.25" stop-color="#E4B4D4"/>
+      <stop offset="0.5" stop-color="#C0B9E2"/>
+      <stop offset="0.75" stop-color="#9EC3EB"/>
+      <stop offset="1" stop-color="#87C7EA"/>
+    </linearGradient>
+    <radialGradient id="atmosphere" cx="0.38" cy="0.22" r="0.72">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="ghost" x1="365" y1="240" x2="620" y2="824" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#E9DEEB"/>
+      <stop offset="0.62" stop-color="#DCD7ED"/>
+      <stop offset="1" stop-color="#CFCBF3"/>
+    </linearGradient>
+    <linearGradient id="file" x1="424" y1="503" x2="580" y2="705" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F4B5CD"/>
+      <stop offset="1" stop-color="#E9ACC9"/>
+    </linearGradient>
+    <linearGradient id="inbox" x1="374" y1="596" x2="645" y2="799" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#A1C4ED"/>
+      <stop offset="1" stop-color="#85BCE8"/>
+    </linearGradient>
+    <filter id="softShadow" x="-25%" y="-20%" width="150%" height="155%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="18" stdDeviation="24" flood-color="#706896" flood-opacity="0.15"/>
+    </filter>
+    <filter id="fileShadow" x="-30%" y="-30%" width="160%" height="165%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="8" stdDeviation="9" flood-color="#527CA6" flood-opacity="0.12"/>
+    </filter>
+  </defs>
+
+  <!-- Full square artwork: the platform, not this source, supplies its icon mask. -->
+  <g id="background-layer">
+    <rect width="1024" height="1024" fill="url(#background)"/>
+    <rect width="1024" height="1024" fill="url(#atmosphere)"/>
+  </g>
+
+  <g id="mascot" transform="translate(-128 -131.25) scale(1.25)">
+  <g id="ghost-body" filter="url(#softShadow)">
+    <path d="M260 513 C260 337 357 219 512 219 C667 219 764 337 764 513 L764 713 C764 779 733 819 682 819 C649 819 626 794 611 786 C590 809 558 831 512 831 C466 831 434 809 413 786 C398 794 375 819 342 819 C291 819 260 779 260 713 Z" fill="url(#ghost)"/>
+  </g>
+
+  <g id="face">
+    <ellipse cx="426" cy="431" rx="20" ry="23" fill="#49465D"/>
+    <ellipse cx="598" cy="431" rx="20" ry="23" fill="#49465D"/>
+    <path d="M482 470 C494 491 530 491 542 470" fill="none" stroke="#49465D" stroke-width="11" stroke-linecap="round"/>
+    <ellipse cx="376" cy="469" rx="27" ry="15" fill="#F6CEE0" opacity="0.72"/>
+    <ellipse cx="648" cy="469" rx="27" ry="15" fill="#F6CEE0" opacity="0.72"/>
+  </g>
+
+  <g id="file-and-inbox">
+    <!-- One file and one tray keep the organizing metaphor legible at small sizes. -->
+    <path id="inbox-back" d="M346 585 H678 C700 585 716 602 716 624 V650 H308 V624 C308 602 324 585 346 585 Z" fill="#6EA5D5"/>
+    <g id="pink-file" filter="url(#fileShadow)" transform="rotate(-6 512 610)">
+      <path d="M422 520 Q422 506 437 506 H480 Q489 506 495 518 L505 531 H589 Q605 531 605 547 V711 H422 Z" fill="url(#file)"/>
+      <path d="M454 569 H563" fill="none" stroke="#FFFFFF" stroke-opacity="0.56" stroke-width="9" stroke-linecap="round"/>
+    </g>
+    <path id="inbox-front" d="M308 626 Q308 612 324 612 H435 Q444 612 447 621 Q452 648 475 648 H549 Q572 648 577 621 Q580 612 589 612 H700 Q716 612 716 626 L700 751 Q697 785 661 785 H363 Q327 785 324 751 Z" fill="url(#inbox)"/>
+  </g>
+
+  <g id="little-hands">
+    <path d="M293 626 C317 614 341 629 348 655 C355 682 345 706 323 710 C299 714 281 699 277 674 C273 653 279 634 293 626 Z" fill="#EAE5F7"/>
+    <path d="M731 626 C707 614 683 629 676 655 C669 682 679 706 701 710 C725 714 743 699 747 674 C751 653 745 634 731 626 Z" fill="#EAE5F7"/>
+  </g>
+  </g>
+</svg>

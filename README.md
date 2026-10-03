@@ -1,66 +1,46 @@
-<p align="center">
-  <img src="Resources/Brand/MoeTidy-AppIcon-concept.png" width="180" alt="粉蓝色 MoeTidy 小幽灵抱着文件夹收纳盒的概念图标" />
-</p>
+# MoeKit
 
-<h1 align="center">MoeTidy</h1>
+面向 macOS 的个人 CLI 工具箱：把项目、工具和任务放进一个原生工作台。Mole 是首个内置模块，整体架构为更多个人常用工具保留扩展位置。
 
-<p align="center">把项目空间和 Git 工作区，整理得明明白白。</p>
+Swift 6 · SwiftUI / AppKit · macOS 15+ · Tuist 4.148.3 · SPM
 
-MoeTidy 是面向开发者的原生 macOS 清理与 Git 工作区管理项目。计划用 Swift、SwiftUI 与必要的 AppKit，把项目、仓库、worktree、分支和开发产物放进一个简洁的界面：看懂空间去了哪里，逐项审核哪些内容可以清理，哪些工作区可以退役。
+## 当前预览
 
-**当前阶段：规划、文档与品牌概念。** 已包含产品/技术规划、开发与设计约定，以及首版粉蓝图标概念；尚无可运行应用、安装包、CLI 适配器或经过验证的清理功能。macOS 15+ 是初始技术目标，最终支持范围与分发方式待验证。图标尚未打包成 AppIcon。
+已经写入源码：
+- **Projects**：原生表格、搜索与排序、项目详情 inspector、置顶项目、Finder 定位；选择文件夹后只读发现 Git 项目，再勾选导入
+- **Tools**：Mole 的 Space / Clean / Apps / Maintenance / Status 工作区；Space 可导入 Mole analyze JSON
+- **Tasks**：本次会话的发现任务、取消、状态与底部结果详情；可展开 Diagnostics
+- 独立 Demo 开关与明确示例标识；正常启动无虚构项目、运行结果或磁盘测量
+- 原生 NavigationSplitView、Table、工具栏与 SF Symbols；自定义应用图标
 
-## 一张清楚的工作区列表
+尚未实现：CLI 进程执行、清理、卸载、维护、实时系统状态、提权、第三方插件加载及持久任务历史。导入报告不运行 Mole，报告数值不等于可回收空间。
 
-不用在文件夹、终端和多个清理工具之间猜测。MoeTidy 的目标流程是：
+**验证边界：源码检查不等于可运行应用。** 初始编写环境没有 Swift、Xcode 或 Tuist；下列原生构建和测试命令尚未在该环境执行。具体提交能否构建以 GitHub Actions 记录为准；原生视觉、VoiceOver 和实际 Mac 交互仍需手动验收。
 
-**找到工作区 → 看懂状态与空间 → 选择精确动作 → 审核影响 → 执行并核验 → 保留可用恢复信息。**
+## 构建
 
-- **项目仍在开发，只想清产物：** 看构建输出和依赖目录的依据、大小估算及重建成本，选择明确路径，保护源码与本地数据。
-- **临时 worktree 已结束，想收尾：** 查看改动、忽略文件、独有提交、锁和活动线索；默认移除 checkout 并保留分支，删除分支单独审核。
-- **想知道后来发生了什么：** 从历史查看成功、失败、保留项和恢复材料；只有具备有效材料的操作才提供对应恢复入口。
+需要 macOS 15+、Xcode 16.4 和 [Mise](https://mise.jdx.dev/getting-started.html)。以下是待在 macOS 执行的命令：
 
-以上均为计划能力。Git clean 不等于 merged、pushed 或 abandoned；ignored 的 `.env`、数据库与素材也可能是唯一副本。
+```sh
+mise install
+mise exec -- tuist generate --no-open
+xcodebuild -workspace MoeKit.xcworkspace -scheme MoeKit \
+  -configuration Debug -destination 'platform=macOS' \
+  -derivedDataPath DerivedData CODE_SIGN_STYLE=Manual \
+  CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= test
+open DerivedData/Build/Products/Debug/MoeKit.app
+```
 
-## Swift 原生，粉蓝而克制
+在 Settings → Preview 中开启 Demo；也可通过 `open -n …/MoeKit.app --args --demo` 启动。`Package.swift` 仅管理 Tuist 的 SPM 依赖，目前为空；请通过生成的 Xcode workspace 构建，不使用 `swift run`。
 
-计划使用 macOS 分栏导航、可排序表格、工具栏、检查器与独立审核窗口，支持深浅色、键盘导航和 VoiceOver。列表渐进更新，扫描可取消，昂贵 IO 不占用主线程。
+## 下载与开发
 
-设计与开发经验参考 [MoePeek](https://github.com/cosZone/MoePeek)：系统字体与控件、语义颜色、半透明材质、紧凑卡片，以及 SwiftUI/AppKit 的清晰分工。新图标延续粉蓝渐变和淡紫圆润角色，改用收纳盒与文件夹表达整理。品牌粉彩点到为止，风险与删除始终清楚表达。见 [设计约定](docs/design.md)。
+- [Actions](https://github.com/cosZone/MoeKit/actions)：Native CI 构建与测试；手动运行 Preview app artifact 可下载包含 `.app` 的 ZIP、源码 SHA、SHA-256 校验和与构建信息
+- 预览包仅 **ad-hoc 签名，没有 Developer ID 签名、没有公证**，Gatekeeper 可能阻止打开；本工作流不会创建 tag 或 GitHub Release。后续 Developer ID 签名与发布工作流尚待配置与审核
+- [构建与交付说明](Documentation/Build-and-preview.md)
+- [架构与数据边界](Documentation/Architecture.md)
+- [原生验收清单](Documentation/Verification.md)
 
-## 复用已安装的工具
+## 许可
 
-优先复用可靠能力，而非重新实现整个系统清理器：
-
-| 工具 | 计划职责 | 接入边界 |
-| --- | --- | --- |
-| Git | 仓库/worktree/ref 的真实状态及受约束操作 | 精确路径、结构化解析与独立保护规则 |
-| Mole CLI | 可选开发产物清理能力 | 用户主动启用；逐版本验证预览、限域和删除语义 |
-| Worktrunk | 后续高级集成判断与管理证据 | 先评估只读入口；配置、hooks 与版本分别检查 |
-| gfold | 后续选定范围内的仓库发现加速 | 发现线索由 Git 验证，不作为删除许可 |
-
-当前没有安装步骤或必装工具清单。未来应用检测本机工具，由用户选择启用；不静默安装、升级或修改工具配置。缺少可靠预览或精确范围时，不开放集成执行。JSON/dry-run 的名称也不能证明只读。详见 [工具适配契约](docs/tool-adapters.md)。
-
-## 从少量可靠场景开始
-
-| 阶段 | 计划交付 |
-| --- | --- |
-| 0 · 当前 | 文档与概念图；技术、权限及 CLI 验证仍待开始 |
-| 1 · 只读原型 | 选择目录、跨仓库 worktree 列表、证据检查器、保护与空间估算 |
-| 2 · 精确清产物 | 少量验证规则、人工选择、审核、恢复语义与结果核验 |
-| 3 · 受限退役 MVP | 已完整检查的 clean linked worktree 移除，默认保留分支，无 force |
-| 4 · 历史管理 | 独立分支删除、仓库级 prune、受限备份和 checkout 重建 |
-| 5 · 扩展 | 更多工具与生态、共享缓存、项目归档、托管平台只读证据 |
-
-完整愿景还包括可选应用管理，但需另行评估。首版不做全盘/Home 自动清扫、全面系统优化、完整卸载器、后台定时删除或强制删除；主 checkout 与整个项目的归档也走独立设计。见 [路线图与验收](docs/roadmap.md)。
-
-## 文档与开发
-
-- [文档目录](docs/README.md)：产品、扫描、产物、Git 保护、执行、恢复与架构。
-- [开发约定](docs/development.md)：参考 Tuist/SPM、Swift 严格并发、String Catalog、Swift Testing；实际工程和构建命令待建立。
-- [项目指导](AGENTS.md)：当前阶段、实现边界和验证要求。
-- [灵感与复用地图](docs/references.md)：Mole、ClearDisk、Worktrunk、gfold、teebe、Farol 等优秀工具的经验与边界。
-
-当前仅有文档与图标，不宣称 build/test 通过、发布可用或清理效果。实现后才补真实命令、支持矩阵、性能数据和截图；发布计划需要测试门禁、签名、公证与分发验证。
-
-**许可证尚未决定。** 当前没有移植第三方 GPL/AGPL 源码。调用已安装工具、源码移植和捆绑分发分别评估具体许可与条款；本项目不提供通用法律结论。
+项目许可证尚未确定；公开源码不代表授予额外许可。Mole 是独立上游项目，本仓库不包含其可执行文件或复制其 GPL 实现。第三方集成、分发及品牌使用需分别核对对应许可证与条件。

@@ -97,10 +97,15 @@ final class UISnapshotTests: XCTestCase {
         }
 
         // Allow bounded SwiftUI/AppKit layout turns for native Table/inspector
-        // subviews. The window is never ordered onto the runner's desktop.
+        // subviews. SwiftUI can attach its toolbar after the initial window
+        // setup, reducing the content height while preserving the outer frame.
+        // Reapply the requested content size after each turn so AppKit uses the
+        // current toolbar metrics; do not hardcode a titlebar/toolbar offset.
+        // The window is never ordered onto the runner's desktop.
         for _ in 0..<5 {
             hosting.layoutSubtreeIfNeeded()
             RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05))
+            window.setContentSize(size)
         }
         hosting.layoutSubtreeIfNeeded()
         XCTAssertEqual(hosting.bounds.size, size, "Capture must retain the requested content size")

@@ -8,6 +8,7 @@ import Testing
 struct NativeProcessInventoryProviderTests {
     @Test("Native strings require a terminator, valid UTF-8 and a nonempty value")
     func boundedStrings() {
+        #expect(NativeProcessInventoryParsing.executablePathCapacity == 4 * Int(PATH_MAX))
         #expect(decode(Array("/tmp/project".utf8) + [0, 65]) == "/tmp/project")
         #expect(decode(Array("/tmp/项目".utf8) + [0]) == "/tmp/项目")
         #expect(decode([]) == nil)

@@ -187,7 +187,7 @@ actor NativeProcessInventoryProvider: ProcessInventoryProviding {
 
     private func executablePath(pid: pid_t, deadline: TimeInterval) throws -> String? {
         try checkBudget(deadline)
-        var buffer = [UInt8](repeating: 0, count: Int(PROC_PIDPATHINFO_MAXSIZE))
+        var buffer = [UInt8](repeating: 0, count: NativeProcessInventoryParsing.executablePathCapacity)
         let bytesRead = buffer.withUnsafeMutableBytes { bytes in
             proc_pidpath(pid, bytes.baseAddress, UInt32(bytes.count))
         }
@@ -288,6 +288,10 @@ actor NativeProcessInventoryProvider: ProcessInventoryProviding {
 /// Pure decoding helpers are separate so tests can use synthetic SDK structures
 /// without enumerating processes, opening sockets, or examining the test machine.
 enum NativeProcessInventoryParsing {
+    // sys/proc_info.h defines PROC_PIDPATHINFO_MAXSIZE as 4 * MAXPATHLEN;
+    // MAXPATHLEN is PATH_MAX on macOS. Swift cannot import that C expression macro.
+    static let executablePathCapacity = 4 * Int(PATH_MAX)
+
     enum ListenerResult: Equatable {
         case notListener
         case listener(ListeningPort)

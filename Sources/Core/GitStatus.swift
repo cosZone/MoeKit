@@ -90,7 +90,7 @@ enum GitStatusParser {
             case 49, 50: // ordinary or rename/copy
                 let renamed = record.first == 50
                 let fields = record.split(separator: 32, maxSplits: renamed ? 9 : 8, omittingEmptySubsequences: false)
-                guard fields.count == (renamed ? 10 : 9), fields.allSatisfy({ !$0.isEmpty }),
+                guard fields.count == (renamed ? 10 : 9), fields[0].count == 1, fields.allSatisfy({ !$0.isEmpty }),
                       validXY(fields[1], renamed: renamed), validSubmodule(fields[2]),
                       fields[3...5].allSatisfy(validMode), fields[6...7].allSatisfy(validObjectID) else {
                     throw GitStatusParseError.malformed
@@ -111,7 +111,7 @@ enum GitStatusParser {
                 total += 1
             case 117: // unmerged
                 let fields = record.split(separator: 32, maxSplits: 10, omittingEmptySubsequences: false)
-                guard fields.count == 11, fields.allSatisfy({ !$0.isEmpty }),
+                guard fields.count == 11, fields[0].count == 1, fields.allSatisfy({ !$0.isEmpty }),
                       ["DD", "AU", "UD", "UA", "DU", "AA", "UU"].contains(String(decoding: fields[1], as: UTF8.self)),
                       validSubmodule(fields[2]), fields[3...6].allSatisfy(validMode),
                       fields[7...9].allSatisfy(validObjectID) else { throw GitStatusParseError.malformed }

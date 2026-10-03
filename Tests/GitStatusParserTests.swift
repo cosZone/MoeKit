@@ -118,4 +118,22 @@ struct GitStatusParserTests {
         #expect(!ProjectCleanupPreview(project: project).isEligible)
     }
 
+
+    @Test("Record tags, modes, submodule flags, hashes and rename scores are strict")
+    func invalidFields() {
+        let row = ordinary("M.", path: "file")
+        let bad = [
+            row.replacingOccurrences(of: "1 M.", with: "10 M."),
+            row.replacingOccurrences(of: "N...", with: "Nbad"),
+            row.replacingOccurrences(of: "100644", with: "999999"),
+            row.replacingOccurrences(of: hash, with: String(repeating: "z", count: 40)),
+            row.replacingOccurrences(of: "1 M.", with: "1  M."),
+            "2 R. N... 100644 100644 100644 \(hash) \(hash) R101 to\0from\0",
+            "2 R. N... 100644 100644 100644 \(hash) \(hash) R+1 to\0from\0",
+            "20 R. N... 100644 100644 100644 \(hash) \(hash) R100 to\0from\0",
+            "unknown UU N... 100644 100644 100644 100644 \(hash) \(hash) \(hash) file\0"
+        ]
+        for text in bad { #expect(throws: (any Error).self) { try GitStatusParser.parse(Data((headers + text).utf8)) } }
+    }
+
 }

@@ -11,15 +11,23 @@ description: 先核对来源和版本，再了解 macOS 的安全提示。
 
 ## 获取可用产物
 
-当前已交付 [0.1.0-preview.1 开发签名预览](https://github.com/cosZone/MoeKit/releases/tag/v0.1.0-preview.1)，包含 universal Release 应用、校验和与构建信息。它使用 Apple Development 签名，未公证；不包含后续 About 窗口与文档网站改动。
+当前已交付 [0.1.0-preview.2 开发签名预览](https://github.com/cosZone/MoeKit/releases/tag/v0.1.0-preview.2)，提供 DMG 与 ZIP，包内是同一份 universal Release App，并附校验和与构建信息。本版包含原生 About 窗口、Feedback 与 Give a Star 入口；使用 Apple Development 签名，未公证。文档网站独立构建，不是安装包组件。
 
 先查看 [GitHub Releases](https://github.com/cosZone/MoeKit/releases)。只有实际发布页中附带的文件才是已交付版本；文档中的版本计划或示例号不构成下载承诺。
 
 维护者也可从 [GitHub Actions](https://github.com/cosZone/MoeKit/actions) 手动运行 **Preview app artifact**，下载包含应用、源码提交与校验信息的预览产物。Actions 产物有保留期限，可能需要登录 GitHub。
 
-解开 Actions 的外层下载包后，内层 ZIP 才包含 `MoeKit.app`。签名预览的 Release ZIP 直接包含应用。把应用放到你自己的 Applications 目录前，先核对版本、构建记录及校验和。
+推荐下载 Release 中的 DMG，核对来源与校验和后打开，将 `MoeKit.app` 拖到 `Applications` 快捷方式，再从安装位置启动。ZIP 可直接解压取得同一份 App。两种包均同时支持 Apple Silicon 与 Intel，无需按芯片选包。
 
-在校验和文件与对应 ZIP 所在目录执行：
+如果使用 Actions 手动预览，解开外层下载包后，内层 ZIP 才包含 `MoeKit.app`；不要把 Actions 的外层包与 Release 安装包混淆。
+
+只下载 DMG 时，在文件所在目录执行，并将结果与 `SHA256SUMS.txt` 中的同名条目对照：
+
+```sh
+shasum -a 256 MoeKit-v0.1.0-preview.2-macOS.dmg
+```
+
+如果 DMG、ZIP、`BUILD_INFO.json` 和校验和文件全部已下载到同一目录，可一次检查全部：
 
 ```sh
 shasum -a 256 -c SHA256SUMS.txt

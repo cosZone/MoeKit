@@ -560,19 +560,24 @@ public actor RepositoryScanner {
               size.uint64Value <= UInt64(Self.maximumMetadataBytes) else {
             throw metadataFailure(url, .metadataTooLarge, "Git metadata exceeds the 16 KiB safety limit. Branch is unknown.")
         }
-        let handle = try FileHandle(forReadingFrom: url)
-        defer { try? handle.close() }
+        let data: Data
+        do {
+            data = try BoundedRegularFileReader.read(at: url, maximumBytes: Self.maximumMetadataBytes) {
+                try requireSafePath(url, scope: scope)
+            }
+        } catch let error as BoundedRegularFileReader.ReadError {
+            switch error {
+            case .tooLarge:
+                throw metadataFailure(url, .metadataTooLarge, "Git metadata exceeds the 16 KiB safety limit. Branch is unknown.")
+            case .symbolicLink:
+                throw metadataFailure(url, .symbolicLinkSkipped, "Git metadata became a symbolic link and was not followed. Branch is unknown.")
+            case .notRegularFile:
+                throw metadataFailure(url, .invalidMetadata, "Git metadata must be a regular UTF-8 file.")
+            case .changedDuringRead, .invalidPath, .invalidLimit:
+                throw metadataFailure(url, .metadataUnreadable, "Git metadata changed or could not be read safely. Branch is unknown.")
+            }
+        }
         try requireSafePath(url, scope: scope)
-        guard try handle.seekToEnd() <= UInt64(Self.maximumMetadataBytes) else {
-            throw metadataFailure(url, .metadataTooLarge, "Git metadata exceeds the 16 KiB safety limit. Branch is unknown.")
-        }
-        try handle.seek(toOffset: 0)
-        // Read at most 16 KiB, including when the file changes after its size check.
-        let data = try handle.read(upToCount: Self.maximumMetadataBytes) ?? Data()
-        guard try handle.seekToEnd() <= UInt64(Self.maximumMetadataBytes) else {
-            throw metadataFailure(url, .metadataTooLarge, "Git metadata grew beyond the 16 KiB safety limit. Branch is unknown.")
-        }
-        try Task.checkCancellation()
         guard let string = String(data: data, encoding: .utf8) else {
             throw metadataFailure(url, .invalidMetadata, "Git metadata is not valid UTF-8. Branch is unknown.")
         }
@@ -667,7 +672,8 @@ public actor RepositoryScanner {
 
     private func isMissingFile(_ error: Error) -> Bool {
         let error = error as NSError
-        return error.domain == NSCocoaErrorDomain
-            && (error.code == NSFileNoSuchFileError || error.code == NSFileReadNoSuchFileError)
+        return (error.domain == NSCocoaErrorDomain
+            && (error.code == NSFileNoSuchFileError || error.code == NSFileReadNoSuchFileError))
+            || (error.domain == NSPOSIXErrorDomain && error.code == Int(ENOENT))
     }
 }

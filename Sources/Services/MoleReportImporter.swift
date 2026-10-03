@@ -13,10 +13,16 @@ actor MoleReportImporter {
         guard let size = attributes[.size] as? NSNumber, size.int64Value <= Self.maximumBytes else {
             throw ImportError.tooLarge
         }
-        let handle = try FileHandle(forReadingFrom: url)
-        defer { try? handle.close() }
-        let data = try handle.read(upToCount: Self.maximumBytes + 1) ?? Data()
-        guard data.count <= Self.maximumBytes else { throw ImportError.tooLarge }
+        let data: Data
+        do {
+            data = try BoundedRegularFileReader.read(at: url, maximumBytes: Self.maximumBytes)
+        } catch let error as BoundedRegularFileReader.ReadError {
+            switch error {
+            case .notRegularFile, .symbolicLink: throw ImportError.notRegularFile
+            case .tooLarge: throw ImportError.tooLarge
+            case .changedDuringRead, .invalidPath, .invalidLimit: throw ImportError.changedDuringRead
+            }
+        }
         try Task.checkCancellation()
         let report = try JSONDecoder().decode(MoleAnalyzeReport.self, from: data)
         try Task.checkCancellation()
@@ -24,11 +30,12 @@ actor MoleReportImporter {
     }
 
     enum ImportError: LocalizedError {
-        case notRegularFile, tooLarge
+        case notRegularFile, tooLarge, changedDuringRead
         var errorDescription: String? {
             switch self {
             case .notRegularFile: String(localized: "Choose a regular JSON report file, not a folder or symbolic link.")
             case .tooLarge: String(localized: "Report exceeds the 16 MB import limit.")
+            case .changedDuringRead: String(localized: "The report changed while being read. Choose it again to retry.")
             }
         }
     }

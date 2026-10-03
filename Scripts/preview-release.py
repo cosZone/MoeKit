@@ -9,6 +9,7 @@ never runs the app and never uploads a P12, keychain, certificate dump, or log.
 from __future__ import annotations
 
 import base64
+import datetime
 import hashlib
 import json
 import os
@@ -54,6 +55,8 @@ OPERATIONS = frozenset({
     "codesign-sign", "codesign-verify", "codesign-display", "entitlements-read",
     "certificate-extract", "archive-package", "archive-round-trip",
     "codesign-verify-packaged", "keychain-search-list-check", "keychain-register-search-list",
+    "dmg-stage", "dmg-create", "dmg-verify", "dmg-attach", "dmg-detach",
+    "codesign-verify-dmg",
 })
 
 
@@ -147,7 +150,69 @@ def validate() -> dict[str, str]:
     require(text_run("git", "rev-parse", "HEAD", operation="source-read") == context["source_sha"], "Checkout does not match the reviewed source SHA.")
     # Untracked build products are allowed; tracked source modifications are not.
     run("git", "diff", "--exit-code", "HEAD", "--", operation="source-clean")
+    release_notes(context)
     return context
+
+
+def release_notes(context: dict[str, str]) -> tuple[str, str]:
+    """Read the reviewed version's plain Markdown; support only this tiny schema.
+
+    This is deliberately not a general YAML parser. Reject ambiguous YAML rather
+    than interpret tags, aliases, duplicate keys, nested values, or block scalars.
+    The source remains unreleased until publication is independently verified.
+    """
+    version = context["version"]
+    require(bool(VERSION_RE.fullmatch(version)), "Invalid release-note version.")
+    path = Path("website/content/changelog") / (version + ".md")
+    require(path.is_file() and not path.is_symlink(), "Canonical version notes are missing or unsafe.")
+    raw = path.read_bytes()
+    require(len(raw) <= 64 * 1024, "Canonical version notes are unexpectedly large.")
+    lines = raw.decode("utf-8", errors="strict").splitlines()
+    require(bool(lines) and lines[0] == "---", "Version notes require a small YAML frontmatter.")
+    closing = next((index for index, line in enumerate(lines[1:], 1) if line == "---"), None)
+    require(closing is not None and 1 < closing <= 8, "Invalid version-note frontmatter boundary.")
+    fields = {}
+    for line in lines[1:closing]:
+        match = re.fullmatch(r"(title|version|description|status|date|sourceCommit|releaseUrl): (.+)", line)
+        require(match is not None and match[1] not in fields, "Unsupported or duplicate version-note frontmatter.")
+        key, value = match.groups()
+        if key == "status":
+            require(value in {"unreleased", "prerelease"}, "Invalid version-note status.")
+        elif key == "sourceCommit" and SHA_RE.fullmatch(value):
+            pass
+        else:
+            require(value.startswith('"') and value.endswith('"'), "Version-note strings must use one-line double quotes.")
+            try:
+                value = json.loads(value)
+            except ValueError:
+                raise ReleaseError("Invalid quoted version-note value.") from None
+            require(isinstance(value, str) and bool(value.strip()) and
+                    all(ord(char) >= 32 for char in value), "Invalid quoted version-note value.")
+        fields[key] = value
+    require({"title", "version", "description", "status"} <= fields.keys(), "Required version-note metadata is missing.")
+    require(fields["version"] == version, "Version-note metadata does not match the release version.")
+    published_fields = {"date", "sourceCommit", "releaseUrl"}
+    if fields["status"] == "unreleased":
+        require(not published_fields.intersection(fields), "Unreleased notes must not claim publication metadata.")
+    else:
+        require(published_fields <= fields.keys(), "Published notes require verified publication metadata.")
+        require(re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", fields["date"]) is not None,
+                "Invalid version-note date.")
+        try:
+            datetime.date.fromisoformat(fields["date"])
+        except ValueError:
+            raise ReleaseError("Invalid version-note date.") from None
+        require(fields["sourceCommit"] == context["source_sha"] and
+                fields["releaseUrl"] == f"https://github.com/{REPOSITORY}/releases/tag/v{version}",
+                "Version-note publication provenance mismatch.")
+    body = "\n".join(lines[closing + 1:]).strip()
+    require(bool(body) and "\x00" not in body, "Version-note Markdown body is missing or invalid.")
+    return body, hashlib.sha256(raw).hexdigest()
+
+
+def package_names(context: dict[str, str]) -> tuple[str, str]:
+    stem = f"MoeKit-v{context['version']}-macOS"
+    return stem + ".dmg", stem + ".zip"
 
 
 def sha256(path: Path) -> str:
@@ -212,6 +277,7 @@ def verify_app(app: Path, context: dict[str, str], *, provenance: bool = True) -
     # New nested code requires its own explicit signing review instead of --deep signing.
     for path in app.rglob("*"):
         require(not path.is_symlink(), "Unexpected symlink in the first-preview bundle; review packaging.")
+        require(path.is_file() or path.is_dir(), "Unexpected special file in app bundle.")
         if path.is_file():
             with path.open("rb") as stream:
                 magic = stream.read(4)
@@ -220,17 +286,58 @@ def verify_app(app: Path, context: dict[str, str], *, provenance: bool = True) -
     require(not (app / "Contents/embedded.provisionprofile").exists(), "Unexpected provisioning profile in preview bundle.")
 
 
-def inspect_zip(path: Path, context: dict[str, str]) -> None:
+def content_digest(files: dict[str, str]) -> str:
+    """Hash paths and every regular file's bytes, including the code signature."""
+    return hashlib.sha256(json.dumps(files, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+
+
+def app_content_digest(app: Path) -> str:
+    require(app.is_dir() and not app.is_symlink(), "App bundle is missing or unsafe.")
+    files = {}
+    for path in app.rglob("*"):
+        require(not path.is_symlink() and (path.is_file() or path.is_dir()), "Unexpected app file type.")
+        if path.is_file():
+            files[path.relative_to(app).as_posix()] = sha256(path)
+    require(bool(files), "App bundle is empty.")
+    return content_digest(files)
+
+
+def inspect_zip(path: Path, context: dict[str, str]) -> str:
     with zipfile.ZipFile(path) as archive:
         names = archive.namelist()
         require(len(names) == len(set(names)), "ZIP contains duplicate paths.")
+        files = {}
         for item in archive.infolist():
             parts = PurePosixPath(item.filename).parts
             require(bool(parts) and parts[0] in {"MoeKit.app", "__MACOSX"} and
                     not item.filename.startswith("/") and ".." not in parts and "\\" not in item.filename,
                     "ZIP contains an unsafe path.")
+            require(item.filename == "/".join(parts) + ("/" if item.is_dir() else ""),
+                    "ZIP contains a noncanonical path.")
             require(not stat.S_ISLNK(item.external_attr >> 16), "ZIP contains an unexpected symlink.")
+            require(stat.S_IFMT(item.external_attr >> 16) in {0, stat.S_IFREG, stat.S_IFDIR},
+                    "ZIP contains an unexpected special file.")
+            if parts[0] == "__MACOSX":
+                # ditto's AppleDouble resource metadata only, never arbitrary payloads.
+                require((len(parts) == 1 and item.is_dir()) or
+                        (len(parts) > 1 and parts[1] in {"MoeKit.app", "._MoeKit.app"} and
+                         (item.is_dir() or parts[-1].startswith("._"))), "ZIP contains unexpected resource metadata.")
+                if not item.is_dir():
+                    target = "/".join((*parts[1:-1], parts[-1][2:]))
+                    require(target in names or target + "/" in names,
+                            "ZIP resource metadata does not belong to the app.")
+                    with archive.open(item) as stream:
+                        require(stream.read(8) == bytes.fromhex("0005160700020000"),
+                                "ZIP resource metadata is not AppleDouble data.")
+            elif not item.is_dir():
+                require(len(parts) > 1, "ZIP app root is not a directory.")
+                with archive.open(item) as stream:
+                    digest = hashlib.sha256()
+                    for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                        digest.update(chunk)
+                files["/".join(parts[1:])] = digest.hexdigest()
         verify_provenance(plistlib.loads(archive.read("MoeKit.app/Contents/Info.plist")), context)
+        return content_digest(files)
 
 
 def metadata(context: dict[str, str]) -> dict:
@@ -252,6 +359,76 @@ def check_metadata(info: dict, context: dict[str, str], *, signed: bool) -> None
         require(info.get("signing") == "Apple Development" and info.get("signature_verified") is True and
                 info.get("expected_team_verified") is True and info.get("entitlements") == {},
                 "Artifact is not a verified development-signed preview.")
+        require(info.get("package_verification") == {
+            "dmg_integrity": True, "dmg_read_only": True,
+            "dmg_app_signature_verified": True, "zip_app_signature_verified": True,
+            "identical_app_content": True,
+        }, "Artifact packaging has not passed all native verification checks.")
+        require(re.fullmatch(r"[0-9a-f]{64}", info.get("app_content_sha256", "")) is not None,
+                "App content provenance is missing or invalid.")
+        hashes = info.get("artifacts")
+        require(isinstance(hashes, dict) and set(hashes) == set(package_names(context)) and
+                all(isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value) for value in hashes.values()),
+                "Artifact hash allowlist is missing or invalid.")
+        _, notes_hash = release_notes(context)
+        require(info.get("release_notes_sha256") == notes_hash, "Version-note provenance mismatch.")
+
+
+def dmg_mountpoint() -> Path:
+    # Kept OUTSIDE the recursively removed signing scratch directory. This path
+    # is only ever removed with rmdir, even after failed/partial attach or detach.
+    return signing_directory().parent / "moekit-preview-dmg-mount"
+
+
+def cleanup_dmg_mount() -> None:
+    mount = dmg_mountpoint()
+    require(not mount.is_symlink(), "Unsafe DMG verification mountpoint.")
+    if not mount.exists():
+        return
+    require(mount.is_dir(), "Unsafe DMG verification mountpoint.")
+    if mount.is_mount():
+        run("/usr/bin/hdiutil", "detach", str(mount), operation="dmg-detach")
+    require(not mount.is_mount(), "DMG is still mounted; retained mountpoint and stopped publication.")
+    # NEVER rmtree a mountpoint or a parent containing one. A failed rmdir also
+    # fails closed, retaining unexpected contents for runner teardown.
+    mount.rmdir()
+
+
+def verify_dmg_contents(mount: Path, context: dict[str, str], expected_digest: str) -> None:
+    require({entry.name for entry in mount.iterdir()} == {"MoeKit.app", "Applications"},
+            "DMG contains missing or unexpected root items.")
+    shortcut = mount / "Applications"
+    require(shortcut.is_symlink() and os.readlink(shortcut) == "/Applications",
+            "DMG must contain the exact Applications shortcut.")
+    app = mount / "MoeKit.app"
+    verify_app(app, context)
+    require(app_content_digest(app) == expected_digest, "DMG app content differs from the verified signed ZIP.")
+    run("/usr/bin/codesign", "--verify", "--deep", "--strict", "--all-architectures", str(app), operation="codesign-verify-dmg")
+
+
+def package_dmg(app: Path, destination: Path, scratch: Path,
+                context: dict[str, str], expected_digest: str) -> None:
+    staging = scratch / "dmg-source"
+    staging.mkdir(mode=0o700, exist_ok=False)
+    run("/usr/bin/ditto", str(app), str(staging / "MoeKit.app"), operation="dmg-stage")
+    require(app_content_digest(staging / "MoeKit.app") == expected_digest,
+            "DMG staging changed the signed app content.")
+    (staging / "Applications").symlink_to("/Applications")
+    # No create-dmg, Finder automation, downloaded installer, or exit-1 bypass.
+    run("/usr/bin/hdiutil", "create", "-volname", "MoeKit", "-srcfolder", str(staging),
+        "-fs", "HFS+", "-format", "UDZO", str(destination), operation="dmg-create")
+    run("/usr/bin/hdiutil", "verify", str(destination), operation="dmg-verify")
+    mount = dmg_mountpoint()
+    mount.mkdir(mode=0o700, exist_ok=False)
+    try:
+        run("/usr/bin/hdiutil", "attach", str(destination), "-readonly", "-nobrowse", "-noautoopen",
+            "-verify", "-mountpoint", str(mount), operation="dmg-attach")
+        require(mount.is_mount() and bool(os.statvfs(mount).f_flag & os.ST_RDONLY),
+                "DMG verification requires a read-only mounted volume.")
+        verify_dmg_contents(mount, context, expected_digest)
+    finally:
+        # Runs even when attach times out after partially mounting the image.
+        cleanup_dmg_mount()
 
 
 def prepare() -> None:
@@ -282,12 +459,19 @@ def signing_directory() -> Path:
 
 
 def cleanup() -> None:
+    failed = False
+    try:
+        cleanup_dmg_mount()
+    except (ReleaseError, OSError):
+        # Still remove signing material if detach failed; the mountpoint is not
+        # underneath the signing directory and is never recursively removed.
+        failed = True
     directory = signing_directory()
     if not directory.exists():
+        require(not failed, "DMG cleanup failed; mountpoint retained and publication stopped.")
         return
     require(directory.is_dir() and not directory.is_symlink(), "Unsafe signing cleanup directory.")
     keychain = directory / "preview.keychain-db"
-    failed = False
     if keychain.exists():
         try:
             run("/usr/bin/security", "delete-keychain", str(keychain), operation="keychain-delete")
@@ -302,7 +486,7 @@ def cleanup() -> None:
         except (ReleaseError, ValueError):
             failed = True
     shutil.rmtree(directory)
-    require(not failed, "Temporary files removed, but keychain cleanup reported an error; do not publish.")
+    require(not failed, "Signing files removed, but temporary keychain or DMG cleanup failed; do not publish.")
 
 
 def report_keychain_search_membership(keychain: Path) -> bool:
@@ -392,21 +576,32 @@ def sign() -> None:
         verify_app(app, context)
         destination = Path("Preview")
         destination.mkdir(exist_ok=False)
-        zip_name = f"MoeKit-v{context['version']}-macOS-universal.zip"
+        dmg_name, zip_name = package_names(context)
+        app_digest = app_content_digest(app)
         run("/usr/bin/ditto", "-c", "-k", "--sequesterRsrc", "--keepParent", str(app), str(destination / zip_name), operation="archive-package")
-        inspect_zip(destination / zip_name, context)
+        require(inspect_zip(destination / zip_name, context) == app_digest,
+                "ZIP app content differs from the verified signed app.")
         round_trip = scratch / "round-trip"
         run("/usr/bin/ditto", "-x", "-k", str(destination / zip_name), str(round_trip), operation="archive-round-trip")
         packaged_app = round_trip / "MoeKit.app"
         verify_app(packaged_app, context)
         run("/usr/bin/codesign", "--verify", "--deep", "--strict", "--all-architectures", str(packaged_app), operation="codesign-verify-packaged")
+        require(app_content_digest(packaged_app) == app_digest, "ZIP round-trip changed the signed app content.")
+        package_dmg(packaged_app, destination / dmg_name, scratch, context, app_digest)
+        _, notes_hash = release_notes(context)
         info = metadata(context)
         info.update(signing="Apple Development", signature_verified=True, expected_team_verified=True,
                     entitlements={}, hardened_runtime=True, secure_timestamp=False,
-                    gatekeeper="Unnotarized development preview; macOS may block it. Not Developer ID distribution.")
+                    gatekeeper="Unnotarized development preview; macOS may block it. Not Developer ID distribution.",
+                    app_content_sha256=app_digest, release_notes_sha256=notes_hash,
+                    artifacts={name: sha256(destination / name) for name in (dmg_name, zip_name)},
+                    package_verification={"dmg_integrity": True, "dmg_read_only": True,
+                                          "dmg_app_signature_verified": True, "zip_app_signature_verified": True,
+                                          "identical_app_content": True})
         write_json(destination / "BUILD_INFO.json", info)
-        write_checksums(destination, (zip_name, "BUILD_INFO.json"))
-        print("Verified Apple Development signature, expected team, empty entitlements, universal architectures, and source provenance.")
+        write_checksums(destination, (dmg_name, zip_name, "BUILD_INFO.json"))
+        check_files(destination, (dmg_name, zip_name, "BUILD_INFO.json"))
+        print("Verified development signature, expected team, universal app, and identical app content in read-only DMG and ZIP.")
     finally:
         cleanup()
 
@@ -483,12 +678,15 @@ def existing_release(api, tag: str):
 def publish() -> None:
     context = validate()
     directory = Path("Preview")
-    zip_name = f"MoeKit-v{context['version']}-macOS-universal.zip"
-    names = (zip_name, "BUILD_INFO.json")
+    dmg_name, zip_name = package_names(context)
+    names = (dmg_name, zip_name, "BUILD_INFO.json")
     check_files(directory, names)
     info = json.loads((directory / "BUILD_INFO.json").read_text(encoding="utf-8"))
     check_metadata(info, context, signed=True)
-    inspect_zip(directory / zip_name, context)
+    require(inspect_zip(directory / zip_name, context) == info["app_content_sha256"], "ZIP app content provenance mismatch.")
+    require(all(info["artifacts"][name] == sha256(directory / name) for name in (dmg_name, zip_name)),
+            "Package hashes do not match verified packaging provenance.")
+    notes, _ = release_notes(context)
     api = GitHub()
     tag = "v" + context["version"]
     base = f"/repos/{REPOSITORY}"
@@ -499,18 +697,20 @@ def publish() -> None:
     if current is None:
         api.request("POST", base + "/git/refs", {"ref": "refs/tags/" + tag, "sha": context["source_sha"]})
     require(tag_commit(api, tag) == context["source_sha"], "Release tag does not match the exact reviewed commit.")
-    body = (f"Development-signed preview for macOS 15+ (Apple Silicon and Intel).\n\n"
-            f"Source: {info['source_url']}\nBuild and tests: {info['run_url']}\n\n"
-            "Signed with an Apple Development identity. NOT Developer ID signed and NOT notarized. "
-            "Gatekeeper may block opening it. This is an owner/tester trial, not a supported public-distribution build.\n\n"
-            "Release-configuration unit tests passed on the runner architecture with testability enabled. "
-            "The universal Release archive was built separately from the same source. Native UI, VoiceOver, "
-            "both-architecture execution, and privacy-permission persistence still need manual verification.\n\n"
-            "Download the ZIP containing MoeKit.app; SHA256SUMS.txt covers it and BUILD_INFO.json. "
-            "No automatic updater, Sparkle key, or notarization credentials are used.\n")
+    download = f"https://github.com/{REPOSITORY}/releases/download/{tag}/"
+    body = (f"[下载 DMG（推荐）]({download}{dmg_name}) · [下载 ZIP]({download}{zip_name})\n\n"
+            "macOS 15+ · 通用版本（Apple Silicon / Intel）\n\n" + notes + "\n\n---\n\n"
+            f"源码：[{context['source_sha'][:12]}]({info['source_url']}) · "
+            f"[构建与测试]({info['run_url']})（attempt {context['run_attempt']}）\n\n"
+            f"[SHA256SUMS.txt]({download}SHA256SUMS.txt) 覆盖 DMG、ZIP 与 "
+            f"[BUILD_INFO.json]({download}BUILD_INFO.json)；两种包内 App 的文件内容、签名与构建来源已核对一致。\n\n"
+            "Apple Development 开发签名；不是 Developer ID 分发签名，未经过 Apple 公证。"
+            "Gatekeeper 仍可能阻止打开，DMG 不改变这一限制。\n\n"
+            "Release 配置单元测试在 runner 架构通过；通用归档从同一源码单独构建。"
+            "原生 UI、VoiceOver、双架构实机运行与隐私授权沿用仍需手动验收。\n")
     # Draft first: partial uploads are never presented as a completed public release.
     release = api.request("POST", base + "/releases", {"tag_name": tag, "target_commitish": context["source_sha"],
-                          "name": f"MoeKit {tag} preview", "body": body, "draft": True,
+                          "name": tag, "body": body, "draft": True,
                           "prerelease": True, "make_latest": "false"})
     release_id = release.get("id")
     require(isinstance(release_id, int) and release_id > 0, "Unexpected release identifier.")

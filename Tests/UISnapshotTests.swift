@@ -43,6 +43,12 @@ final class UISnapshotTests: XCTestCase {
 
     @MainActor
     private func captureVariants(named scenario: String, configure: (WorkspaceStore) -> Void) throws {
+        let language = try XCTUnwrap(Bundle.main.preferredLocalizations.first)
+        XCTAssertTrue(["en", "zh-Hans"].contains(language), "Render language must be explicitly supported")
+        XCTAssertEqual(WorkspaceSection.projects.title, language == "zh-Hans" ? "项目" : "Projects")
+        XCTAssertEqual(TaskStatus.partial.title, language == "zh-Hans" ? "部分结果" : "Partial result")
+        // CI separately checks that the process locale agrees with its requested
+        // language. Setting only the SwiftUI locale would leave model strings mixed.
         let sizes = [NSSize(width: 960, height: 620), NSSize(width: 1280, height: 800)]
         let appearances: [(String, NSAppearance.Name, ColorScheme)] = [
             ("light", .aqua, .light), ("dark", .darkAqua, .dark),
@@ -50,7 +56,7 @@ final class UISnapshotTests: XCTestCase {
         for (name, appearanceName, colorScheme) in appearances {
             for size in sizes {
                 try autoreleasepool {
-                    let name = "\(scenario)-\(name)-\(Int(size.width))x\(Int(size.height))"
+                    let name = "\(scenario)-\(language)-\(name)-\(Int(size.width))x\(Int(size.height))"
                     try capture(named: name, size: size, appearanceName: appearanceName,
                                 colorScheme: colorScheme, configure: configure)
                 }
@@ -77,7 +83,7 @@ final class UISnapshotTests: XCTestCase {
         let root = WorkspaceView()
             .environment(store)
             .environment(\.colorScheme, colorScheme)
-            .environment(\.locale, Locale(identifier: "en_US"))
+            .environment(\.locale, Locale.current)
             .frame(width: size.width, height: size.height)
             .background(Color(nsColor: .windowBackgroundColor))
             .transaction { $0.animation = nil }
@@ -135,6 +141,13 @@ final class UISnapshotTests: XCTestCase {
         Content size: \(Int(size.width)) × \(Int(size.height)) points
         Bitmap size: \(bitmap.pixelsWide) × \(bitmap.pixelsHigh) pixels
         Appearance: \(appearanceName.rawValue)
+        Process locale: \(Locale.current.identifier)
+        Preferred languages: \(Locale.preferredLanguages.joined(separator: ", "))
+        Bundle language: \(Bundle.main.preferredLocalizations.first ?? "unknown")
+        Projects title: \(WorkspaceSection.projects.title)
+        Partial-result title: \(TaskStatus.partial.title)
+        Hosting bounds: \(hosting.bounds)
+        Window content layout: \(window.contentLayoutRect)
         macOS: \(ProcessInfo.processInfo.operatingSystemVersionString)
         Scope: app-owned WorkspaceView subtree, synthetic Demo fixtures, empty temporary catalog.
         No screen/window-server capture. Window chrome and toolbar are outside this content render.

@@ -88,3 +88,11 @@
 - [ ] 960×620 且 inspector 打开时，Finder、Project actions、路径与空状态可读；Project actions 中置顶、关联进程和安全复查指向当前可见选择
 - [ ] 发现复查筛选隐藏了已选项目时，隐藏选择数量和最终总导入数量明确显示
 - [ ] Demo 与真实模式之间清空搜索/筛选/选择；Demo 任务计数来自示例记录，空搜索结果不能显示真实导入提示
+
+## 中文渲染补充检查
+
+- Native CI 显式以英语 / 美国运行完整测试，再对同一构建产物以 `zh-Hans` / 中国单独运行 Projects inspector 与 Tasks 结果的渲染测试；每种尺寸 × 深浅色，共增加 8 个中文 PNG，保留原有 16 个英文 PNG
+- 这两次运行是独立测试进程；SwiftUI 使用测试进程的 locale，不能只改 SwiftUI environment 然后把仍为英文的 `String(localized:)` 模型值称为中文覆盖
+- XCTest 核对实际 bundle 语言及「项目」「部分结果」模型哨兵；导出的 scope 文件记录 process locale、首选语言、bundle 语言与实际哨兵值，辅助脚本核对 8 / 16 张图的完整性、尺寸和语言，防止静默回退或跳过测试
+- 中文图片保存在 `native-chinese-view-renders-<SHA>`，独立 `.xcresult` 与原英文结果一同留存；是否通过、对应 SHA 与图片人工检查结果以实际 CI / PR 记录为准
+- 仅覆盖所列中文视图布局，不包括其他模块、系统弹窗、工具栏、键盘、VoiceOver 或活动窗口对比度；示例项目名、路径和品牌名称保留原样

@@ -2,12 +2,12 @@ import Foundation
 import Testing
 @testable import MoeKit
 
-/// Exercise the production rejection path without #expect-generated closures.
-/// Run optimized, including under Address Sanitizer, to distinguish the test
-/// expression's lifetime/code-generation behavior from catalog memory safety.
+/// Exercise fixture construction and the production rejection path without
+/// assertion-expression macros. Run optimized and under Address Sanitizer so
+/// invalid-record fixtures reach the catalog instead of failing during encoding.
 struct CatalogRecoveryLifetimeTests {
     private enum Failure: Error {
-        case loadSucceeded, wrongLoadError, saveSucceeded, wrongSaveError, originalChanged
+        case fixtureChanged, loadSucceeded, wrongLoadError, saveSucceeded, wrongSaveError, originalChanged
     }
 
     @Test("Repeated catalog rejection preserves exact errors and bytes without assertion closures")
@@ -20,9 +20,10 @@ struct CatalogRecoveryLifetimeTests {
             for variant in 0..<8 {
                 let first = ProjectRecord(name: "Original", path: root.appendingPathComponent("not-created-project").path,
                                           kind: .folder, lastOpened: Date(timeIntervalSince1970: 50), isPinned: true)
-                var second = ProjectRecord(name: "Second", path: first.path + "-second", kind: .folder)
+                var second = ProjectRecord(id: variant == 0 ? first.id : UUID(), name: "Second",
+                                           path: first.path + "-second", kind: .folder)
                 switch variant {
-                case 0: second = ProjectRecord(id: first.id, name: "Duplicate ID", path: second.path, kind: .folder)
+                case 0: break
                 case 1: second.path = first.path + "/child/.."
                 case 2: second.path = "relative/project"
                 case 3: second.parentID = UUID()
@@ -32,6 +33,8 @@ struct CatalogRecoveryLifetimeTests {
                 default: second.kind = .group
                 }
                 let original = try JSONEncoder().encode([first, second])
+                let decoded = try JSONDecoder().decode([ProjectRecord].self, from: original)
+                guard decoded == [first, second] else { throw Failure.fixtureChanged }
                 try original.write(to: file)
                 let persistence = CatalogPersistence(directory: root)
                 do {

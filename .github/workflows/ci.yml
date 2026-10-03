@@ -170,26 +170,28 @@ jobs:
           args=(-workspace MoeKit.xcworkspace -scheme MoeKit -configuration Release
                 -destination 'platform=macOS' -derivedDataPath DerivedDataRelease
                 ENABLE_TESTABILITY=YES CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=)
-          selection=()
+          test_args=(test-without-building -testLanguage en -testRegion US -resultBundlePath ReleaseTestResults.xcresult)
           if [ "$INSTRUMENTATION" = address-sanitizer ]; then
             args+=(-enableAddressSanitizer YES)
-            selection=(-only-testing:MoeKitTests/CatalogPersistenceTests
-                       -only-testing:MoeKitTests/WorkspacePersistenceTests
-                       -only-testing:MoeKitTests/CatalogRecoveryLifetimeTests)
+            test_args+=(-only-testing:MoeKitTests/CatalogPersistenceTests
+                        -only-testing:MoeKitTests/WorkspacePersistenceTests
+                        -only-testing:MoeKitTests/CatalogRecoveryLifetimeTests)
           fi
-          xcodebuild "${args[@]}" -showBuildSettings > ReleaseBuildSettings.txt
+          xcodebuild -project MoeKit.xcodeproj -alltargets -configuration Release \
+            ENABLE_TESTABILITY=YES CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= \
+            -showBuildSettings -json > ReleaseBuildSettings.json
           python3 - <<'PY'
           from pathlib import Path
-          import re
-          settings = Path("ReleaseBuildSettings.txt").read_text()
-          levels = re.findall(r"^\s*SWIFT_OPTIMIZATION_LEVEL = (\S+)", settings, re.MULTILINE)
-          if not levels or any(level not in {"-O", "-Osize"} for level in levels):
+          import json
+          settings = json.loads(Path("ReleaseBuildSettings.json").read_text())
+          levels = {entry["target"]: entry["buildSettings"].get("SWIFT_OPTIMIZATION_LEVEL") for entry in settings}
+          required = ("MoeKit", "MoeKitTests")
+          if any(levels.get(target) not in {"-O", "-Osize"} for target in required):
               raise SystemExit(f"Release app and tests must stay optimized: {levels}")
           print(f"Verified Release optimization levels: {levels}")
           PY
           xcodebuild "${args[@]}" build-for-testing
-          xcodebuild "${args[@]}" test-without-building -testLanguage en -testRegion US \
-            "${selection[@]}" -resultBundlePath ReleaseTestResults.xcresult
+          xcodebuild "${args[@]}" "${test_args[@]}"
           xcrun xcresulttool get test-results summary --path ReleaseTestResults.xcresult > ReleaseTestSummary.json
           xcrun xcresulttool get test-results tests --path ReleaseTestResults.xcresult > ReleaseTestInventory.json
           python3 - <<'PYTHON'
@@ -212,7 +214,7 @@ jobs:
           name: release-test-results-${{ matrix.instrumentation }}-${{ env.SOURCE_SHA }}
           path: |
             ReleaseTestResults.xcresult
-            ReleaseBuildSettings.txt
+            ReleaseBuildSettings.json
             ReleaseTestSummary.json
             ReleaseTestInventory.json
           if-no-files-found: ignore

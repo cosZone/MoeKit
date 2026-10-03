@@ -68,9 +68,12 @@ struct CatalogPersistenceTests {
         let fixture = CatalogFixture()
         defer { fixture.remove() }
         let first = fixture.project()
-        var second = ProjectRecord(name: "Second", path: first.path + "-second", kind: .folder)
+        // Construct the duplicate identity directly. Replacing a record while
+        // reading its own path triggered an optimized fixture use-after-free.
+        var second = ProjectRecord(id: variant == 0 ? first.id : UUID(), name: "Second",
+                                   path: first.path + "-second", kind: .folder)
         switch variant {
-        case 0: second = ProjectRecord(id: first.id, name: "Duplicate ID", path: second.path, kind: .folder)
+        case 0: break
         case 1: second.path = first.path + "/child/.."
         case 2: second.path = "relative/project"
         case 3: second.parentID = UUID()
@@ -84,12 +87,7 @@ struct CatalogPersistenceTests {
         let persistence = fixture.persistence()
         #expect(throws: CatalogPersistence.CatalogError.invalidRecords) { try persistence.load() }
         #expect(throws: CatalogPersistence.CatalogError.recoveryRequired) { try persistence.save([first]) }
-        // Evaluate throwing I/O and byte equality as explicit local statements.
-        // The compound assertion crashed at this expression/cleanup in optimized
-        // Xcode 16.4 tests; the separate lifetime test exercises the same app path.
-        let persistedBytes = try Data(contentsOf: fixture.file)
-        let originalWasPreserved = persistedBytes == original
-        #expect(originalWasPreserved)
+        #expect(try Data(contentsOf: fixture.file) == original)
     }
 
     @Test("External replacement or removal after load cannot lose saved pins", arguments: 0..<4)

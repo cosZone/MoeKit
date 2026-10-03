@@ -4,6 +4,7 @@ struct DiscoveryReviewView: View {
     @Environment(WorkspaceStore.self) private var store
     @State private var search = ""
     @State private var sortByPath = false
+    @FocusState private var isSearchFocused: Bool
 
     private var visibleItems: [DiscoveredRepository] {
         let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -30,6 +31,8 @@ struct DiscoveryReviewView: View {
                 HStack {
                     TextField("Filter by name, path or branch", text: $search)
                         .textFieldStyle(.roundedBorder)
+                        .focused($isSearchFocused)
+                        .accessibilityLabel("Filter discovered projects")
                     Picker("Sort", selection: $sortByPath) {
                         Text("Name").tag(false)
                         Text("Path").tag(true)
@@ -43,6 +46,11 @@ struct DiscoveryReviewView: View {
                     Spacer()
                     Text("\(store.importSelection.count) selected · \(visibleItems.count) visible").foregroundStyle(.secondary)
                 }.font(.caption)
+                let hiddenSelectionCount = store.importSelection.subtracting(Set(visibleItems.map(\.id))).count
+                if hiddenSelectionCount > 0 {
+                    Label("\(hiddenSelectionCount) selected projects are outside this filter and will also be imported.", systemImage: "info.circle")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
                 List(visibleItems) { item in
                     Toggle(isOn: Binding(get: { store.importSelection.contains(item.id) }, set: { included in
                         if included { store.importSelection.insert(item.id) } else { store.importSelection.remove(item.id) }
@@ -56,7 +64,7 @@ struct DiscoveryReviewView: View {
                                     if store.projects.contains(where: { $0.path == item.url.path }) {
                                         Text("Update existing").font(.caption).foregroundStyle(.secondary)
                                     }
-                                    if item.metadata?.isLocked == true { Image(systemName: "lock.fill").foregroundStyle(.orange) }
+                                    if item.metadata?.isLocked == true { Image(systemName: "lock.fill").foregroundStyle(.orange).accessibilityLabel("Git worktree lock observed") }
                                 }
                                 Text(item.url.path).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                             }
@@ -65,7 +73,7 @@ struct DiscoveryReviewView: View {
                                 .lineLimit(1).frame(maxWidth: 150, alignment: .trailing)
                         }
                     }
-                }.listStyle(.inset).frame(minHeight: 220)
+                }.listStyle(.inset).frame(minHeight: 220).accessibilityLabel("Discovered projects")
                 .overlay {
                     if visibleItems.isEmpty {
                         ContentUnavailableView(search.isEmpty ? "No repositories found" : "No matching projects", systemImage: "magnifyingglass")
@@ -76,9 +84,10 @@ struct DiscoveryReviewView: View {
                 Text("No project files were changed.").font(.caption).foregroundStyle(.secondary)
                 Spacer()
                 Button("Cancel") { store.pendingDiscovery = nil; store.importSelection = [] }.keyboardShortcut(.cancelAction)
-                Button("Add or update selected") { store.importDiscoveredProjects() }
+                Button("Add or update \(store.importSelection.count) selected") { store.importDiscoveredProjects() }
                     .keyboardShortcut(.defaultAction).disabled(store.importSelection.isEmpty)
             }
         }.padding(24).frame(width: 760, height: 550)
+            .onAppear { isSearchFocused = true }
     }
 }

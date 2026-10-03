@@ -5,18 +5,18 @@ import Observation
 @MainActor @Observable
 final class WorkspaceStore {
     var section: WorkspaceSection = .projects
-    var projectFilter: ProjectFilter = .all
-    var taskFilter: TaskFilter = .all
+    var projectFilter: ProjectFilter = .all { didSet { reconcileProjectSelection() } }
+    var taskFilter: TaskFilter = .all { didSet { reconcileTaskSelection() } }
     var selectedCapability: MoleCapability = .space
     var selectedToolID = MoleModule.id
     let processes = ProcessInventoryStore()
-    var projectSearch = ""
-    var taskSearch = ""
+    var projectSearch = "" { didSet { reconcileProjectSelection() } }
+    var taskSearch = "" { didSet { reconcileTaskSelection() } }
     var toolSearch = ""
     var selectedProjectID: ProjectRecord.ID?
     var selectedTaskID: TaskRecord.ID?
     var cleanupReviewProjectID: ProjectRecord.ID?
-    var expandedProjectIDs: Set<UUID> = [DemoData.projects[0].id]
+    var expandedProjectIDs: Set<UUID> = [DemoData.projects[0].id] { didSet { reconcileProjectSelection() } }
     var isInspectorPresented = false
     var isDemoEnabled: Bool {
         didSet {
@@ -28,10 +28,13 @@ final class WorkspaceStore {
             pendingDiscovery = nil
             importSelection = []
             scanProgress = nil
+            clearProjectFilters()
+            clearTaskFilters()
+            toolSearch = ""
         }
     }
-    var projects: [ProjectRecord] = []
-    var tasks: [TaskRecord] = []
+    var projects: [ProjectRecord] = [] { didSet { reconcileProjectSelection() } }
+    var tasks: [TaskRecord] = [] { didSet { reconcileTaskSelection() } }
     var pendingDiscovery: RepositoryScanResult?
     var importSelection: Set<String> = []
     var importedReport: MoleAnalyzeReport?
@@ -79,7 +82,41 @@ final class WorkspaceStore {
 
     var displayedProjects: [ProjectRecord] { isDemoEnabled ? DemoData.projects : projects }
     var displayedTasks: [TaskRecord] { isDemoEnabled ? DemoData.tasks : tasks }
-    var selectedProject: ProjectRecord? { displayedProjects.first { $0.id == selectedProjectID } }
+    var selectedProject: ProjectRecord? {
+        guard let id = selectedProjectID else { return nil }
+        let all = displayedProjects
+        guard let project = all.first(where: { $0.id == id }) else { return nil }
+        let query = projectSearch.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let parentID = project.parentID {
+            guard all.contains(where: { $0.id == parentID && $0.parentID == nil }),
+                  isProjectExpanded(parentID), projectMatches(project, query: query) else { return nil }
+        } else {
+            guard projectMatches(project, query: query)
+                || all.contains(where: { $0.parentID == id && projectMatches($0, query: query) }) else { return nil }
+        }
+        return project
+    }
+    var hasProjectFilters: Bool { projectFilter != .all || !projectSearch.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    var hasTaskFilters: Bool { taskFilter != .all || !taskSearch.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    var canSearchWorkspace: Bool {
+        guard pendingDiscovery == nil, cleanupReviewProjectID == nil, processes.plan == nil else { return false }
+        return section != .tools || (selectedToolID == ProcessModule.id ? !isDemoEnabled : selectedCapability == .space)
+    }
+    var workspaceSearchPrompt: String {
+        switch section {
+        case .projects: String(localized: "Search projects")
+        case .tasks: String(localized: "Search tasks")
+        case .tools: selectedToolID == ProcessModule.id ? String(localized: "Search processes and ports") : String(localized: "Search report entries")
+        }
+    }
+    func clearProjectFilters() { projectSearch = ""; projectFilter = .all }
+    func clearTaskFilters() { taskSearch = ""; taskFilter = .all }
+    private func reconcileProjectSelection() {
+        if selectedProjectID != nil && selectedProject == nil { selectedProjectID = nil }
+    }
+    private func reconcileTaskSelection() {
+        if let id = selectedTaskID, !filteredTasks.contains(where: { $0.id == id }) { selectedTaskID = nil }
+    }
     var cleanupReviewProject: ProjectRecord? {
         guard !isDemoEnabled else { return nil }
         return projects.first { $0.id == cleanupReviewProjectID && $0.kind != .group }
@@ -88,37 +125,44 @@ final class WorkspaceStore {
         guard !isDemoEnabled, let project = selectedProject, project.kind != .group else { return }
         cleanupReviewProjectID = project.id
     }
-    var selectedTask: TaskRecord? { displayedTasks.first { $0.id == selectedTaskID } }
-    var runningTaskCount: Int { tasks.filter { $0.status == .running }.count }
+    var selectedTask: TaskRecord? { filteredTasks.first { $0.id == selectedTaskID } }
+    var runningTaskCount: Int { displayedTasks.filter { $0.status == .running }.count }
     var filteredTasks: [TaskRecord] {
-        displayedTasks.filter { task in
+        let query = taskSearch.trimmingCharacters(in: .whitespacesAndNewlines)
+        return displayedTasks.filter { task in
             let filterMatches = taskFilter == .all || (taskFilter == .running && task.status == .running)
                 || (taskFilter == .attention && [.partial, .failed].contains(task.status))
-            return filterMatches && (taskSearch.isEmpty || [task.title, task.target, task.tool].contains { $0.localizedStandardContains(taskSearch) })
+            return filterMatches && (query.isEmpty || [task.title, task.target, task.tool].contains { $0.localizedStandardContains(query) })
         }.sorted { $0.startedAt > $1.startedAt }
     }
 
     func projectRows(sortedBy order: [KeyPathComparator<ProjectRecord>]) -> [ProjectRecord] {
         let all = displayedProjects
         let query = projectSearch.trimmingCharacters(in: .whitespacesAndNewlines)
-        let matching = all.filter { item in
-            let filterMatches = projectFilter == .all || (projectFilter == .pinned && item.isPinned)
-                || (projectFilter == .recent && item.lastOpened != nil)
-            return filterMatches && item.matches(query)
-        }
+        let matching = all.filter { projectMatches($0, query: query) }
         let matchingIDs = Set(matching.map(\.id))
+        let childrenByParent = all.reduce(into: [UUID: [ProjectRecord]]()) { children, item in
+            if let parent = item.parentID { children[parent, default: []].append(item) }
+        }
         let roots = all.filter { item in
-            item.parentID == nil && (matchingIDs.contains(item.id) || all.contains { $0.parentID == item.id && matchingIDs.contains($0.id) })
+            item.parentID == nil && (matchingIDs.contains(item.id) || (childrenByParent[item.id] ?? []).contains { matchingIDs.contains($0.id) })
         }.sorted(using: order)
         return roots.flatMap { root in
-            let children = all.filter { $0.parentID == root.id }
+            let children = childrenByParent[root.id] ?? []
             if children.isEmpty { return [root] }
             let expand = expandedProjectIDs.contains(root.id) || !query.isEmpty || projectFilter != .all
             return [root] + (expand ? children.filter { matchingIDs.contains($0.id) }.sorted(using: order) : [])
         }
     }
 
+    private func projectMatches(_ item: ProjectRecord, query: String) -> Bool {
+        let filterMatches = projectFilter == .all || (projectFilter == .pinned && item.isPinned)
+            || (projectFilter == .recent && item.lastOpened != nil)
+        return filterMatches && item.matches(query)
+    }
+
     func hasProjectChildren(_ id: UUID) -> Bool { displayedProjects.contains { $0.parentID == id } }
+    func isProjectExpanded(_ id: UUID) -> Bool { expandedProjectIDs.contains(id) || hasProjectFilters }
 
     func toggleExpansion(_ id: UUID) {
         if expandedProjectIDs.contains(id) { expandedProjectIDs.remove(id) } else { expandedProjectIDs.insert(id) }
@@ -206,6 +250,7 @@ final class WorkspaceStore {
                 if let parentID = record.parentID { expandedProjectIDs.insert(parentID) }
             }
         }
+        reconcileProjectSelection()
         saveCatalog()
     }
     func togglePin(_ id: UUID) {

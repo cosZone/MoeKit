@@ -19,6 +19,7 @@ struct ProcessWorkspaceView: View {
                 } description: {
                     Text("Process scanning is unavailable in Demo. Exit Demo to explicitly scan your current user’s processes.")
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 VStack(spacing: 0) {
                     snapshotHeader

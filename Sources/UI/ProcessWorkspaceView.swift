@@ -55,7 +55,8 @@ struct ProcessWorkspaceView: View {
     }
 
     private var snapshotHeader: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        @Bindable var inventory = inventory
+        return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 10) {
                 Label("Processes & Ports", systemImage: "terminal").fontWeight(.medium)
                 if inventory.isScanning {
@@ -73,6 +74,10 @@ struct ProcessWorkspaceView: View {
                     Text("Not scanned").foregroundStyle(.secondary)
                 }
             }
+            if let notice = inventory.retainedSnapshotNotice {
+                Label(notice, systemImage: "clock.arrow.circlepath")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             if let projectID = inventory.projectFilterID {
                 HStack(spacing: 8) {
                     Label(inventory.projects.first { $0.id == projectID }?.name ?? String(localized: "Selected project"), systemImage: "folder")
@@ -84,6 +89,22 @@ struct ProcessWorkspaceView: View {
             }
             Text("Current user only. TCP listening ports and project associations reflect this snapshot; unknown readings are not empty results.")
                 .font(.caption).foregroundStyle(.secondary)
+            if inventory.unavailableProjectCount > 0 {
+                Label("\(inventory.unavailableProjectCount) project folders could not be resolved. Associations may be missing.", systemImage: "folder.badge.questionmark")
+                    .font(.caption).foregroundStyle(.orange)
+            }
+            HStack(spacing: 12) {
+                Picker("Port coverage", selection: $inventory.portFilter) {
+                    ForEach(ProcessPortFilter.allCases) { filter in
+                        Text("\(filter.title) (\(inventory.count(for: filter)))").tag(filter)
+                    }
+                }.pickerStyle(.segmented).frame(maxWidth: 520)
+                    .disabled(inventory.snapshot == nil)
+                Spacer(minLength: 0)
+                if inventory.hasActiveFilters {
+                    Button("Clear filters") { inventory.clearFilters() }.buttonStyle(.borderless)
+                }
+            }
             if let snapshot = inventory.snapshot, !snapshot.issues.isEmpty {
                 DisclosureGroup("Scan diagnostics") {
                     ScrollView {
@@ -118,7 +139,7 @@ struct ProcessWorkspaceView: View {
                 let association = inventory.association(for: record)
                 Text(association.projectName ?? association.title)
                     .foregroundStyle(.secondary).lineLimit(1)
-                    .help(association.evidence)
+                    .help(inventory.assessment(for: record).explanation)
             }.width(min: 125, ideal: 180, max: 300)
             TableColumn("Protection") { record in
                 let reasons = inventory.protectionReasons(for: record)
@@ -128,16 +149,49 @@ struct ProcessWorkspaceView: View {
             }.width(min: 120, ideal: 145, max: 200)
         }
         .tableStyle(.inset(alternatesRowBackgrounds: true))
+        .disabled(inventory.isScanning)
         .overlay {
             if inventory.rows.isEmpty {
                 ContentUnavailableView {
-                    Label(inventory.snapshot == nil ? "Inspect running processes" : "No matching processes", systemImage: "terminal")
+                    Label(emptyStateTitle, systemImage: inventory.isScanning ? "hourglass" : "terminal")
                 } description: {
-                    Text(inventory.snapshot == nil
-                         ? "Start a bounded, read-only scan when you’re ready. Nothing is scanned automatically."
-                         : "Try another search or project filter. A partial snapshot may omit unreadable processes.")
+                    Text(emptyStateDescription)
+                } actions: {
+                    if inventory.hasActiveFilters && !inventory.isScanning {
+                        Button("Clear filters") { inventory.clearFilters() }
+                    }
                 }
             }
+        }
+    }
+
+    private var emptyStateTitle: String {
+        if inventory.isScanning { return String(localized: "Reading process snapshot…") }
+        if inventory.snapshot != nil {
+            return inventory.hasActiveFilters ? String(localized: "No matching processes") : String(localized: "No processes observed")
+        }
+        switch inventory.lastScanStatus {
+        case .cancelled: return String(localized: "Scan cancelled")
+        case .failed: return String(localized: "Snapshot unavailable")
+        default: return String(localized: "Inspect running processes")
+        }
+    }
+
+    private var emptyStateDescription: String {
+        if inventory.isScanning { return String(localized: "Reading current-user metadata. You can cancel the scan at any time.") }
+        if inventory.snapshot != nil {
+            if inventory.portFilter == .listening {
+                return String(localized: "No TCP listeners match these filters. Unknown port readings and unreadable processes may still hide listeners.")
+            }
+            if inventory.portFilter == .unknown {
+                return String(localized: "No unknown port readings match these filters. A partial snapshot may still omit unreadable processes.")
+            }
+            return String(localized: "Try another search or project filter. A partial snapshot may omit unreadable processes.")
+        }
+        switch inventory.lastScanStatus {
+        case .cancelled: return String(localized: "The scan was cancelled. No processes were changed. Start a new scan when you’re ready.")
+        case .failed: return String(localized: "The scan did not produce a snapshot. Start a new scan to retry; no processes were changed.")
+        default: return String(localized: "Start a bounded, read-only scan when you’re ready. Nothing is scanned automatically.")
         }
     }
 
@@ -160,7 +214,10 @@ struct ProcessWorkspaceView: View {
                         Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 7) {
                             ProcessDetailRow(title: "Project", value: inventory.association(for: record).projectName ?? ProcessPresentation.unknown)
                             ProcessDetailRow(title: "Project association", value: inventory.association(for: record).title)
-                            ProcessDetailRow(title: "Association evidence", value: inventory.association(for: record).evidence)
+                            ProcessDetailRow(title: "Association evidence", value: inventory.assessment(for: record).explanation)
+                            if let path = inventory.assessment(for: record).canonicalProjectPath {
+                                ProcessDetailRow(title: "Matched project folder", value: path)
+                            }
                             ProcessDetailRow(title: "Protection", value: protectionText(for: record))
                         }
                         if !record.metadataIssues.isEmpty {
@@ -236,7 +293,9 @@ private struct ProcessStopPlanView: View {
                 LabeledContent("Snapshot", value: plan.snapshotDate.formatted(date: .abbreviated, time: .complete))
                     .font(.caption)
                 LabeledContent("Snapshot ID", value: plan.snapshotID.uuidString).font(.caption).textSelection(.enabled)
-                Text("\(plan.targets.count) exact targets").font(.caption).fontWeight(.medium)
+                Text("\(plan.targets.count) exact targets · \(plan.protectedTargetCount) protected").font(.caption).fontWeight(.medium)
+                Text("Protected rows remain in this inspection so you can understand why they need individual review. Selecting a row does not authorize stopping it.")
+                    .font(.caption).foregroundStyle(.secondary)
             }.padding(20)
             Divider()
             ScrollView {
@@ -256,7 +315,10 @@ private struct ProcessStopPlanView: View {
                                 Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 7) {
                                     ProcessDetailRow(title: "Project", value: target.association.projectName ?? ProcessPresentation.unknown)
                                     ProcessDetailRow(title: "Project association", value: target.association.title)
-                                    ProcessDetailRow(title: "Association evidence", value: target.association.evidence)
+                                    ProcessDetailRow(title: "Association evidence", value: target.associationEvidence)
+                                    if let path = target.canonicalProjectPath {
+                                        ProcessDetailRow(title: "Matched project folder", value: path)
+                                    }
                                 }
                                 if target.risks.isEmpty {
                                     Text("No flagged risks. This is not a safety guarantee.").foregroundStyle(.secondary)
@@ -293,7 +355,10 @@ private enum ProcessPresentation {
     static func portDetails(_ ports: [ListeningPort]?) -> String {
         guard let ports else { return unknown }
         guard !ports.isEmpty else { return String(localized: "None observed") }
-        return ports.map { "\($0.transport) \($0.address) · \($0.port)" }.joined(separator: "\n")
+        return ports.map { port in
+            let address = port.address.contains(":") ? "[\(port.address)]" : port.address
+            return "\(port.transport) \(address):\(port.port)"
+        }.joined(separator: "\n")
     }
 
     static func startIdentity(_ identity: ProcessIdentity) -> String {

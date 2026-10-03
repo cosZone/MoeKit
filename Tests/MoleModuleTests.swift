@@ -30,7 +30,7 @@ struct MoleModuleTests {
     @Test("Search covers IDs, keywords, and capabilities with all words required")
     func registrySearch() {
         let registry = ToolModuleRegistry.builtIn
-        #expect(registry.search(" \n\t ").map(\.id) == ["mole"])
+        #expect(registry.search(" \n\t ").map(\.id) == ["mole", "processes"])
         #expect(registry.search("MOLE").map(\.id) == ["mole"])
         #expect(registry.search("mole disk").map(\.id) == ["mole"])
         #expect(registry.search("uninstall").map(\.id) == ["mole"])

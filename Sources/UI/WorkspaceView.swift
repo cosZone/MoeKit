@@ -25,11 +25,13 @@ struct WorkspaceView: View {
                 }
                 switch store.section {
                 case .projects: ProjectsView()
-                case .tools: MoleWorkspaceView()
+                case .tools:
+                    if store.selectedToolID == ProcessModule.id { ProcessWorkspaceView() }
+                    else { MoleWorkspaceView() }
                 case .tasks: TasksView()
                 }
             }
-            .navigationTitle(store.section == .tools ? "Mole" : store.section.title)
+            .navigationTitle(store.section == .tools ? (store.registry.descriptor(id: store.selectedToolID)?.title ?? store.section.title) : store.section.title)
             .toolbar {
                 ToolbarItem(placement: .automatic) {
                     HStack(spacing: 6) {
@@ -63,8 +65,21 @@ struct WorkspaceView: View {
                         }
                         .help("Show or hide project details")
                     case .tools:
-                        Button("Import report…", systemImage: "square.and.arrow.down") { store.chooseMoleReport() }
-                            .disabled(store.isDemoEnabled || store.isImporting || store.selectedCapability != .space)
+                        if store.selectedToolID == ProcessModule.id {
+                            if store.processes.isScanning && !store.isDemoEnabled {
+                                Button("Cancel scan", systemImage: "stop.circle") { store.processes.cancel() }
+                            } else {
+                                Button(store.isDemoEnabled || store.processes.snapshot == nil ? "Start scan" : "Refresh", systemImage: "arrow.clockwise") {
+                                    guard !store.isDemoEnabled else { return }
+                                    store.processes.startScan(projects: store.projects)
+                                }
+                                .disabled(store.isDemoEnabled || store.processes.isScanning)
+                                .help("Read a bounded snapshot of the current user’s processes and TCP listening ports")
+                            }
+                        } else {
+                            Button("Import report…", systemImage: "square.and.arrow.down") { store.chooseMoleReport() }
+                                .disabled(store.isDemoEnabled || store.isImporting || store.selectedCapability != .space)
+                        }
                     case .tasks:
                         Menu {
                             Picker("Task filter", selection: $store.taskFilter) {
@@ -73,6 +88,9 @@ struct WorkspaceView: View {
                         } label: { Label("Filter", systemImage: "line.3.horizontal.decrease") }
                         if store.isScanning {
                             Button("Cancel discovery", systemImage: "stop.circle") { store.cancelScan() }
+                        }
+                        if store.processes.isScanning && !store.isDemoEnabled {
+                            Button("Cancel process scan", systemImage: "stop.circle") { store.processes.cancel() }
                         }
                     }
                 }
@@ -97,13 +115,15 @@ struct WorkspaceView: View {
         Binding(get: {
             switch store.section {
             case .projects: store.projectSearch
-            case .tools: store.toolSearch
+            case .tools: store.selectedToolID == ProcessModule.id ? store.processes.search : store.toolSearch
             case .tasks: store.taskSearch
             }
         }, set: { value in
             switch store.section {
             case .projects: store.projectSearch = value
-            case .tools: store.toolSearch = value
+            case .tools:
+                if store.selectedToolID == ProcessModule.id { store.processes.search = value }
+                else { store.toolSearch = value }
             case .tasks: store.taskSearch = value
             }
         })
@@ -142,13 +162,25 @@ private struct SidebarView: View {
                     }
                 case .tools:
                     Section("Tools") {
-                        Label("Mole", systemImage: "briefcase").fontWeight(.semibold)
-                        ForEach(MoleCapability.allCases) { capability in
-                            Button { store.selectedCapability = capability } label: {
-                                Label(capability.title, systemImage: capability.systemImage)
-                                    .foregroundStyle(store.selectedCapability == capability ? Color.accentColor : Color.primary)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            }.buttonStyle(.plain).padding(.leading, 12)
+                        ForEach(store.registry.descriptors) { module in
+                            Button { store.selectedToolID = module.id } label: {
+                                HStack {
+                                    Label(module.title, systemImage: module.systemImage)
+                                    Spacer()
+                                    if store.selectedToolID == module.id { Image(systemName: "checkmark").font(.caption) }
+                                }
+                                .fontWeight(.medium)
+                                .foregroundStyle(store.selectedToolID == module.id ? Color.accentColor : Color.primary)
+                            }.buttonStyle(.plain)
+                            if module.id == MoleModule.id && store.selectedToolID == MoleModule.id {
+                                ForEach(MoleCapability.allCases) { capability in
+                                    Button { store.selectedCapability = capability } label: {
+                                        Label(capability.title, systemImage: capability.systemImage)
+                                            .foregroundStyle(store.selectedCapability == capability ? Color.accentColor : Color.primary)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                    }.buttonStyle(.plain).padding(.leading, 12)
+                                }
+                            }
                         }
                     }
                 case .tasks:

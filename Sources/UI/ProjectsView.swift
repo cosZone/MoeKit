@@ -81,7 +81,17 @@ struct ProjectsView: View {
             Spacer()
             Button("Finder", systemImage: "folder") { store.revealSelectedProject() }
                 .disabled(store.isDemoEnabled || store.selectedProject == nil || store.selectedProject?.kind == .group)
-            Button("Open tools", systemImage: "briefcase") { store.section = .tools }
+            Button("Related processes", systemImage: "terminal") {
+                guard !store.isDemoEnabled, let project = store.selectedProject, project.kind != .group else { return }
+                store.processes.openProject(project, projects: store.projects)
+                store.selectedToolID = ProcessModule.id
+                store.section = .tools
+            }
+            .disabled(store.isDemoEnabled || store.selectedProject == nil || store.selectedProject?.kind == .group)
+            Button("Open tools", systemImage: "briefcase") {
+                store.selectedToolID = MoleModule.id
+                store.section = .tools
+            }
                 .disabled(store.selectedProject == nil)
         }.padding(.horizontal, 16).frame(height: 64).background(MoeStyle.secondarySurface)
     }
@@ -104,6 +114,31 @@ private struct ProjectInspector: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 if project.kind != .group {
+                    Section("Processes & Ports") {
+                        if store.isDemoEnabled {
+                            Text("Unavailable in Demo").foregroundStyle(.secondary)
+                        } else if let snapshot = store.processes.snapshot {
+                            let count = snapshot.records.filter { store.processes.association(for: $0).projectID == project.id }.count
+                            Text("\(count) inferred processes")
+                            LabeledContent("Snapshot") {
+                                Text(snapshot.capturedAt, format: .dateTime.month().day().hour().minute().second())
+                            }.font(.caption).foregroundStyle(.secondary)
+                            if snapshot.isPartial {
+                                Label("Partial snapshot", systemImage: "exclamationmark.triangle")
+                                    .font(.caption).foregroundStyle(.orange)
+                            }
+                        } else {
+                            Text("Not scanned").foregroundStyle(.secondary)
+                        }
+                        Text("Association is inferred from the working directory. Opening this view does not scan.")
+                            .font(.caption).foregroundStyle(.secondary)
+                        Button("Open related processes", systemImage: "terminal") {
+                            guard !store.isDemoEnabled else { return }
+                            store.processes.openProject(project, projects: store.projects)
+                            store.selectedToolID = ProcessModule.id
+                            store.section = .tools
+                        }.disabled(store.isDemoEnabled)
+                    }
                     Button(project.isPinned ? "Unpin project" : "Pin project", systemImage: "pin") { store.togglePin(project.id) }
                         .disabled(store.isDemoEnabled)
                 }

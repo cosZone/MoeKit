@@ -4,7 +4,7 @@
 
 `MoeKitApp` 创建共享的 `WorkspaceStore`。SwiftUI `NavigationSplitView` 承载 Projects / Tools / Tasks，项目使用 `Table` 和 inspector，任务详情停靠于底部。AppKit 仅用于原生文件选择器与 Finder 定位。导航与操作图标使用 SF Symbols；应用图标和品牌图像来自 `Resources/Brand`。
 
-`ToolModule` / `ToolModuleDescriptor` / `ToolModuleRegistry` 描述内置集成、稳定 ID、可搜索的模块数据和能力可用性；当前 UI 直接导航到 Mole，尚无独立目录搜索界面。新增内置模块不应改变顶层导航。目前仅注册 Mole，所有命令执行能力均明确不可用。它不是动态插件宿主，不加载任意二进制或脚本。
+`ToolModule` / `ToolModuleDescriptor` / `ToolModuleRegistry` 描述内置集成、稳定 ID、可搜索的模块数据和能力可用性；当前 UI 在 Tools 中选择 Mole 或 Processes & Ports。新增内置模块不改变顶层导航。Mole 执行与进程停止能力均明确不可用；Processes & Ports 仅提供用户主动触发的原生只读快照。它不是动态插件宿主，不加载任意二进制或脚本。
 
 ## Projects：读取与保存
 
@@ -29,3 +29,7 @@
 真实项目和任务初始为空，项目目录从本地持久化加载。Demo 必须显式启用，使用 `DemoData` 与页面中的示例报告；有持续可见标识，不向真实项目目录写入示例项目。退出 Demo 恢复真实数据。任务记录和已导入报告仅保留于当前进程。
 
 Swift Testing 测试覆盖扫描边界、取消、异常元数据、模块注册与报告解码。源码中存在测试不代表测试已运行；结果应按精确提交查验 CI。
+
+## Processes & Ports
+
+独立的 actor 通过 Darwin/libproc 读取当前有效用户的有限进程快照；主线程 coordinator 处理取消、重复请求、选择失效和 Demo 边界。关联只来自规范化 cwd 与项目路径的包含关系，不推断会话所有权。停止计划仅供检查，不包含信号执行入口。详见 [范围与隐私](Processes-and-ports.md)。

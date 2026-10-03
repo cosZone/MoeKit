@@ -37,12 +37,17 @@ open DerivedData/Build/Products/Debug/MoeKit.app
 ## 下载与开发
 
 - [Actions](https://github.com/cosZone/MoeKit/actions)：Native CI 构建与测试；手动运行 Preview app artifact 可下载包含 `.app` 的 ZIP、源码 SHA、SHA-256 校验和与构建信息
-- 预览包仅 **ad-hoc 签名，没有 Developer ID 签名、没有公证**，Gatekeeper 可能阻止打开；本工作流不会创建 tag 或 GitHub Release。后续 Developer ID 签名与发布工作流尚待配置与审核
-- [开发签名预览发布](Documentation/Signed-preview-release.md)：已编写独立的手动发布流程，待配置 Secrets、审核合入并实际运行；使用 Apple Development 签名，仍未公证，不等于 Developer ID 正式分发
+- Actions 的 Preview app artifact 仅 **ad-hoc 签名，没有 Developer ID 签名、没有公证**；该工作流不会创建 tag 或 GitHub Release
+- [0.1.0-preview.1](https://github.com/cosZone/MoeKit/releases/tag/v0.1.0-preview.1) 已发布 universal Release ZIP、校验和与构建信息，源码为 `fd3f9feffb5deca745b64967acafa1933fcd303d`；使用 **Apple Development 签名，未公证**，不等于 Developer ID 正式分发，Gatekeeper 仍可能阻止打开
+- 首个预览包不包含其后合入的 About 窗口与文档站。按版本的交付说明见 [更新记录](website/content/changelog/0.1.0-preview.1.md)；维护者流程见 [开发签名预览发布](Documentation/Signed-preview-release.md)
 - [构建与交付说明](Documentation/Build-and-preview.md)
 - [架构与数据边界](Documentation/Architecture.md)
 - [进程与端口的范围、隐私与验证边界](Documentation/Processes-and-ports.md)
 - [原生验收清单](Documentation/Verification.md)
+
+## 文档网站
+
+Fumadocs 中文文档位于 [`website/`](website/README.md)，与原生应用同仓库、独立构建。包含功能边界、安装说明、每版本普通 Markdown 更新日志，以及可自行部署到 Dokploy 的 Docker 配置；尚未配置公开站点域名。
 
 ## 许可
 

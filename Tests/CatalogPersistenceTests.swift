@@ -68,9 +68,12 @@ struct CatalogPersistenceTests {
         let fixture = CatalogFixture()
         defer { fixture.remove() }
         let first = fixture.project()
-        var second = ProjectRecord(name: "Second", path: first.path + "-second", kind: .folder)
+        // Construct the duplicate identity directly. Replacing a record while
+        // reading its own path triggered an optimized fixture use-after-free.
+        var second = ProjectRecord(id: variant == 0 ? first.id : UUID(), name: "Second",
+                                   path: first.path + "-second", kind: .folder)
         switch variant {
-        case 0: second = ProjectRecord(id: first.id, name: "Duplicate ID", path: second.path, kind: .folder)
+        case 0: break
         case 1: second.path = first.path + "/child/.."
         case 2: second.path = "relative/project"
         case 3: second.parentID = UUID()

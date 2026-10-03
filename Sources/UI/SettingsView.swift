@@ -2,7 +2,21 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(WorkspaceStore.self) private var store
+
     var body: some View {
+        TabView {
+            generalSettings
+                .tabItem { Label("General", systemImage: "gearshape") }
+
+            AboutView()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .tabItem { Label("About", systemImage: "info.circle") }
+        }
+        .frame(width: 520, height: 600)
+    }
+
+    @ViewBuilder
+    private var generalSettings: some View {
         @Bindable var store = store
         Form {
             Section {
@@ -36,6 +50,6 @@ struct SettingsView: View {
                 Text("Your project list and pins are stored in MoeKit’s Application Support folder. Task records and imported reports last for the current session.")
                     .font(.caption).foregroundStyle(.secondary)
             }
-        }.formStyle(.grouped).frame(width: 520, height: 600)
+        }.formStyle(.grouped)
     }
 }

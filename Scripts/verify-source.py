@@ -21,6 +21,8 @@ required = (
     "Sources/App/MoeKitApp.swift", "Sources/Core/WorkspaceStore.swift",
     "Sources/Core/DemoData.swift", "Sources/Core/ToolModule.swift",
     "Sources/Core/MoleReport.swift", "Sources/Services/RepositoryScanner.swift",
+    "Sources/Core/AppInformation.swift", "Sources/UI/AboutView.swift",
+    "Tests/AppInformationTests.swift",
     "Tests/RepositoryScannerTests.swift", "Tests/MoleModuleTests.swift",
     "Sources/Processes/ProcessModels.swift", "Sources/Processes/ProcessInventoryStore.swift",
     "Sources/Services/NativeProcessInventoryProvider.swift", "Sources/UI/ProcessWorkspaceView.swift",

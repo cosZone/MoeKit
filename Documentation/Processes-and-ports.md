@@ -15,7 +15,7 @@ Native APIs are bounded by process count, descriptor count and a cooperative wal
 
 ## Project associations
 
-Canonical current working directory containment in an already-added project is observed evidence only. Component boundaries prevent sibling-prefix matches. The deepest unique project root wins; duplicate canonical roots and missing/ambiguous paths remain unattributed. A project at filesystem root is not used for association. Parent PID, process name, port, old age, PPID 1, or a missing parent do not establish ownership. No process is labeled “Started by MoeKit” because this milestone has no launch ledger.
+Canonical current working directory containment in an already-added project is observed evidence only. Both process working directories and catalog roots use `realpath` physical paths, preserving macOS aliases such as `/tmp` → `/private/tmp`. Component boundaries prevent sibling-prefix matches. The deepest unique project root wins; duplicate canonical roots and missing/ambiguous paths remain unattributed. A project at filesystem root is not used for association. Parent PID, process name, port, old age, PPID 1, or a missing parent do not establish ownership. No process is labeled “Started by MoeKit” because this milestone has no launch ledger.
 
 Browser/GUI-app, IDE, shell, database, VM and shared-service hints are highlighted for individual review. These conservative heuristics are not an exhaustive safety guarantee. In particular, a Chrome helper cannot be assumed to be a disposable automation instance. Process groups are never treated as exclusive sessions.
 

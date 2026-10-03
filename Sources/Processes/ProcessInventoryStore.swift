@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import Observation
 
@@ -14,10 +15,19 @@ actor ProcessProjectResolver {
         let scopes: [ProcessProjectScope] = try candidates.compactMap { project in
             try Task.checkCancellation()
             guard ProcessPath.isCanonicalAbsolute(project.path), project.path != "/" else { return nil }
-            let url = project.url.resolvingSymlinksInPath().standardizedFileURL
-            guard ProcessPath.isCanonicalAbsolute(url.path), url.path != "/",
-                  (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true else { return nil }
-            return ProcessProjectScope(id: project.id, name: project.name, canonicalPath: url.path)
+            // Use the same physical-path representation as native cwd reads.
+            // Foundation standardization may remove macOS's /private prefix.
+            var resolved = [CChar](repeating: 0, count: Int(PATH_MAX))
+            let succeeded = project.path.withCString { source in
+                resolved.withUnsafeMutableBufferPointer { destination in
+                    realpath(source, destination.baseAddress) != nil
+                }
+            }
+            try Task.checkCancellation()
+            guard succeeded, let path = resolved.withUnsafeBytes(NativeProcessInventoryParsing.decodeCString),
+                  ProcessPath.isCanonicalAbsolute(path), path != "/",
+                  (try? URL(fileURLWithPath: path).resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true else { return nil }
+            return ProcessProjectScope(id: project.id, name: project.name, canonicalPath: path)
         }
         return ProcessProjectResolution(scopes: scopes, unavailableCount: candidates.count - scopes.count)
     }

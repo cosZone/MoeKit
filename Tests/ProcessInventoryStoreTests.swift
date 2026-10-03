@@ -283,6 +283,24 @@ struct ProcessInventoryStoreTests {
         #expect(store.lastScanStatus == .completed)
     }
 
+    @Test("macOS temporary aliases use the same physical root as native working directories")
+    func physicalProjectRoot() async throws {
+        // macOS /tmp is an alias of /private/tmp. Use a unique fixture only.
+        let name = "moekit-process-" + UUID().uuidString
+        let alias = URL(fileURLWithPath: "/tmp").appendingPathComponent(name, isDirectory: true)
+        try FileManager.default.createDirectory(at: alias, withIntermediateDirectories: false)
+        defer { try? FileManager.default.removeItem(at: alias) }
+        let project = ProjectRecord(name: "Aliased fixture", path: alias.path, kind: .folder)
+        let resolution = try await ProcessProjectResolver().resolve([project])
+        let scope = try #require(resolution.scopes.first)
+        #expect(scope.canonicalPath == "/private/tmp/" + name)
+        #expect(resolution.unavailableCount == 0)
+        let row = ProcessInventoryRecord(identity: Self.snapshot().records[0].identity,
+            name: "fixture", parentPID: 10, processGroupID: 100,
+            workingDirectory: "/private/tmp/" + name + "/src", listeningPorts: [])
+        #expect(ProcessClassifier.association(for: row, projects: resolution.scopes).projectID == project.id)
+    }
+
     private static func portSnapshot() -> ProcessSnapshot {
         let ports: [[ListeningPort]?] = [[ListeningPort(port: 3_000, address: "::1", transport: "TCP")], [], nil]
         let records = ["listener", "empty", "unknown"].enumerated().map { index, name in

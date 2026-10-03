@@ -35,12 +35,21 @@ struct WorkspaceView: View {
             .toolbar {
                 ToolbarItem(placement: .automatic) {
                     HStack(spacing: 6) {
-                        Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                        TextField("Search", text: searchBinding)
+                        Image(systemName: "magnifyingglass").foregroundStyle(.secondary).accessibilityHidden(true)
+                        TextField(store.workspaceSearchPrompt, text: searchBinding)
                             .textFieldStyle(.plain).focused($isSearchFocused)
+                            .accessibilityLabel(store.workspaceSearchPrompt)
+                            .disabled(!store.canSearchWorkspace)
+                            .onKeyPress(.escape) {
+                                guard isSearchFocused else { return .ignored }
+                                if searchBinding.wrappedValue.isEmpty { isSearchFocused = false }
+                                else { searchBinding.wrappedValue = "" }
+                                return .handled
+                            }
                         if !searchBinding.wrappedValue.isEmpty {
-                            Button { searchBinding.wrappedValue = "" } label: { Image(systemName: "xmark.circle.fill") }
+                            Button { searchBinding.wrappedValue = ""; isSearchFocused = true } label: { Image(systemName: "xmark.circle.fill") }
                                 .buttonStyle(.plain).accessibilityLabel("Clear search")
+                                .disabled(!store.canSearchWorkspace)
                         }
                     }
                     .padding(.horizontal, 8).frame(width: 230, height: 26)
@@ -64,6 +73,8 @@ struct WorkspaceView: View {
                             Label("Inspector", systemImage: "sidebar.right")
                         }
                         .help("Show or hide project details")
+                        .accessibilityValue(store.isInspectorPresented ? Text("Shown") : Text("Hidden"))
+                        .keyboardShortcut("i", modifiers: [.command, .option])
                     case .tools:
                         if store.selectedToolID == ProcessModule.id {
                             if store.processes.isScanning && !store.isDemoEnabled {
@@ -95,12 +106,12 @@ struct WorkspaceView: View {
                     }
                 }
             }
-            .background {
-                Button("") { isSearchFocused = true }
-                    .keyboardShortcut("f", modifiers: [.command])
-                    .hidden()
-            }
         }
+        .focusedSceneValue(\.workspaceSearchAction, WorkspaceSearchAction(isEnabled: store.canSearchWorkspace) { isSearchFocused = true })
+        .onChange(of: store.section) { isSearchFocused = false }
+        .onChange(of: store.selectedToolID) { isSearchFocused = false }
+        .onChange(of: store.selectedCapability) { isSearchFocused = false }
+        .onChange(of: store.isDemoEnabled) { isSearchFocused = false }
         .font(.system(size: 13))
         .controlSize(.small)
         .sheet(isPresented: Binding(get: { store.pendingDiscovery != nil }, set: { if !$0 { store.pendingDiscovery = nil } })) {
@@ -151,8 +162,9 @@ private struct SidebarView: View {
                     Section("Browse") {
                         ForEach(ProjectFilter.allCases) { filter in
                             Button { store.projectFilter = filter } label: {
-                                HStack { Text(filter.title); Spacer(); if store.projectFilter == filter { Image(systemName: "checkmark").font(.caption) } }
+                                HStack { Text(filter.title); Spacer(); if store.projectFilter == filter { Image(systemName: "checkmark").font(.caption).accessibilityHidden(true) } }
                             }.buttonStyle(.plain)
+                                .accessibilityAddTraits(store.projectFilter == filter ? [.isSelected] : [])
                         }
                     }
                     Section("Discovery") {
@@ -167,18 +179,23 @@ private struct SidebarView: View {
                                 HStack {
                                     Label(module.title, systemImage: module.systemImage)
                                     Spacer()
-                                    if store.selectedToolID == module.id { Image(systemName: "checkmark").font(.caption) }
+                                    if store.selectedToolID == module.id { Image(systemName: "checkmark").font(.caption).accessibilityHidden(true) }
                                 }
                                 .fontWeight(.medium)
                                 .foregroundStyle(store.selectedToolID == module.id ? Color.accentColor : Color.primary)
                             }.buttonStyle(.plain)
+                                .accessibilityAddTraits(store.selectedToolID == module.id ? [.isSelected] : [])
                             if module.id == MoleModule.id && store.selectedToolID == MoleModule.id {
                                 ForEach(MoleCapability.allCases) { capability in
                                     Button { store.selectedCapability = capability } label: {
-                                        Label(capability.title, systemImage: capability.systemImage)
-                                            .foregroundStyle(store.selectedCapability == capability ? Color.accentColor : Color.primary)
-                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                        HStack {
+                                            Label(capability.title, systemImage: capability.systemImage)
+                                            Spacer()
+                                            if store.selectedCapability == capability { Image(systemName: "checkmark").font(.caption).accessibilityHidden(true) }
+                                        }
+                                        .foregroundStyle(store.selectedCapability == capability ? Color.accentColor : Color.primary)
                                     }.buttonStyle(.plain).padding(.leading, 12)
+                                        .accessibilityAddTraits(store.selectedCapability == capability ? [.isSelected] : [])
                                 }
                             }
                         }
@@ -187,8 +204,9 @@ private struct SidebarView: View {
                     Section("Records") {
                         ForEach(TaskFilter.allCases) { filter in
                             Button { store.taskFilter = filter } label: {
-                                HStack { Text(filter.title); Spacer(); if store.taskFilter == filter { Image(systemName: "checkmark").font(.caption) } }
+                                HStack { Text(filter.title); Spacer(); if store.taskFilter == filter { Image(systemName: "checkmark").font(.caption).accessibilityHidden(true) } }
                             }.buttonStyle(.plain)
+                                .accessibilityAddTraits(store.taskFilter == filter ? [.isSelected] : [])
                         }
                     }
                 }

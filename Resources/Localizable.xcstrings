@@ -3520,6 +3520,316 @@
           }
         }
       }
+    },
+    "%@, %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@，%@"
+          }
+        }
+      }
+    },
+    "%lld selected projects are outside this filter and will also be imported.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "有 %lld 个已选项目不在当前筛选结果中，也将被导入。"
+          }
+        }
+      }
+    },
+    "Add or update %lld selected": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加或更新 %lld 个已选项目"
+          }
+        }
+      }
+    },
+    "Collapsed": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已折叠"
+          }
+        }
+      }
+    },
+    "Discovered projects": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发现的项目"
+          }
+        }
+      }
+    },
+    "Discovering projects…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在发现项目…"
+          }
+        }
+      }
+    },
+    "Discovery and process scans appear here with their actual results.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "目录发现和进程扫描的实际结果会显示在这里。"
+          }
+        }
+      }
+    },
+    "Expanded": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已展开"
+          }
+        }
+      }
+    },
+    "Filter discovered projects": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "筛选发现的项目"
+          }
+        }
+      }
+    },
+    "Hidden": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已隐藏"
+          }
+        }
+      }
+    },
+    "Importing report…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在导入报告…"
+          }
+        }
+      }
+    },
+    "Matching working directories stay expanded while filtering": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "筛选时，匹配的工作目录保持展开"
+          }
+        }
+      }
+    },
+    "No matching tasks": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有匹配的任务"
+          }
+        }
+      }
+    },
+    "No per-item details. Read the summary or open Diagnostics.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有逐项详情。请阅读摘要或打开诊断信息。"
+          }
+        }
+      }
+    },
+    "No summary recorded": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未记录摘要"
+          }
+        }
+      }
+    },
+    "Project actions": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "项目操作"
+          }
+        }
+      }
+    },
+    "Reading only the folders you selected. You can cancel discovery at any time.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "只读取你选择的文件夹。你可以随时取消发现。"
+          }
+        }
+      }
+    },
+    "Reading the selected JSON report. No CLI is running and no reported files are changed.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在读取所选 JSON 报告。未运行命令行工具，也不会更改报告中的文件。"
+          }
+        }
+      }
+    },
+    "Report entries": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "报告条目"
+          }
+        }
+      }
+    },
+    "Search processes and ports": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜索进程与端口"
+          }
+        }
+      }
+    },
+    "Search projects": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜索项目"
+          }
+        }
+      }
+    },
+    "Search report entries": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜索报告条目"
+          }
+        }
+      }
+    },
+    "Search tasks": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜索任务"
+          }
+        }
+      }
+    },
+    "Search workspace": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜索工作区"
+          }
+        }
+      }
+    },
+    "Select a task": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择一个任务"
+          }
+        }
+      }
+    },
+    "Select a visible record to inspect its result and diagnostics.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择可见记录以查看结果和诊断信息。"
+          }
+        }
+      }
+    },
+    "Shown": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已显示"
+          }
+        }
+      }
+    },
+    "Task item details": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "任务条目详情"
+          }
+        }
+      }
+    },
+    "Try a different search or task filter.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请尝试其他搜索词或任务筛选条件。"
+          }
+        }
+      }
+    },
+    "Waiting for a result…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在等待结果…"
+          }
+        }
+      }
+    },
+    "Working directories for %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 的工作目录"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

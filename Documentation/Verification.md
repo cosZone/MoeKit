@@ -75,3 +75,16 @@
 - 展开/折叠、置顶/最近筛选、搜索子 worktree、改变排序；不可见项目应清除选择，操作按钮不能继续指向隐藏行
 - 打开清理安全复查：所有项目都处于保护状态，明确未检查的本地变更、未跟踪/未推送内容与活动状态；没有删除或回收量承诺
 - 使用 VoiceOver 检查扫描进度、锁标识、展开按钮、复查选择计数与取消/完成按钮；检查小窗口、长路径与深浅色模式
+
+## 工作区可靠性与渲染证据
+
+- Native CI 的 `UISnapshotTests` 在临时空 catalog 中显式开启 Demo，以 AppKit 绘制测试拥有的 `WorkspaceView` 子树，覆盖 Projects inspector、Tasks 结果、Mole Space 与 Processes Demo 禁用状态的两种尺寸和深浅色，共 16 个 PNG
+- PNG 与范围说明随 `.xcresult` 保存，并导出到 `native-view-renders-<SHA>` artifact；测试仅检查可绘制且非空白，必须人工查看实际图片，不能把通过记录当成视觉验收
+- 不截取桌面或其他窗口，不请求屏幕录制或 Accessibility 权限，不读取真实 catalog，不扫描真实目录/进程；不改变签名和发布流程
+- 范围不含原生标题栏/工具栏、键盘操作、VoiceOver、真实 Mac、中文布局或像素回归基线；Demo 相对时间使图片不是稳定基线
+- [ ] 在活动工作区中用 Edit → Search workspace / Command-F 聚焦对应搜索框；Escape 先清空搜索，再移出焦点；切换工作区后不得继续编辑旧搜索
+- [ ] Command-Option-I 切换项目 inspector；打开 About、Settings 或发现复查时，不应把搜索命令发送到不可见工作区
+- [ ] 项目折叠/筛选/移除、任务筛选/完成后，旧选中项立即清除；清空筛选不复活旧选择
+- [ ] 960×620 且 inspector 打开时，Finder、Project actions、路径与空状态可读；Project actions 中置顶、关联进程和安全复查指向当前可见选择
+- [ ] 发现复查筛选隐藏了已选项目时，隐藏选择数量和最终总导入数量明确显示
+- [ ] Demo 与真实模式之间清空搜索/筛选/选择；Demo 任务计数来自示例记录，空搜索结果不能显示真实导入提示

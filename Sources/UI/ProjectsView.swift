@@ -11,6 +11,9 @@ struct ProjectsView: View {
             HStack {
                 Text(store.projectFilter.title).fontWeight(.medium)
                 Spacer()
+                if store.hasProjectFilters {
+                    Button("Clear filters") { store.clearProjectFilters() }.buttonStyle(.borderless)
+                }
                 Text("\(rows.count) rows").foregroundStyle(.secondary)
             }.padding(.horizontal, 16).frame(height: 32)
             if store.isScanning {
@@ -33,16 +36,21 @@ struct ProjectsView: View {
                     HStack(spacing: 7) {
                         if store.hasProjectChildren(project.id) {
                             Button { store.toggleExpansion(project.id) } label: {
-                                Image(systemName: store.expandedProjectIDs.contains(project.id) ? "chevron.down" : "chevron.right")
+                                Image(systemName: store.isProjectExpanded(project.id) ? "chevron.down" : "chevron.right")
                                     .font(.system(size: 9, weight: .semibold)).frame(width: 10)
-                            }.buttonStyle(.plain).accessibilityLabel("Expand or collapse working directories")
+                            }.buttonStyle(.plain)
+                                .accessibilityLabel(Text("Working directories for \(project.name)"))
+                                .accessibilityValue(store.isProjectExpanded(project.id) ? Text("Expanded") : Text("Collapsed"))
+                                .disabled(store.hasProjectFilters)
+                                .help("Matching working directories stay expanded while filtering")
                         } else { Color.clear.frame(width: project.parentID == nil ? 10 : 26) }
                         Image(systemName: project.kind.symbol).foregroundStyle(.secondary).frame(width: 16)
                         Text(project.name).lineLimit(1)
                         if project.gitMetadata?.isLocked == true {
-                            Image(systemName: "lock.fill").font(.caption).foregroundStyle(.orange).help("Git worktree lock observed")
+                            Image(systemName: "lock.fill").font(.caption).foregroundStyle(.orange)
+                                .accessibilityLabel("Git worktree lock observed").help("Git worktree lock observed")
                         }
-                        if project.isPinned { Image(systemName: "pin.fill").font(.system(size: 9)).foregroundStyle(.secondary) }
+                        if project.isPinned { Image(systemName: "pin.fill").font(.system(size: 9)).foregroundStyle(.secondary).accessibilityLabel("Pinned") }
                     }.frame(minHeight: 23)
                 }.width(min: 180, ideal: 240, max: 340)
                 TableColumn("Path", value: \.path) { project in
@@ -66,16 +74,19 @@ struct ProjectsView: View {
                 }.width(min: 95, ideal: 110, max: 150)
             }
             .tableStyle(.inset(alternatesRowBackgrounds: true))
+            .accessibilityLabel("Projects")
             .overlay {
                 if rows.isEmpty {
                     ContentUnavailableView {
-                        Label(store.displayedProjects.isEmpty ? "Your projects, in one place" : "No matching projects", systemImage: "folder")
+                        Label(store.isScanning ? "Discovering projects…" : (store.displayedProjects.isEmpty ? "Your projects, in one place" : "No matching projects"), systemImage: store.isScanning ? "hourglass" : "folder")
                     } description: {
-                        Text(store.displayedProjects.isEmpty ? "Add a folder or discover Git repositories in a location you choose." : "Try a different search or filter.")
+                        Text(store.isScanning ? "Reading only the folders you selected. You can cancel discovery at any time." : (store.displayedProjects.isEmpty ? "Add a folder or discover Git repositories in a location you choose." : "Try a different search or filter."))
                     } actions: {
-                        if store.displayedProjects.isEmpty {
-                            Button("Add project…") { store.chooseProject(scanChildren: false) }.disabled(store.isScanning)
+                        if !store.isScanning && store.displayedProjects.isEmpty {
+                            Button("Add project…") { store.chooseProject(scanChildren: false) }.disabled(store.isDemoEnabled)
                             Button("Explore demo") { store.isDemoEnabled = true }
+                        } else if !store.isScanning && store.hasProjectFilters {
+                            Button("Clear filters") { store.clearProjectFilters() }
                         }
                     }
                 }
@@ -98,27 +109,32 @@ struct ProjectsView: View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 5) {
                 Text(store.selectedProject?.name ?? String(localized: "Select a project")).fontWeight(.semibold)
+                    .lineLimit(1)
                 Text(store.selectedProject?.path ?? String(localized: "Select a working directory to reveal it in Finder"))
                     .font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
             }
             Spacer()
             Button("Finder", systemImage: "folder") { store.revealSelectedProject() }
                 .disabled(store.isDemoEnabled || store.selectedProject == nil || store.selectedProject?.kind == .group)
-            Button("Related processes", systemImage: "terminal") {
-                guard !store.isDemoEnabled, let project = store.selectedProject, project.kind != .group else { return }
-                store.processes.openProject(project, projects: store.projects)
-                store.selectedToolID = ProcessModule.id
-                store.section = .tools
-            }
-            .disabled(store.isDemoEnabled || store.selectedProject == nil || store.selectedProject?.kind == .group)
-            Button("Cleanup safety", systemImage: "shield.lefthalf.filled") {
-                store.presentCleanupReview()
-            }.disabled(store.isDemoEnabled || store.selectedProject == nil || store.selectedProject?.kind == .group)
-            Button("Open tools", systemImage: "briefcase") {
-                store.selectedToolID = MoleModule.id
-                store.section = .tools
-            }
-                .disabled(store.selectedProject == nil)
+            Menu {
+                Button(store.selectedProject?.isPinned == true ? "Unpin project" : "Pin project", systemImage: "pin") {
+                    if let project = store.selectedProject { store.togglePin(project.id) }
+                }.disabled(store.isDemoEnabled || store.selectedProject?.kind == .group)
+                Button("Related processes", systemImage: "terminal") {
+                    guard !store.isDemoEnabled, let project = store.selectedProject, project.kind != .group else { return }
+                    store.processes.openProject(project, projects: store.projects)
+                    store.selectedToolID = ProcessModule.id
+                    store.section = .tools
+                }.disabled(store.isDemoEnabled || store.selectedProject?.kind == .group)
+                Button("Cleanup safety", systemImage: "shield.lefthalf.filled") { store.presentCleanupReview() }
+                    .disabled(store.isDemoEnabled || store.selectedProject?.kind == .group)
+                Divider()
+                Button("Open tools", systemImage: "briefcase") {
+                    store.selectedToolID = MoleModule.id
+                    store.section = .tools
+                }
+            } label: { Label("Project actions", systemImage: "ellipsis.circle") }
+                .fixedSize().disabled(store.selectedProject == nil)
         }.padding(.horizontal, 16).frame(height: 64).background(MoeStyle.secondarySurface)
     }
 }
@@ -205,5 +221,6 @@ private struct ProjectCleanupReview: View {
                 .font(.caption).foregroundStyle(.secondary)
             HStack { Spacer(); Button("Done") { dismiss() }.keyboardShortcut(.defaultAction) }
         }.padding(24).frame(width: 600, height: 490)
+            .onExitCommand { dismiss() }
     }
 }

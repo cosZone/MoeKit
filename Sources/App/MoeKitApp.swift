@@ -15,6 +15,7 @@ struct MoeKitApp: App {
         .defaultSize(width: 1280, height: 800)
         .windowToolbarStyle(.unifiedCompact)
         .commands {
+            WorkspaceCommands()
             CommandGroup(replacing: .appInfo) {
                 Button("About MoeKit") { openWindow(id: "about") }
             }

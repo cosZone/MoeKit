@@ -64,20 +64,25 @@ private struct MoleSpaceView: View {
                          coverage: entry.coverage, isDirectory: entry.isDirectory, lastAccess: entry.lastAccess)
             } ?? []
         }
-        let filtered = source.filter { store.toolSearch.isEmpty || $0.name.localizedStandardContains(store.toolSearch) || $0.path.localizedStandardContains(store.toolSearch) }
+        let query = store.toolSearch.trimmingCharacters(in: .whitespacesAndNewlines)
+        let filtered = source.filter { query.isEmpty || $0.name.localizedStandardContains(query) || $0.path.localizedStandardContains(query) }
             .sorted(using: sortOrder)
         // Keep unknown sizes visible rather than burying them below measured rows.
         return filtered.filter { $0.bytes == nil } + filtered.filter { $0.bytes != nil }
     }
     private var selectedRow: SpaceRow? { rows.first { $0.id == selection } }
+    private var hasReport: Bool { store.isDemoEnabled || store.importedReport != nil }
 
     var body: some View {
         VStack(spacing: 0) {
             HStack {
                 Label("Space", systemImage: "internaldrive").fontWeight(.medium)
                 Spacer()
-                if store.isImporting { ProgressView().controlSize(.mini) }
-                Text(store.isDemoEnabled ? "Example sizes" : "Imported report · upstream-reported sizes")
+                if store.isImporting {
+                    ProgressView().controlSize(.mini)
+                    Text("Importing report…").foregroundStyle(.secondary)
+                }
+                Text(store.isDemoEnabled ? "Example sizes" : (hasReport ? "Imported report · upstream-reported sizes" : "No report imported"))
                     .foregroundStyle(.secondary)
             }.padding(.horizontal, 16).frame(height: 38)
             Divider()
@@ -124,15 +129,18 @@ private struct MoleSpaceView: View {
                     }.width(min: 130, ideal: 150, max: 200)
                 }
                 .tableStyle(.inset(alternatesRowBackgrounds: true))
+                .accessibilityLabel("Report entries")
                 .overlay {
                     if rows.isEmpty {
                         ContentUnavailableView {
-                            Label(store.importedReport == nil ? "Explore a Mole space report" : "No matching entries", systemImage: "internaldrive")
+                            Label(store.isImporting ? "Importing report…" : (hasReport ? "No matching entries" : "Explore a Mole space report"), systemImage: store.isImporting ? "hourglass" : "internaldrive")
                         } description: {
-                            Text(store.importedReport == nil ? "Import an existing analyze --json report. CLI scanning will be connected in a later milestone." : "Try a different search. Empty results do not prove an empty disk.")
+                            Text(store.isImporting ? "Reading the selected JSON report. No CLI is running and no reported files are changed." : (hasReport ? "Try a different search. Empty results do not prove an empty disk." : "Import an existing analyze --json report. CLI scanning will be connected in a later milestone."))
                         } actions: {
-                            if store.importedReport == nil {
+                            if !hasReport && !store.isImporting {
                                 Button("Import report…") { store.chooseMoleReport() }.disabled(store.isDemoEnabled || store.isImporting)
+                            } else if hasReport && !store.toolSearch.isEmpty {
+                                Button("Clear search") { store.toolSearch = "" }
                             }
                         }
                     }
@@ -156,6 +164,9 @@ private struct MoleSpaceView: View {
         .onChange(of: canShowTreemap) { if !canShowTreemap { showTreemap = false } }
         .onChange(of: store.isDemoEnabled) { selection = nil; showTreemap = false }
         .onChange(of: store.importedAt) { selection = nil; showTreemap = false }
+        .onChange(of: rows.map(\.id)) { _, visibleIDs in
+            if let selected = selection, !visibleIDs.contains(selected) { selection = nil }
+        }
     }
     private var canShowTreemap: Bool {
         // Demo data contains nested example locations; it is deliberately not summed.
@@ -185,6 +196,9 @@ private struct SpaceTreemapView: View {
                         .overlay(Rectangle().stroke(selection == row.id ? Color.accentColor : Color.clear, lineWidth: 2))
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel(Text("\(row.name), \(row.sizeLabel)"))
+                    .accessibilityValue(row.path)
+                    .accessibilityAddTraits(selection == row.id ? [.isSelected] : [])
                     .frame(width: max(0, (geometry.size.width - CGFloat(max(0, weighted.count - 1) * 2)) * CGFloat(Double(row.bytes ?? 0) / max(1, total))))
                     .clipped().help("\(row.path) · \(row.sizeLabel)")
                 }

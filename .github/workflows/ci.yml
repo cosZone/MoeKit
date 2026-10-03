@@ -84,6 +84,20 @@ jobs:
                       process.kill()
                       process.wait(timeout=5)
           PY
+      - name: Export owned-view render evidence
+        if: always()
+        run: |
+          if [ -d TestResults.xcresult ]; then
+            xcrun xcresulttool export attachments --path TestResults.xcresult --output-path UIRenderArtifacts
+          fi
+      - name: Preserve owned-view render evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: native-view-renders-${{ env.SOURCE_SHA }}
+          path: UIRenderArtifacts/
+          if-no-files-found: ignore
+          retention-days: 14
       - name: Preserve test results
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

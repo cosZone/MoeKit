@@ -3200,6 +3200,326 @@
           }
         }
       }
+    },
+    "This is not a verified linked worktree. Repository and folder removal is protected.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此目录尚未验证为关联 worktree。仓库和文件夹受到保护，不能移除。"
+          }
+        }
+      }
+    },
+    "Git marks this worktree as locked. Preserve it until the lock is reviewed.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Git 将此 worktree 标记为已锁定。请先检查锁定原因，并保留此目录。"
+          }
+        }
+      }
+    },
+    "The Git relationship is unknown or unreadable.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Git 关联关系未知或无法读取。"
+          }
+        }
+      }
+    },
+    "Uncommitted changes and untracked files have not been checked.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚未检查未提交的改动和未跟踪文件。"
+          }
+        }
+      }
+    },
+    "Unpushed commits, upstream tracking and remote reachability have not been checked.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚未检查未推送提交、上游跟踪关系和远程可达性。"
+          }
+        }
+      }
+    },
+    "Active use and ownership have not been verified. A process snapshot cannot prove a directory is unused.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚未验证使用状态和归属。进程快照无法证明某个目录已不再使用。"
+          }
+        }
+      }
+    },
+    "Discovery is a snapshot. All safety checks would need to be repeated before any future cleanup.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发现结果只是快照。未来执行任何清理前，都必须重新完成全部安全检查。"
+          }
+        }
+      }
+    },
+    "Discover repositories in up to 32 selected folders, up to 4 levels each. One shared budget applies. Dependencies and symbolic links are skipped.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在最多 32 个所选文件夹内发现仓库，每处最多搜索 4 层，所有位置共用扫描限额。跳过依赖目录和符号链接。"
+          }
+        }
+      }
+    },
+    "%lld projects found. Existing paths update metadata without changing pins or history.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发现 %lld 个项目。已有路径仅更新元数据，保留置顶状态和历史。"
+          }
+        }
+      }
+    },
+    "Filter by name, path or branch": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按名称、路径或分支筛选"
+          }
+        }
+      }
+    },
+    "Select visible": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择可见项目"
+          }
+        }
+      }
+    },
+    "Clear selection": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清空选择"
+          }
+        }
+      }
+    },
+    "%lld selected · %lld visible": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已选 %lld 项 · 可见 %lld 项"
+          }
+        }
+      }
+    },
+    "Update existing": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更新已有项目"
+          }
+        }
+      }
+    },
+    "Unknown branch": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分支未知"
+          }
+        }
+      }
+    },
+    "No repositories found": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未发现仓库"
+          }
+        }
+      }
+    },
+    "Add or update selected": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加或更新所选"
+          }
+        }
+      }
+    },
+    "%lld directories inspected · %lld/%lld folders finished": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已检查 %lld 个目录 · 完成 %lld/%lld 个文件夹"
+          }
+        }
+      }
+    },
+    "Preparing discovery…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在准备发现…"
+          }
+        }
+      }
+    },
+    "Git worktree lock observed": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "扫描时发现 Git worktree 锁定标记"
+          }
+        }
+      }
+    },
+    "Cleanup safety": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清理安全复查"
+          }
+        }
+      }
+    },
+    "Verified worktree relationship": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已验证 worktree 关联关系"
+          }
+        }
+      }
+    },
+    "Locked when scanned": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "扫描时已锁定"
+          }
+        }
+      }
+    },
+    "No lock observed": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "扫描时未发现锁定"
+          }
+        }
+      }
+    },
+    "Shared Git metadata directory": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "共享 Git 元数据目录"
+          }
+        }
+      }
+    },
+    "Cleanup safety review": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清理安全复查"
+          }
+        }
+      }
+    },
+    "Protected · not eligible for cleanup": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已保护 · 不符合清理条件"
+          }
+        }
+      }
+    },
+    "Review only. No deletion is available and no reclaimable space has been measured.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅供复查。不提供删除操作，也未测量可回收空间。"
+          }
+        }
+      }
+    },
+    "Sort": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "排序"
+          }
+        }
+      }
+    },
+    "Lock": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "锁定"
+          }
+        }
+      }
+    },
+    "Observed": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "观察时间"
+          }
+        }
+      }
+    },
+    "Done": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完成"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

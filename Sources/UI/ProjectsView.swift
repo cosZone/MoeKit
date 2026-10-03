@@ -13,11 +13,25 @@ struct ProjectsView: View {
                 Spacer()
                 Text("\(rows.count) rows").foregroundStyle(.secondary)
             }.padding(.horizontal, 16).frame(height: 32)
+            if store.isScanning {
+                Divider()
+                HStack(spacing: 10) {
+                    ProgressView().controlSize(.small)
+                    VStack(alignment: .leading, spacing: 2) {
+                        if let progress = store.scanProgress {
+                            Text("\(progress.visitedDirectories) directories inspected · \(progress.completedRoots)/\(progress.totalRoots) folders finished")
+                            Text(progress.root.path).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                        } else { Text("Preparing discovery…") }
+                    }
+                    Spacer()
+                    Button("Cancel discovery", systemImage: "stop.circle") { store.cancelScan() }
+                }.padding(.horizontal, 16).padding(.vertical, 8)
+            }
             Divider()
             Table(rows, selection: $store.selectedProjectID, sortOrder: $sortOrder) {
                 TableColumn("Project / working directory", value: \.name) { project in
                     HStack(spacing: 7) {
-                        if project.kind == .group {
+                        if store.hasProjectChildren(project.id) {
                             Button { store.toggleExpansion(project.id) } label: {
                                 Image(systemName: store.expandedProjectIDs.contains(project.id) ? "chevron.down" : "chevron.right")
                                     .font(.system(size: 9, weight: .semibold)).frame(width: 10)
@@ -25,6 +39,9 @@ struct ProjectsView: View {
                         } else { Color.clear.frame(width: project.parentID == nil ? 10 : 26) }
                         Image(systemName: project.kind.symbol).foregroundStyle(.secondary).frame(width: 16)
                         Text(project.name).lineLimit(1)
+                        if project.gitMetadata?.isLocked == true {
+                            Image(systemName: "lock.fill").font(.caption).foregroundStyle(.orange).help("Git worktree lock observed")
+                        }
                         if project.isPinned { Image(systemName: "pin.fill").font(.system(size: 9)).foregroundStyle(.secondary) }
                     }.frame(minHeight: 23)
                 }.width(min: 180, ideal: 240, max: 340)
@@ -68,6 +85,12 @@ struct ProjectsView: View {
             StatusBar(leading: String(localized: "\(store.displayedProjects.filter { $0.kind != .group }.count) working directories"),
                       trailing: store.isDemoEnabled ? String(localized: "Example data") : String(localized: "Git working-tree status not checked"))
         }
+        .onChange(of: rows.map(\.id)) { _, visibleIDs in
+            if let selected = store.selectedProjectID, !visibleIDs.contains(selected) { store.selectedProjectID = nil }
+        }
+        .sheet(item: Binding(get: { store.cleanupReviewProject }, set: { store.cleanupReviewProjectID = $0?.id })) { project in
+            if !store.isDemoEnabled { ProjectCleanupReview(project: project) }
+        }
         .inspector(isPresented: $store.isInspectorPresented) { ProjectInspector().inspectorColumnWidth(min: 260, ideal: 280, max: 340) }
     }
 
@@ -88,6 +111,9 @@ struct ProjectsView: View {
                 store.section = .tools
             }
             .disabled(store.isDemoEnabled || store.selectedProject == nil || store.selectedProject?.kind == .group)
+            Button("Cleanup safety", systemImage: "shield.lefthalf.filled") {
+                store.presentCleanupReview()
+            }.disabled(store.isDemoEnabled || store.selectedProject == nil || store.selectedProject?.kind == .group)
             Button("Open tools", systemImage: "briefcase") {
                 store.selectedToolID = MoleModule.id
                 store.section = .tools
@@ -110,6 +136,15 @@ private struct ProjectInspector: View {
                 Section("Git metadata") {
                     LabeledContent("Branch", value: project.branchLabel)
                     LabeledContent("Status", value: project.status)
+                    if let metadata = project.gitMetadata {
+                        LabeledContent("Observed") { Text(metadata.observedAt, format: .dateTime.month().day().hour().minute()) }
+                        if metadata.isLinkedWorktree {
+                            Label("Verified worktree relationship", systemImage: "arrow.triangle.branch")
+                            LabeledContent("Lock", value: metadata.isLocked ? String(localized: "Locked when scanned") : String(localized: "No lock observed"))
+                        }
+                        Text(metadata.commonDirectoryPath).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+                        Text("Shared Git metadata directory").font(.caption).foregroundStyle(.secondary)
+                    }
                     Text("Discovery reads Git metadata only. It does not run git status, hooks, fetch, or project scripts.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
@@ -144,5 +179,31 @@ private struct ProjectInspector: View {
                 }
             }.formStyle(.grouped)
         } else { ContentUnavailableView("Select a project", systemImage: "sidebar.right") }
+    }
+}
+
+
+private struct ProjectCleanupReview: View {
+    let project: ProjectRecord
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        let preview = ProjectCleanupPreview(project: project)
+        VStack(alignment: .leading, spacing: 16) {
+            Label("Cleanup safety review", systemImage: "shield.lefthalf.filled").font(.title2).fontWeight(.semibold)
+            Text(project.name).font(.headline)
+            Text(preview.path).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+            Label("Protected · not eligible for cleanup", systemImage: "lock.fill").foregroundStyle(.orange)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    ForEach(preview.reasons, id: \.self) { reason in
+                        Label(reason, systemImage: "exclamationmark.circle").fixedSize(horizontal: false, vertical: true)
+                    }
+                }.frame(maxWidth: .infinity, alignment: .leading)
+            }
+            Text("Review only. No deletion is available and no reclaimable space has been measured.")
+                .font(.caption).foregroundStyle(.secondary)
+            HStack { Spacer(); Button("Done") { dismiss() }.keyboardShortcut(.defaultAction) }
+        }.padding(24).frame(width: 600, height: 490)
     }
 }

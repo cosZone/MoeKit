@@ -14,14 +14,16 @@ public struct DiscoveredRepository: Identifiable, Sendable, Hashable {
     public let kind: Kind
     /// A branch name, a detached-HEAD label, or nil when it cannot be read safely.
     public let branch: String?
+    public let metadata: GitDiscoveryMetadata?
 
     public var id: String { url.path }
 
-    public init(url: URL, name: String, kind: Kind, branch: String?) {
+    public init(url: URL, name: String, kind: Kind, branch: String?, metadata: GitDiscoveryMetadata? = nil) {
         self.url = url
         self.name = name
         self.kind = kind
         self.branch = branch
+        self.metadata = metadata
     }
 }
 
@@ -31,11 +33,13 @@ public struct ScanOptions: Sendable, Hashable {
     /// Includes the selected root; excluded and symbolic-link directories do not count.
     public let maxDirectories: Int
     public let includeHidden: Bool
+    public let maxEntries: Int
 
-    public init(maxDepth: Int = 4, maxDirectories: Int = 2_000, includeHidden: Bool = false) {
+    public init(maxDepth: Int = 4, maxDirectories: Int = 2_000, includeHidden: Bool = false, maxEntries: Int = 100_000) {
         self.maxDepth = maxDepth
         self.maxDirectories = maxDirectories
         self.includeHidden = includeHidden
+        self.maxEntries = maxEntries
     }
 }
 
@@ -70,17 +74,20 @@ public struct RepositoryScanResult: Sendable, Hashable {
     public let issues: [ScanIssue]
     public let visitedDirectories: Int
     public let wasLimited: Bool
+    public let enumeratedEntries: Int
 
     public init(
         items: [DiscoveredRepository],
         issues: [ScanIssue],
         visitedDirectories: Int,
-        wasLimited: Bool
+        wasLimited: Bool,
+        enumeratedEntries: Int = 0
     ) {
         self.items = items
         self.issues = issues
         self.visitedDirectories = visitedDirectories
         self.wasLimited = wasLimited
+        self.enumeratedEntries = enumeratedEntries
     }
 }
 
@@ -91,7 +98,7 @@ public enum RepositoryScannerError: Error, Sendable, LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .invalidOptions:
-            return "Scan depth must be zero or greater and the directory limit must be positive."
+            return "Choose 1–32 folders. Scan depth must be zero or greater and directory and entry limits must be positive."
         case .invalidRoot(let message):
             return message
         }
@@ -116,13 +123,78 @@ public actor RepositoryScanner {
 
     public init() {}
 
+    /// A scan shares one budget across all roots. Repeated physical roots are ignored;
+    /// overlapping roots may discover the same repository, but it is returned once.
+    public func scan(roots: [URL], options: ScanOptions = ScanOptions(),
+                     progress: (@Sendable (RepositoryScanProgress) async -> Void)? = nil) async throws -> RepositoryScanResult {
+        try Task.checkCancellation()
+        guard !roots.isEmpty, roots.count <= 32, options.maxDepth >= 0,
+              options.maxDirectories > 0, options.maxEntries > 0 else {
+            throw RepositoryScannerError.invalidOptions
+        }
+        var scopes: [Scope] = []
+        var issues: [ScanIssue] = []
+        for root in roots {
+            try Task.checkCancellation()
+            do {
+                let scope = try makeScope(root)
+                if !scopes.contains(where: { $0.root.path == scope.root.path }) { scopes.append(scope) }
+            } catch {
+                issues.append(ScanIssue(url: root, kind: .directoryUnreadable, message: error.localizedDescription))
+            }
+        }
+        let authorizedRoots = scopes.map(\.root)
+        let totalRoots = scopes.count
+        var items: [String: DiscoveredRepository] = [:]
+        var visited = 0
+        var entries = 0
+        var limited = false
+        for (index, original) in scopes.enumerated() {
+            try Task.checkCancellation()
+            guard visited < options.maxDirectories, entries < options.maxEntries else {
+                limited = true
+                issues.append(ScanIssue(url: original.root, kind: visited >= options.maxDirectories ? .directoryLimit : .entryLimit,
+                                       message: "The shared scan budget was reached. This selected root was not searched."))
+                continue
+            }
+            let scope = Scope(root: original.root, components: original.components, authorizedRoots: authorizedRoots)
+            let beforeDirectories = visited
+            let beforeEntries = entries
+            let beforeItems = items.count
+            let result = try await scanScope(scope, options: ScanOptions(maxDepth: options.maxDepth,
+                maxDirectories: options.maxDirectories - visited, includeHidden: options.includeHidden,
+                maxEntries: options.maxEntries - entries), progress: { update in
+                    await progress?(RepositoryScanProgress(root: update.root, completedRoots: index,
+                        totalRoots: totalRoots, visitedDirectories: beforeDirectories + update.visitedDirectories,
+                        enumeratedEntries: beforeEntries + update.enumeratedEntries,
+                        discoveredRepositories: beforeItems + update.discoveredRepositories))
+                })
+            for item in result.items { items[item.id] = item }
+            visited += result.visitedDirectories
+            entries += result.enumeratedEntries
+            limited = limited || result.wasLimited
+            issues.append(contentsOf: result.issues)
+            await progress?(RepositoryScanProgress(root: original.root, completedRoots: index + 1,
+                totalRoots: totalRoots, visitedDirectories: visited, enumeratedEntries: entries,
+                discoveredRepositories: items.count))
+        }
+        try Task.checkCancellation()
+        return RepositoryScanResult(items: items.values.sorted { $0.url.path.localizedStandardCompare($1.url.path) == .orderedAscending },
+            issues: Array(Set(issues)).sorted { $0.id < $1.id }, visitedDirectories: visited,
+            wasLimited: limited, enumeratedEntries: entries)
+    }
+
     /// Finds Git repositories only. Use `inspectFolder` to explicitly add a plain folder.
     public func scan(root: URL, options: ScanOptions = ScanOptions()) async throws -> RepositoryScanResult {
         try Task.checkCancellation()
-        guard options.maxDepth >= 0, options.maxDirectories > 0 else {
+        guard options.maxDepth >= 0, options.maxDirectories > 0, options.maxEntries > 0 else {
             throw RepositoryScannerError.invalidOptions
         }
-        let scope = try makeScope(root)
+        return try await scanScope(makeScope(root), options: options, progress: nil)
+    }
+
+    private func scanScope(_ scope: Scope, options: ScanOptions,
+                           progress: (@Sendable (RepositoryScanProgress) async -> Void)?) async throws -> RepositoryScanResult {
         var issues: [ScanIssue] = []
         var items: [DiscoveredRepository] = []
         var visitedDirectories = 1
@@ -169,15 +241,20 @@ public actor RepositoryScanner {
         var reportedDepthLimit = false
         while let candidate = enumerator.nextObject() as? URL {
             try Task.checkCancellation()
-            guard enumeratedEntries < Self.maximumEnumeratedEntries else {
+            guard enumeratedEntries < options.maxEntries else {
                 wasLimited = true
                 issues.append(ScanIssue(
                     url: scope.root, kind: .entryLimit,
-                    message: "Stopped after examining \(Self.maximumEnumeratedEntries) directory entries. Results are partial."
+                    message: "Stopped after examining \(options.maxEntries) directory entries. Results are partial."
                 ))
                 break
             }
             enumeratedEntries += 1
+            if enumeratedEntries == 1 || enumeratedEntries.isMultiple(of: 64) {
+                await progress?(RepositoryScanProgress(root: scope.root, completedRoots: 0, totalRoots: 1,
+                    visitedDirectories: visitedDirectories, enumeratedEntries: enumeratedEntries,
+                    discoveredRepositories: items.count))
+            }
 
             // Enumerator URLs already have explicit path components. Foundation's
             // standardization may resolve symlinks while simplifying `..`; do not
@@ -255,7 +332,7 @@ public actor RepositoryScanner {
         items.sort { $0.url.path.localizedStandardCompare($1.url.path) == .orderedAscending }
         return RepositoryScanResult(
             items: items, issues: issues,
-            visitedDirectories: visitedDirectories, wasLimited: wasLimited
+            visitedDirectories: visitedDirectories, wasLimited: wasLimited, enumeratedEntries: enumeratedEntries
         )
     }
 
@@ -278,6 +355,18 @@ public actor RepositoryScanner {
     private struct Scope {
         let root: URL
         let components: [String]
+        var authorizedRoots: [URL] = []
+        var allowedRoots: [URL] { authorizedRoots.isEmpty ? [root] : authorizedRoots }
+
+        func metadataRoot(for url: URL) -> URL? {
+            guard url.isFileURL, !url.pathComponents.contains(where: { $0 == "." || $0 == ".." }) else { return nil }
+            return allowedRoots.filter { url.pathComponents.starts(with: $0.pathComponents) }
+                .max { $0.pathComponents.count < $1.pathComponents.count }
+        }
+
+        func isAuthorizedAncestor(_ url: URL) -> Bool {
+            allowedRoots.contains { $0.pathComponents.starts(with: url.pathComponents) }
+        }
 
         func contains(_ url: URL) -> Bool {
             let candidate = url.pathComponents
@@ -366,6 +455,7 @@ public actor RepositoryScanner {
 
         let kind: DiscoveredRepository.Kind = type == .typeDirectory ? .gitRepository : .gitWorktree
         var branch: String?
+        var metadata: GitDiscoveryMetadata?
         do {
             let gitDirectory: URL
             if kind == .gitRepository {
@@ -382,6 +472,46 @@ public actor RepositoryScanner {
             let head = gitDirectory.appendingPathComponent("HEAD", isDirectory: false)
             let contents = try boundedUTF8(at: head, scope: scope)
             branch = try branchLabel(from: contents, head: head)
+            var commonDirectory = gitDirectory
+            var isLinkedWorktree = false
+            if kind == .gitWorktree {
+                let commonFile = gitDirectory.appendingPathComponent("commondir")
+                do {
+                    let common = try boundedUTF8(at: commonFile, scope: scope)
+                    commonDirectory = try metadataPath(common, relativeTo: gitDirectory, marker: commonFile, scope: scope)
+                    guard commonDirectory.path != gitDirectory.path else {
+                        throw metadataFailure(commonFile, .invalidMetadata, "A worktree cannot use itself as its common Git directory.")
+                    }
+                    let backlinkFile = gitDirectory.appendingPathComponent("gitdir")
+                    let backlink = try boundedUTF8(at: backlinkFile, scope: scope)
+                    let linkedMarker = try metadataPath(backlink, relativeTo: gitDirectory, marker: backlinkFile,
+                                                        scope: scope, isDirectory: false)
+                    guard linkedMarker.path == marker.path else {
+                        throw metadataFailure(backlinkFile, .invalidMetadata, "The worktree backlink does not match this working directory. Relationship is unknown.")
+                    }
+                    isLinkedWorktree = true
+                } catch {
+                    // A plain gitfile (for example a submodule) has no commondir.
+                    // It must not be labelled a linked worktree on that evidence alone.
+                    if !isMissingFile(error) { throw error }
+                    // Only a missing commondir is a plain gitfile. A present commondir
+                    // with a missing backlink or target is incomplete worktree evidence.
+                    if fileManager.fileExists(atPath: commonFile.path) { throw error }
+                    commonDirectory = gitDirectory
+                }
+            }
+            var isLocked = false
+            if isLinkedWorktree {
+                let lockFile = gitDirectory.appendingPathComponent("locked")
+                do {
+                    _ = try boundedUTF8(at: lockFile, scope: scope)
+                    isLocked = true
+                } catch {
+                    if !isMissingFile(error) { throw error }
+                }
+            }
+            metadata = GitDiscoveryMetadata(observedAt: .now, gitDirectoryPath: gitDirectory.path,
+                commonDirectoryPath: commonDirectory.path, isLinkedWorktree: isLinkedWorktree, isLocked: isLocked)
         } catch let failure as MetadataFailure {
             issues.append(failure.issue)
         } catch is CancellationError {
@@ -389,11 +519,11 @@ public actor RepositoryScanner {
         } catch {
             issues.append(ScanIssue(
                 url: marker, kind: .metadataUnreadable,
-                message: "Branch is unknown because Git metadata could not be read: \(error.localizedDescription)"
+                message: "Some Git metadata could not be read; relationship details may be unknown: \(error.localizedDescription)"
             ))
         }
         return DiscoveredRepository(
-            url: directory, name: directory.lastPathComponent, kind: kind, branch: branch
+            url: directory, name: directory.lastPathComponent, kind: kind, branch: branch, metadata: metadata
         )
     }
 
@@ -401,11 +531,11 @@ public actor RepositoryScanner {
     /// untrusted pointer's symlinks; inspect each component inside the scope instead.
     private func requireSafePath(_ url: URL, scope: Scope) throws {
         try Task.checkCancellation()
-        guard scope.contains(url) else {
+        guard let metadataRoot = scope.metadataRoot(for: url) else {
             throw metadataFailure(url, .outsideScope, "Git metadata is outside the selected folder. Branch is unknown.")
         }
-        var cursor = scope.root
-        let relative = url.pathComponents.dropFirst(scope.components.count)
+        var cursor = metadataRoot
+        let relative = url.pathComponents.dropFirst(metadataRoot.pathComponents.count)
         let rootAttributes = try fileManager.attributesOfItem(atPath: cursor.path)
         guard rootAttributes[.type] as? FileAttributeType == .typeDirectory else {
             throw metadataFailure(cursor, .symbolicLinkSkipped, "The selected folder changed during discovery; this path was skipped.")
@@ -459,45 +589,51 @@ public actor RepositoryScanner {
         guard line.hasPrefix("gitdir: ") else {
             throw metadataFailure(marker, .invalidMetadata, "The .git file does not contain a valid Git directory pointer.")
         }
-        let path = String(line.dropFirst("gitdir: ".count))
+        return try metadataPath(String(line.dropFirst("gitdir: ".count)), relativeTo: repository, marker: marker, scope: scope)
+    }
+
+    private func metadataPath(_ contents: String, relativeTo base: URL, marker: URL,
+                              scope: Scope, isDirectory: Bool = true) throws -> URL {
+        let path = contents.trimmingCharacters(in: .newlines)
         guard !path.isEmpty, !path.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains) else {
-            throw metadataFailure(marker, .invalidMetadata, "The Git directory pointer is empty or contains control characters.")
+            throw metadataFailure(marker, .invalidMetadata, "The Git metadata pointer is empty or contains control characters.")
         }
-        // Walk the text lexically, never standardize or resolve an untrusted URL.
-        // Check each directory BEFORE handling the next component: `link/../safe`
-        // must reject `link`, rather than erasing it and reading a different target.
         let components = path.split(separator: "/", omittingEmptySubsequences: true).map(String.init)
         var cursor: URL
         let remaining: ArraySlice<String>
         if path.hasPrefix("/") {
-            let rootComponents = scope.components.filter { $0 != "/" }
-            guard components.starts(with: rootComponents) else {
-                throw metadataFailure(marker, .outsideScope, "This worktree's Git metadata is outside the selected folder. Branch is unknown.")
+            guard let root = scope.allowedRoots.filter({ components.starts(with: $0.pathComponents.filter { $0 != "/" }) })
+                .min(by: { $0.pathComponents.count < $1.pathComponents.count }) else {
+                throw metadataFailure(marker, .outsideScope, "Git metadata is outside the selected folders. Relationship is unknown.")
             }
-            cursor = scope.root
-            remaining = components.dropFirst(rootComponents.count)
+            cursor = root
+            remaining = components.dropFirst(root.pathComponents.filter { $0 != "/" }.count)
         } else {
-            cursor = repository
+            cursor = base
             remaining = components[...]
         }
         try requireSafePath(cursor, scope: scope)
-        for component in remaining {
+        for (offset, component) in remaining.enumerated() {
             try Task.checkCancellation()
             if component == "." { continue }
-            if component == ".." {
-                guard cursor.pathComponents.count > scope.components.count else {
-                    throw metadataFailure(marker, .outsideScope, "This worktree's Git metadata path leaves the selected folder. Branch is unknown.")
+            if component == ".." { cursor.deleteLastPathComponent() }
+            else { cursor.appendPathComponent(component) }
+            if scope.metadataRoot(for: cursor) == nil {
+                // Walking between explicitly selected sibling roots may pass through
+                // their parent. No attributes or content are read from that parent.
+                guard scope.isAuthorizedAncestor(cursor) else {
+                    throw metadataFailure(marker, .outsideScope, "Git metadata leaves the selected folders. Relationship is unknown.")
                 }
-                cursor.deleteLastPathComponent()
-            } else {
-                cursor.appendPathComponent(component, isDirectory: true)
+                continue
             }
             try requireSafePath(cursor, scope: scope)
             let attributes = try fileManager.attributesOfItem(atPath: cursor.path)
-            guard attributes[.type] as? FileAttributeType == .typeDirectory else {
-                throw metadataFailure(cursor, .invalidMetadata, "The Git metadata path contains a non-directory component.")
+            let expected: FileAttributeType = (!isDirectory && offset == remaining.count - 1) ? .typeRegular : .typeDirectory
+            guard attributes[.type] as? FileAttributeType == expected else {
+                throw metadataFailure(cursor, .invalidMetadata, "The Git metadata path contains an unexpected file type.")
             }
         }
+        try requireSafePath(cursor, scope: scope)
         return cursor
     }
 

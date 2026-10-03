@@ -531,6 +531,181 @@ struct RepositoryScannerTests {
             try await task.value
         }
     }
+
+    @Test("Multiple roots and repeated paths produce one result per repository")
+    func multipleRootsDeduplicate() async throws {
+        let fixture = try ScannerFixture()
+        defer { fixture.remove() }
+        let a = try fixture.repository("a")
+        let b = try fixture.repository("b")
+        let result = try await RepositoryScanner().scan(roots: [a, b, a, fixture.root])
+        #expect(result.items.map(\.url) == [a, b])
+        #expect(result.visitedDirectories == 5)
+        #expect(result.issues.isEmpty)
+    }
+
+    @Test("All roots share the directory budget")
+    func sharedDirectoryBudget() async throws {
+        let fixture = try ScannerFixture()
+        defer { fixture.remove() }
+        let a = try fixture.repository("a")
+        let b = try fixture.repository("b")
+        let result = try await RepositoryScanner().scan(roots: [a, b], options: ScanOptions(maxDirectories: 1))
+        #expect(result.items.map(\.url) == [a])
+        #expect(result.visitedDirectories == 1)
+        #expect(result.wasLimited)
+        #expect(result.issues.contains { $0.url == b && $0.kind == .directoryLimit })
+    }
+
+    @Test("All roots share the entry budget, including ordinary files")
+    func sharedEntryBudget() async throws {
+        let fixture = try ScannerFixture()
+        defer { fixture.remove() }
+        let a = try fixture.folder("a")
+        let b = try fixture.repository("b")
+        for number in 0..<10 { try fixture.write("a/file-\(number)", text: "fixture") }
+        let result = try await RepositoryScanner().scan(roots: [a, b], options: ScanOptions(maxEntries: 3))
+        #expect(result.enumeratedEntries == 3)
+        #expect(result.items.isEmpty)
+        #expect(result.wasLimited)
+        #expect(result.issues.contains { $0.kind == .entryLimit })
+    }
+
+    @Test("An unreadable selected root does not discard readable roots")
+    func rootFailurePreservesResults() async throws {
+        let fixture = try ScannerFixture()
+        defer { fixture.remove() }
+        let a = try fixture.repository("a")
+        let missing = fixture.root.appendingPathComponent("missing")
+        let result = try await RepositoryScanner().scan(roots: [missing, a])
+        #expect(result.items.map(\.url) == [a])
+        #expect(result.issues.contains { $0.url == missing && $0.kind == .directoryUnreadable })
+    }
+
+    @Test("A validated commondir and matching backlink identify a linked worktree")
+    func verifiedWorktree() async throws {
+        let fixture = try ScannerFixture()
+        defer { fixture.remove() }
+        let main = try fixture.repository("main")
+        let work = try fixture.linkedWorktree("work", main: "main")
+        try fixture.write("main/.git/worktrees/work/locked", text: "manual fixture lock\n")
+        let result = try await RepositoryScanner().scan(root: fixture.root)
+        let linked = try #require(result.items.first { $0.url == work })
+        #expect(linked.branch == "topic/work")
+        #expect(linked.metadata?.isLinkedWorktree == true)
+        #expect(linked.metadata?.isLocked == true)
+        #expect(linked.metadata?.commonDirectoryPath == main.appendingPathComponent(".git").path)
+        #expect(result.issues.isEmpty)
+    }
+
+    @Test("Worktree relationships can cross explicitly selected roots")
+    func crossSelectedRoots() async throws {
+        let fixture = try ScannerFixture()
+        defer { fixture.remove() }
+        let main = try fixture.repository("main")
+        let work = try fixture.linkedWorktree("work", main: "main")
+        let alone = try await RepositoryScanner().scan(roots: [work])
+        #expect(alone.items.first?.branch == nil)
+        #expect(alone.items.first?.metadata == nil)
+        #expect(alone.issues.contains { $0.kind == .outsideScope })
+        let together = try await RepositoryScanner().scan(roots: [work, main])
+        #expect(together.items.first { $0.url == work }?.metadata?.isLinkedWorktree == true)
+        #expect(together.issues.isEmpty)
+    }
+
+    @Test("Absolute gitfile and backlink pointers work across selected roots with spaces")
+    func absoluteCrossRootPointers() async throws {
+        let fixture = try ScannerFixture()
+        defer { fixture.remove() }
+        let main = try fixture.repository("main repository")
+        let work = try fixture.linkedWorktree("working copy", main: "main repository")
+        try fixture.write("working copy/.git", text: "gitdir: " + main.appendingPathComponent(".git/worktrees/working copy").path + "\n")
+        try fixture.write("main repository/.git/worktrees/working copy/HEAD", text: "ref: refs/heads/topic\n")
+        let result = try await RepositoryScanner().scan(roots: [main, work])
+        let linked = try #require(result.items.first { $0.url == work })
+        #expect(linked.branch == "topic")
+        #expect(linked.metadata?.isLinkedWorktree == true)
+        #expect(linked.metadata?.commonDirectoryPath == main.appendingPathComponent(".git").path)
+        #expect(result.issues.isEmpty)
+    }
+
+    @Test("A submodule-style gitfile does not imply a worktree relationship")
+    func gitfileIsNotWorktree() async throws {
+        let fixture = try ScannerFixture()
+        defer { fixture.remove() }
+        try fixture.write("module/.git", text: "gitdir: ../metadata/module\n")
+        try fixture.write("metadata/module/HEAD", text: "ref: refs/heads/main\n")
+        let result = try await RepositoryScanner().scan(root: fixture.root)
+        #expect(result.items.first?.metadata?.isLinkedWorktree == false)
+        #expect(result.issues.isEmpty)
+        #expect(ProjectCatalog.merging(result.items, into: []).first?.kind == .linkedGitDirectory)
+    }
+
+    @Test("A mismatched backlink preserves the branch but does not invent a relationship")
+    func mismatchedBacklink() async throws {
+        let fixture = try ScannerFixture()
+        defer { fixture.remove() }
+        _ = try fixture.repository("main")
+        let work = try fixture.linkedWorktree("work", main: "main")
+        try fixture.write("other/.git", text: "gitdir: fixture\n")
+        try fixture.write("main/.git/worktrees/work/gitdir", text: fixture.root.appendingPathComponent("other/.git").path + "\n")
+        let result = try await RepositoryScanner().scan(root: fixture.root)
+        let linked = try #require(result.items.first { $0.url == work })
+        #expect(linked.branch == "topic/work")
+        #expect(linked.metadata == nil)
+        #expect(result.issues.contains { $0.kind == .invalidMetadata })
+    }
+
+    @Test("A missing backlink is incomplete worktree evidence")
+    func missingBacklink() async throws {
+        let fixture = try ScannerFixture()
+        defer { fixture.remove() }
+        _ = try fixture.repository("main")
+        try fixture.write("work/.git", text: "gitdir: ../main/.git/worktrees/work\n")
+        try fixture.write("main/.git/worktrees/work/HEAD", text: "ref: refs/heads/topic\n")
+        try fixture.write("main/.git/worktrees/work/commondir", text: "../..\n")
+        let result = try await RepositoryScanner().scan(root: fixture.root)
+        #expect(result.items.first { $0.name == "work" }?.metadata == nil)
+        #expect(result.issues.contains { $0.kind == .metadataUnreadable })
+    }
+
+    @Test("Symbolic-link commondir metadata is rejected")
+    func symbolicCommonDirectory() async throws {
+        let fixture = try ScannerFixture()
+        defer { fixture.remove() }
+        _ = try fixture.repository("main")
+        try fixture.write("work/.git", text: "gitdir: ../metadata/work\n")
+        try fixture.write("metadata/work/HEAD", text: "ref: refs/heads/topic\n")
+        try fixture.write("common-pointer", text: "../../main/.git\n")
+        try fixture.link("metadata/work/commondir", to: fixture.root.appendingPathComponent("common-pointer"))
+        let result = try await RepositoryScanner().scan(root: fixture.root)
+        #expect(result.items.first { $0.name == "work" }?.metadata == nil)
+        #expect(result.issues.contains { $0.kind == .symbolicLinkSkipped })
+    }
+
+    @Test("Multi-root validation stays bounded")
+    func multipleRootValidation() async throws {
+        let fixture = try ScannerFixture()
+        defer { fixture.remove() }
+        let scanner = RepositoryScanner()
+        await #expect(throws: RepositoryScannerError.self) { try await scanner.scan(roots: []) }
+        await #expect(throws: RepositoryScannerError.self) { try await scanner.scan(roots: Array(repeating: fixture.root, count: 33)) }
+        await #expect(throws: RepositoryScannerError.self) { try await scanner.scan(roots: [fixture.root], options: ScanOptions(maxEntries: 0)) }
+    }
+
+    @Test("Cancellation during progress does not return partial success")
+    func cancelFromProgress() async throws {
+        let fixture = try ScannerFixture()
+        defer { fixture.remove() }
+        for number in 0..<100 { _ = try fixture.folder("directory-\(number)") }
+        let task = Task {
+            try await RepositoryScanner().scan(roots: [fixture.root], progress: { _ in
+                withUnsafeCurrentTask { $0?.cancel() }
+            })
+        }
+        await #expect(throws: CancellationError.self) { try await task.value }
+    }
+
 }
 
 private struct ScannerFixture: Sendable {
@@ -567,6 +742,16 @@ private struct ScannerFixture: Sendable {
         try FileManager.default.createDirectory(at: git, withIntermediateDirectories: true)
         try Data(head.utf8).write(to: git.appendingPathComponent("HEAD"))
         return directory
+    }
+
+    @discardableResult
+    func linkedWorktree(_ name: String, main: String) throws -> URL {
+        let work = try folder(name)
+        try write("\(name)/.git", text: "gitdir: ../\(main)/.git/worktrees/\(name)\n")
+        try write("\(main)/.git/worktrees/\(name)/HEAD", text: "ref: refs/heads/topic/\(name)\n")
+        try write("\(main)/.git/worktrees/\(name)/commondir", text: "../..\n")
+        try write("\(main)/.git/worktrees/\(name)/gitdir", text: work.appendingPathComponent(".git").path + "\n")
+        return work
     }
 
     func write(_ relative: String, text: String) throws {

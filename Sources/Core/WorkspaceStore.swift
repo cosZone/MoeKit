@@ -15,6 +15,7 @@ final class WorkspaceStore {
     var toolSearch = ""
     var selectedProjectID: ProjectRecord.ID?
     var selectedTaskID: TaskRecord.ID?
+    var cleanupReviewProjectID: ProjectRecord.ID?
     var expandedProjectIDs: Set<UUID> = [DemoData.projects[0].id]
     var isInspectorPresented = false
     var isDemoEnabled: Bool {
@@ -22,8 +23,11 @@ final class WorkspaceStore {
             processes.resetForModeChange()
             if isDemoEnabled { scanTask?.cancel(); importTask?.cancel() }
             selectedProjectID = nil
+            cleanupReviewProjectID = nil
             selectedTaskID = nil
             pendingDiscovery = nil
+            importSelection = []
+            scanProgress = nil
         }
     }
     var projects: [ProjectRecord] = []
@@ -33,6 +37,7 @@ final class WorkspaceStore {
     var importedReport: MoleAnalyzeReport?
     var importedAt: Date?
     var errorMessage: String?
+    private(set) var scanProgress: RepositoryScanProgress?
     private(set) var isScanning = false
     private(set) var isImporting = false
     let registry = ToolModuleRegistry.builtIn
@@ -75,6 +80,14 @@ final class WorkspaceStore {
     var displayedProjects: [ProjectRecord] { isDemoEnabled ? DemoData.projects : projects }
     var displayedTasks: [TaskRecord] { isDemoEnabled ? DemoData.tasks : tasks }
     var selectedProject: ProjectRecord? { displayedProjects.first { $0.id == selectedProjectID } }
+    var cleanupReviewProject: ProjectRecord? {
+        guard !isDemoEnabled else { return nil }
+        return projects.first { $0.id == cleanupReviewProjectID && $0.kind != .group }
+    }
+    func presentCleanupReview() {
+        guard !isDemoEnabled, let project = selectedProject, project.kind != .group else { return }
+        cleanupReviewProjectID = project.id
+    }
     var selectedTask: TaskRecord? { displayedTasks.first { $0.id == selectedTaskID } }
     var runningTaskCount: Int { tasks.filter { $0.status == .running }.count }
     var filteredTasks: [TaskRecord] {
@@ -100,10 +113,12 @@ final class WorkspaceStore {
         return roots.flatMap { root in
             let children = all.filter { $0.parentID == root.id }
             if children.isEmpty { return [root] }
-            let expand = expandedProjectIDs.contains(root.id) || !query.isEmpty
+            let expand = expandedProjectIDs.contains(root.id) || !query.isEmpty || projectFilter != .all
             return [root] + (expand ? children.filter { matchingIDs.contains($0.id) }.sorted(using: order) : [])
         }
     }
+
+    func hasProjectChildren(_ id: UUID) -> Bool { displayedProjects.contains { $0.parentID == id } }
 
     func toggleExpansion(_ id: UUID) {
         if expandedProjectIDs.contains(id) { expandedProjectIDs.remove(id) } else { expandedProjectIDs.insert(id) }
@@ -113,29 +128,43 @@ final class WorkspaceStore {
         guard !isDemoEnabled, !isScanning else { return }
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true; panel.canChooseFiles = false
-        panel.allowsMultipleSelection = false
+        panel.allowsMultipleSelection = scanChildren
         panel.prompt = scanChildren ? String(localized: "Discover") : String(localized: "Add project")
         panel.message = scanChildren
-            ? String(localized: "Discover repositories in this folder, up to 4 levels. Dependencies and symbolic links are skipped.")
+            ? String(localized: "Discover repositories in up to 32 selected folders, up to 4 levels each. One shared budget applies. Dependencies and symbolic links are skipped.")
             : String(localized: "Add this folder to MoeKit. Project files will not be changed.")
-        guard panel.runModal() == .OK, let root = panel.url else { return }
-        startDiscovery(root: root, scanChildren: scanChildren)
+        guard panel.runModal() == .OK, !panel.urls.isEmpty else { return }
+        startDiscovery(roots: panel.urls, scanChildren: scanChildren)
     }
 
     func startDiscovery(root: URL, scanChildren: Bool) {
-        guard !isDemoEnabled, !isScanning else { return }
+        startDiscovery(roots: [root], scanChildren: scanChildren)
+    }
+
+    func startDiscovery(roots: [URL], scanChildren: Bool) {
+        guard !isDemoEnabled, !isScanning, !roots.isEmpty else { return }
         isScanning = true
+        scanProgress = nil
+        pendingDiscovery = nil
+        importSelection = []
         let taskID = UUID()
-        tasks.insert(TaskRecord(id: taskID, title: String(localized: "Discover projects"), target: root.path, status: .running), at: 0)
+        tasks.insert(TaskRecord(id: taskID, title: String(localized: "Discover projects"),
+            target: roots.map(\.path).joined(separator: "\n"), status: .running), at: 0)
         scanTask = Task { [weak self, scanner] in
             guard let self else { return }
-            defer { self.isScanning = false; self.scanTask = nil }
+            let scopedRoots = roots.filter { $0.startAccessingSecurityScopedResource() }
+            defer {
+                for root in scopedRoots { root.stopAccessingSecurityScopedResource() }
+                self.isScanning = false; self.scanTask = nil; self.scanProgress = nil
+            }
             do {
                 let result: RepositoryScanResult
                 if scanChildren {
-                    result = try await scanner.scan(root: root, options: ScanOptions())
+                    result = try await scanner.scan(roots: roots, options: ScanOptions(), progress: { [weak self] progress in
+                        await self?.receiveDiscoveryProgress(progress)
+                    })
                 } else {
-                    result = try await scanner.inspectFolder(root)
+                    result = try await scanner.inspectFolder(roots[0])
                 }
                 try Task.checkCancellation()
                 guard !self.isDemoEnabled else { throw CancellationError() }
@@ -148,7 +177,7 @@ final class WorkspaceStore {
                 self.finishTask(taskID, status: result.issues.isEmpty && !result.wasLimited ? .completed : .partial,
                                 summary: String(localized: "Found \(result.items.count) projects in the selected scope."),
                                 items: result.issues.map { TaskItemResult(path: $0.url.path, outcome: String(localized: "Not fully read"), detail: $0.message, hasIssue: true) },
-                                diagnostics: "Visited directories: \(result.visitedDirectories)\nLimit reached: \(result.wasLimited)\nRead-only. No Git status, scripts, hooks or processes were run.")
+                                diagnostics: "Visited directories: \(result.visitedDirectories)\nEnumerated entries: \(result.enumeratedEntries)\nSelected roots: \(roots.count)\nLimit reached: \(result.wasLimited)\nRead-only. No Git status, scripts, hooks or processes were run.")
             } catch is CancellationError {
                 self.finishTask(taskID, status: .cancelled, summary: String(localized: "Discovery cancelled. No files were changed."))
             } catch {
@@ -164,17 +193,18 @@ final class WorkspaceStore {
         addDiscovered(result.items.filter { importSelection.contains($0.id) })
         pendingDiscovery = nil
     }
+    private func receiveDiscoveryProgress(_ progress: RepositoryScanProgress) {
+        guard isScanning, !isDemoEnabled, !Task.isCancelled else { return }
+        scanProgress = progress
+    }
+
     private func addDiscovered(_ items: [DiscoveredRepository]) {
-        for item in items where !projects.contains(where: { $0.path == item.url.path }) {
-            let kind: ProjectKind
-            switch item.kind {
-            case .folder: kind = .folder
-            case .gitRepository: kind = .repository
-            case .gitWorktree: kind = .linkedGitDirectory
+        projects = ProjectCatalog.merging(items, into: projects)
+        for item in items {
+            if let record = projects.first(where: { $0.path == item.url.path }) {
+                selectedProjectID = record.id
+                if let parentID = record.parentID { expandedProjectIDs.insert(parentID) }
             }
-            let record = ProjectRecord(name: item.name, path: item.url.path, kind: kind, branch: item.branch)
-            projects.append(record)
-            selectedProjectID = record.id
         }
         saveCatalog()
     }

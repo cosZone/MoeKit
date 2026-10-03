@@ -16,7 +16,7 @@ Swift 6 · SwiftUI / AppKit · macOS 15+ · Tuist 4.148.3 · SPM
 
 尚未实现：CLI 进程执行、停止/强制停止、清理、卸载、维护、实时系统指标、提权、第三方插件加载及持久任务历史。导入报告不运行 Mole，报告数值不等于可回收空间。
 
-**预览验证记录：** `0.1.0-preview.2` 的精确源码 [`75c0824`](https://github.com/cosZone/MoeKit/commit/75c0824c60f897c06f18318c65ea2052f473be66) 已在 [发布运行](https://github.com/cosZone/MoeKit/actions/runs/37143446185) 通过 137 项 Release Swift 测试与 74 项发布辅助测试，包括实际 macOS DMG 创建、只读挂载、签名一致性与卸载检查。DMG、ZIP 及校验信息已公开下载并核对。后续源码以对应 CI 为准；原生视觉、VoiceOver、双架构实机运行和实际 Mac 交互仍需手动验收。
+**预览验证记录：** `0.1.0-preview.3` 的精确源码 [`cc891fd`](https://github.com/cosZone/MoeKit/commit/cc891fd370ac5e0d261c66e8320c3de5c50438d3) 已在 [发布运行](https://github.com/cosZone/MoeKit/actions/runs/37148654870) 通过 205 项 Release Swift 测试、4 项合成视图渲染测试与 74 项发布辅助测试，包括实际 macOS DMG 创建、只读挂载、签名一致性与卸载检查。DMG、ZIP 及校验信息已公开下载并核对。合成视图检查不代替完整原生窗口、键盘、VoiceOver、双架构实机与真实权限验收；后续源码以对应 CI 为准。
 
 ## 构建
 
@@ -38,9 +38,9 @@ open DerivedData/Build/Products/Debug/MoeKit.app
 
 - [Actions](https://github.com/cosZone/MoeKit/actions)：Native CI 构建与测试；手动运行 Preview app artifact 可下载包含 `.app` 的 ZIP、源码 SHA、SHA-256 校验和与构建信息
 - Actions 的 Preview app artifact 仅 **ad-hoc 签名，没有 Developer ID 签名、没有公证**；该工作流不会创建 tag 或 GitHub Release
-- [0.1.0-preview.2](https://github.com/cosZone/MoeKit/releases/tag/v0.1.0-preview.2) 已发布：[DMG（推荐）](https://github.com/cosZone/MoeKit/releases/download/v0.1.0-preview.2/MoeKit-v0.1.0-preview.2-macOS.dmg) · [ZIP](https://github.com/cosZone/MoeKit/releases/download/v0.1.0-preview.2/MoeKit-v0.1.0-preview.2-macOS.zip)。两种包内是同一份 universal Release App，包含原生 About／Feedback／Give a Star 入口，并附校验和与构建信息
+- [0.1.0-preview.3](https://github.com/cosZone/MoeKit/releases/tag/v0.1.0-preview.3) 已发布：[DMG（推荐）](https://github.com/cosZone/MoeKit/releases/download/v0.1.0-preview.3/MoeKit-v0.1.0-preview.3-macOS.dmg) · [ZIP](https://github.com/cosZone/MoeKit/releases/download/v0.1.0-preview.3/MoeKit-v0.1.0-preview.3-macOS.zip)。两种包内是同一份 universal Release App，包含多根目录项目复查、进程筛选、工作区可靠性改进与 About／Feedback／Give a Star 入口，并附校验和与构建信息
 - 使用 **Apple Development 签名，未公证**，不等于 Developer ID 正式分发，Gatekeeper 仍可能阻止打开；DMG 格式不会改变这一限制
-- 按版本的实际交付说明见 [preview.2 更新记录](website/content/changelog/0.1.0-preview.2.md)；preview.1 保持原样。文档网站独立部署，不随 App 安装。维护者流程见 [开发签名预览发布](Documentation/Signed-preview-release.md)
+- 按版本的实际交付说明见 [preview.3 更新记录](website/content/changelog/0.1.0-preview.3.md)；preview.1 与 preview.2 保持原样。文档网站独立部署，不随 App 安装。维护者流程见 [开发签名预览发布](Documentation/Signed-preview-release.md)
 - [构建与交付说明](Documentation/Build-and-preview.md)
 - [架构与数据边界](Documentation/Architecture.md)
 - [进程与端口的范围、隐私与验证边界](Documentation/Processes-and-ports.md)

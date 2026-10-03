@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """Portable security regression tests; no macOS, credentials, or network required."""
+import ast
 import importlib.util
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 import io
 import json
 import os
 from pathlib import Path
 import plistlib
+import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -248,6 +250,101 @@ class Publication(unittest.TestCase):
             with self.assertRaises(release.ReleaseError):
                 release.publish()
         self.assertFalse(any(method in {"PATCH", "DELETE"} for method, _, _ in api.calls))
+
+
+class SafeCommandDiagnostics(unittest.TestCase):
+    """Synthetic values only: failed commands must never disclose their data."""
+
+    def test_failure_shows_only_operation_and_integer_exit(self):
+        marker = "synthetic-private-data-DO-NOT-LOG"
+        result = subprocess.CompletedProcess([marker], 51, stdout=marker.encode(), stderr=marker.encode())
+        with patch.object(release.subprocess, "run", return_value=result):
+            with self.assertRaises(release.ReleaseError) as caught:
+                release.run("/private/" + marker, marker, operation="p12-import")
+        self.assertEqual(str(caught.exception), "Operation p12-import failed (exit code 51); command details withheld.")
+        self.assertNotIn(marker, str(caught.exception))
+
+    def test_timeout_hides_command_and_captured_streams(self):
+        marker = "synthetic-timeout-private-data"
+        error = subprocess.TimeoutExpired([marker], 120, output=marker.encode(), stderr=marker.encode())
+        with patch.object(release.subprocess, "run", side_effect=error):
+            with self.assertRaises(release.ReleaseError) as caught:
+                release.run(marker, operation="keychain-unlock")
+        self.assertEqual(str(caught.exception), "Operation keychain-unlock timed out after 120 seconds; command details withheld.")
+        self.assertNotIn(marker, str(caught.exception))
+        self.assertTrue(caught.exception.__suppress_context__)
+
+    def test_oserror_hides_exception_text_and_paths(self):
+        marker = "synthetic-oserror-private-data"
+        with patch.object(release.subprocess, "run", side_effect=OSError(13, marker, "/" + marker)):
+            with self.assertRaises(release.ReleaseError) as caught:
+                release.run(marker, operation="keychain-create")
+        self.assertEqual(str(caught.exception), "Operation keychain-create could not start (OS error 13); command details withheld.")
+        self.assertNotIn(marker, str(caught.exception))
+        self.assertTrue(caught.exception.__suppress_context__)
+
+    def test_unrecognized_label_is_rejected_without_echoing_it(self):
+        marker = "synthetic-label-private-data\n::error::injection"
+        with patch.object(release.subprocess, "run") as child:
+            with self.assertRaises(release.ReleaseError) as caught:
+                release.run("ignored", operation=marker)
+        child.assert_not_called()
+        self.assertEqual(str(caught.exception), "Unrecognized local operation label.")
+        self.assertNotIn(marker, str(caught.exception))
+
+    def test_shared_capture_strips_secrets_and_does_not_print_streams(self):
+        marker = "synthetic-captured-private-data"
+        hidden_keys = (*release.SECRET_NAMES, "GH_TOKEN", "GITHUB_TOKEN")
+        fake_environment = {key: marker for key in hidden_keys} | {"PATH": "/usr/bin"}
+        result = subprocess.CompletedProcess([], 0, stdout=marker.encode(), stderr=marker.encode())
+        output, errors = io.StringIO(), io.StringIO()
+        with patch.dict(os.environ, fake_environment, clear=True), patch.object(release.subprocess, "run", return_value=result) as child:
+            with redirect_stdout(output), redirect_stderr(errors):
+                captured = release.captured_run("/usr/bin/codesign", "--display", "safe-app-path", operation="codesign-display")
+        self.assertIs(captured, result)
+        self.assertEqual(child.call_args.args[0], ("/usr/bin/codesign", "--display", "safe-app-path"))
+        self.assertEqual(child.call_args.kwargs["env"], {"PATH": "/usr/bin"})
+        self.assertEqual(child.call_args.kwargs["stdout"], subprocess.PIPE)
+        self.assertEqual(child.call_args.kwargs["stderr"], subprocess.PIPE)
+        self.assertEqual(child.call_args.kwargs["timeout"], 120)
+        self.assertFalse(child.call_args.kwargs["check"])
+        self.assertEqual(output.getvalue() + errors.getvalue(), "")
+
+    def test_cli_failure_prints_only_sanitized_message(self):
+        marker = "synthetic-cli-private-data"
+        result = subprocess.CompletedProcess([marker], 9, stdout=marker.encode(), stderr=marker.encode())
+        output, errors = io.StringIO(), io.StringIO()
+        with patch.dict(os.environ, valid_environment(), clear=True), patch.object(release.sys, "argv", ["preview-release.py", "validate"]):
+            with patch.object(release.subprocess, "run", return_value=result), redirect_stdout(output), redirect_stderr(errors):
+                status = release.main()
+        self.assertEqual(status, 1)
+        self.assertEqual(output.getvalue(), "")
+        self.assertEqual(errors.getvalue(), "::error::Operation source-read failed (exit code 9); command details withheld.\n")
+        self.assertNotIn(marker, errors.getvalue())
+
+    def test_command_callsites_have_static_allowlisted_labels(self):
+        tree = ast.parse(Path(release.__file__).read_text())
+        labels = set()
+        raw_calls = []
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            if isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Name):
+                if node.func.value.id == "subprocess" and node.func.attr == "run":
+                    raw_calls.append(node)
+            if not isinstance(node.func, ast.Name) or node.func.id not in {"run", "text_run", "captured_run"}:
+                continue
+            # The two wrappers forward the already-validated operation value.
+            if node.args and isinstance(node.args[0], ast.Starred):
+                continue
+            operation = next((item.value for item in node.keywords if item.arg == "operation"), None)
+            self.assertIsInstance(operation, ast.Constant)
+            self.assertIn(operation.value, release.OPERATIONS)
+            labels.add(operation.value)
+        self.assertEqual(labels, release.OPERATIONS)
+        self.assertEqual(len(raw_calls), 1, "All subprocesses must use the shared sanitized capture wrapper")
+        wrapper = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "captured_run")
+        self.assertIn(raw_calls[0], list(ast.walk(wrapper)))
 
 
 if __name__ == "__main__":

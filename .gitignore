@@ -1,0 +1,13 @@
+.DS_Store
+Derived/
+.build/
+DerivedData/
+build/
+*.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+.swiftpm/
+Configurations/Signing.xcconfig
+.env
+.env.*
+!.env.example

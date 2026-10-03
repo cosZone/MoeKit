@@ -39,3 +39,7 @@ Swift Testing 测试覆盖扫描边界、取消、异常元数据、模块注册
 ## Processes & Ports
 
 独立的 actor 通过 Darwin/libproc 读取当前有效用户的有限进程快照；主线程 coordinator 处理取消、重复请求、选择失效和 Demo 边界。关联只来自规范化 cwd 与项目路径的包含关系，不推断会话所有权。停止计划仅供检查，不包含信号执行入口。详见 [范围与隐私](Processes-and-ports.md)。
+
+## Git status 准备
+
+纯 porcelain-v2/NUL 解析器与 session-only 结果模型已独立准备，包含系统 Git 的合成参考输出与格式/预算测试；没有连接到发现器或 UI，也没有启用 Git 进程。真实工作树仍为未检查，清理仍不可执行。[执行设计与激活前安全门槛](Git-status-execution-design.md) 记录后续实现必须解决的配置执行、属性语义、路径竞态和资源边界。

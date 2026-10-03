@@ -1,6 +1,6 @@
 # GitHub Actions 开发签名预览
 
-此流程交付供作者／测试者试用的 `.app` ZIP，并创建明确标为 prerelease 的 GitHub Release。它使用现有 **Apple Development** 证书，**不是 Developer ID 分发签名，也没有 Apple 公证**。Gatekeeper 仍可能阻止打开。不要把“有效签名”理解为“苹果已审核”或“任意 Mac 均可直接运行”。正式对外分发应另行配置 Developer ID 与公证；本流程不包含绕过系统安全检查的命令。
+此流程交付供作者／测试者试用的 **DMG 与 ZIP**，两者包含同一份已签名 `MoeKit.app`，并创建明确标为 prerelease 的 GitHub Release。它使用现有 **Apple Development** 证书，**不是 Developer ID 分发签名，也没有 Apple 公证**。DMG 只是安装容器，不改变签名或 Gatekeeper 的限制；macOS 仍可能阻止打开。不要把“有效签名”理解为“苹果已审核”或“任意 Mac 均可直接运行”。正式对外分发应另行配置 Developer ID 与公证；本流程不包含绕过系统安全检查的命令。
 
 ## 一次性准备：由仓库所有者直接配置 Secrets
 
@@ -24,11 +24,11 @@ MoeKit 工作流直接读取上述三个名字，**不要求创建 `Prod` enviro
 
 1. 审核 `.github/workflows/preview-release.yml`、`Scripts/preview-release.py`、测试与应用源码，并合入默认分支。GitHub 的手动 workflow dispatch 需要默认分支存在该工作流。不要临时改成 PR／tag 自动触发来绕过这一步
 2. 确认默认分支的实际 40 位 commit SHA，查看该提交的 CI 结果。通过 Actions 打开 **Signed preview release**，选择默认分支
-3. 输入 `version`，例如 `0.1.0-preview.1`，以及完整 `source_sha`。版本不带 `v`，只允许 `数字.数字.数字-preview.数字`，不接受任意 ref、shell 文本、稳定版号或其他后缀
+3. 在同一受审提交中准备 `website/content/changelog/<version>.md`，然后输入 `version`，例如 `0.1.0-preview.2`，以及完整 `source_sha`。版本不带 `v`，只允许 `数字.数字.数字-preview.数字`，不接受任意 ref、shell 文本、稳定版号或其他后缀
 4. Workflow 的源 SHA、checkout SHA 和填写的 SHA 必须一致。默认分支已前进时应重新审核新的 HEAD 后填写它，不能通过指定旧分支／tag 绕过
 5. 查看 build-and-test、sign、publish 三个 job 的结果；只有全部完成后才把 Release 视为已交付
 
-最终 tag 为 `v0.1.0-preview.1`，精确指向填写并验证过的提交；Release 名称含 `preview`，始终 `prerelease: true`，不会成为 latest 正式版。版本示例只是格式示例，不表示该版本已发布。
+最终 tag 与 Release 名称均为 `v<version>`，例如 `v0.1.0-preview.2`，精确指向填写并验证过的提交；始终 `prerelease: true`，不会成为 latest 正式版。版本示例只是格式示例，不表示该版本已发布。既有 preview.1 的 tag、正文与资产不会改变。
 
 ## 构建与交付内容
 
@@ -38,17 +38,37 @@ MoeKit 工作流直接读取上述三个名字，**不要求创建 `Prod` enviro
 - 签名 job 不编译源码、执行应用或运行第三方安装器；它只验证同次 run/attempt 的产物，用临时 keychain 内唯一的 Apple Development 身份重新签名，核对证书指纹、预期 Team ID、两种架构、bundle 信息与 provenance
 - Hardened Runtime 开启；无额外 entitlements、无 get-task-allow、无 App Sandbox、无 provisioning profile。当前不允许嵌套可执行代码；未来新增 framework/helper/XPC 需要单独审查签名方式
 - 不使用公证或安全时间戳；证书过期／撤销可能影响后续校验。代码签名并不承诺长期分发可用性
-- 最终 ZIP 只包含 `MoeKit.app`，另有 `SHA256SUMS.txt` 和 `BUILD_INFO.json`。后者记录版本、源码／工作流运行链接、工具链、架构、验证边界，不写入 Team ID、个人身份文本或任何 secret 值
+- Release 精确包含四个文件：`MoeKit-v<version>-macOS.dmg`、`MoeKit-v<version>-macOS.zip`、`SHA256SUMS.txt`、`BUILD_INFO.json`。两种安装包均为 universal，包含 arm64 与 x86_64；不另发芯片专用包
+- ZIP 中是 `MoeKit.app`（如有 `ditto` 的 AppleDouble 元数据，只允许对应 App 的数据）；DMG 根目录严格只有 `MoeKit.app` 和指向 `/Applications` 的 `Applications` 快捷方式，不包含安装器、其他可执行文件或更新组件
+- `SHA256SUMS.txt` 覆盖 DMG、ZIP 与 `BUILD_INFO.json`。构建信息包含两种包各自的 SHA-256、App 内逐文件内容摘要（包括代码签名文件）、版本说明原文件摘要、源码／工作流运行链接、工具链、架构与验证边界；不写入 Team ID、个人身份文本或任何 secret 值
 - `.app/Contents/Info.plist` 在签名前写入同样的源码 SHA、预览版本与 run/attempt，用于交叉核对最终文件确实来自此构建
 - 测试结果单独保留 14 天；unsigned 中间产物仅用于 job 间传递，保留 1 天，不发布到 Release；signed Actions 产物保留 14 天
 
 `.app` 的版本号使用 `0.1.0` 这样的数字部分，完整 preview 版本单独保存；build number 来自 Actions run number。
 
+### DMG 创建与只读验证
+
+先签名 App，再用系统 `ditto` 生成并往返解包 ZIP；从已验证的 ZIP App 准备 DMG。只使用 macOS 内置 `hdiutil create -srcfolder`，显式设置 HFS+ 与 UDZO 压缩格式，不安装 `create-dmg`，不运行 Finder AppleScript，不修改 TCC 或 quarantine。任何非零退出码都失败，不接受“退出 1 也算成功”。DMG 容器本身未单独签名；验证的是它内部的 App 签名。
+
+`hdiutil verify` 检查镜像的内建校验和，随后在脚本独占的固定临时挂载点以 `-readonly -nobrowse -noautoopen -verify` 挂载。脚本还核对实际挂载状态与只读文件系统标志、精确根目录、Applications 链接、双架构、bundle 与构建来源、App 内全部常规文件的路径和内容摘要，以及所有架构的严格代码签名。初次验证的已签名 App、ZIP 解包后的 App 与 DMG 内 App 内容须一致。这里的镜像校验不等于实机启动测试或完整文件系统修复检查。
+
+挂载点位于签名临时目录之外。正常、失败、部分挂载和超时路径均通过 `finally` 尝试 detach；工作流的 `always` 清理会再次检查。不会 force-detach；卸载失败会阻止发布并保留独立挂载目录供 runner 销毁，同时仍清除签名凭据。挂载点只允许 `rmdir`，绝不递归删除它或一个可能包含它的父目录。
+
+`Scripts/test-preview-release.py` 包含无需凭据的 macOS 集成测试：用 Xcode 编译合成的 universal 小程序，包装并 ad-hoc 签名后实际执行 ZIP／DMG 创建与只读校验，最后验证卸载；**不执行这个程序**。它随 Native CI 与发布的无 secrets 测试阶段运行，Linux 上显式跳过。便携单元测试不能代替这项原生验证。
+
+### 版本说明的唯一来源
+
+发布正文读取同一提交中的 `website/content/changelog/<version>.md`。这是普通 Markdown，不执行 MDX／HTML 组件或仓库脚本。开头用精确的 `---` 围住小型 frontmatter：必需 `title`、`version`、`description`（单行双引号字符串）与 `status: unreleased`。版本必须与 dispatch 输入一致；文件缺失、正文为空、重复／未知字段、嵌套值、块文本、别名或 YAML 标签都会在签名前阻止发布，不新增 YAML 依赖。
+
+发布成功并人工核实前保留 `unreleased`，不提前写入 `date`、`sourceCommit` 或 `releaseUrl`。成功之后可在独立文档变更中使用 `status: prerelease` 与核实后的日期、源码提交和 Release 链接；发布日期采用引号内 UTC `YYYY-MM-DD`，源码为 40 位小写 SHA，链接是本仓库该版本的 Release。发布脚本不自行修改或提交版本说明。
+
+GitHub 正文先展示该版本的 DMG／ZIP 直达下载链接，再显示去除 frontmatter 的中文 Markdown，末尾追加实际 source/run/attempt、校验和／构建信息与不可移除的开发签名、未公证及人工验收范围说明。不会凭版本号猜测 previous tag，也不会生成 PopClip、appcast 或更新器资产。
+
 ## 权限、清理与失败处理
 
 - 只有手动 dispatch，限本仓库默认分支；源码和 workflow 均绑定到同一完整 SHA。所有输入通过环境变量传入并作白名单校验，不插值为 shell 程序
 - build/sign token 只有 contents read；只有 publish job 有 contents write。签名 secrets 仅在 sign 的一个步骤注入，不提供给 Xcode、mise、测试或发布 job
-- P12 仅写入 runner 临时目录，导入后立刻移除；临时 keychain、证书校验副本和临时展开目录通过 finally 加 always 清理。上传列表逐个列明，只接受 ZIP、校验和与安全构建信息
+- P12 仅写入 runner 临时目录，导入后立刻移除；临时 keychain、证书校验副本和临时展开目录通过 finally 加 always 清理。独立 DMG 挂载点遵守上述非递归卸载边界。上传列表逐个列明，只接受 DMG、ZIP、校验和与安全构建信息
 - 没有 `pull_request_target`、PR secrets、持久凭据、自动创建 Apple 凭据或远程配置修改。不要在含真实凭据的任务中启用命令追踪、打印环境、上传整个 workspace 或改变白名单上传路径
 - 并发按仓库预览发布串行化，后来的 dispatch 不会取消已开始的签名／上传
 - 已有 tag 若指向其他 SHA，立即停止，绝不移动 tag。已有同 tag 的已发布 Release **或 draft** 一律停止，不覆盖／删除其资产
@@ -70,7 +90,7 @@ MoeKit 工作流直接读取上述三个名字，**不要求创建 `Prod` enviro
 
 ## 安装与后续版本身份
 
-下载前对照 Release 的 exact source/run 链接，并用 `SHA256SUMS.txt` 检查下载文件。解压得到 `MoeKit.app` 后按 macOS 的正常安装／安全提示处理。若系统拒绝打开，此开发预览并不保证可安装；不要通过关闭 Gatekeeper、删除 quarantine 或重签成 ad-hoc 解决。
+下载前对照 Release 的 exact source/run 链接，并用 `SHA256SUMS.txt` 检查下载文件。推荐下载 DMG，打开后将 `MoeKit.app` 拖入 `Applications`；也可下载 ZIP 并解压取得同一份 App。按 macOS 的正常安装／安全提示处理。若系统拒绝打开，此开发预览并不保证可安装；不要通过关闭 Gatekeeper、删除 quarantine 或重签成 ad-hoc 解决。
 
 固定 Bundle ID 与一致的开发团队有助于版本身份连续性，但**不保证 TCC／辅助功能／文件访问等授权在更新后沿用**。签名类型、证书链、designated requirement、系统版本、安装位置和权限范围变化均可能影响系统判断。未来从 Apple Development 转为 Developer ID 时须实际测试权限迁移，不能提前承诺“不再弹权限提示”。
 
@@ -79,6 +99,8 @@ MoeKit 工作流直接读取上述三个名字，**不要求创建 `Prod` enviro
 ## 参考依据
 
 - [MoePeek 已有 release workflow（审查时固定提交）](https://github.com/cosZone/MoePeek/blob/f12d42122ae3129177cf7d8ce78ca0a910d419d7/.github/workflows/release.yml)：沿用 secret 命名；没有照搬输入插值、宽权限或可变 action tag
+- [MoePeek v0.20.0 release workflow](https://github.com/cosZone/MoePeek/blob/v0.20.0/.github/workflows/release.yml)：参考 DMG／ZIP 命名、Applications 拖放入口与版本标题；未复制 create-dmg 的退出码宽容、PopClip 或 Sparkle 流程
+- [Apple 磁盘映像说明](https://support.apple.com/guide/disk-utility/create-a-disk-image-dskutl11888/mac) 与 [Apple 软件分发打包](https://developer.apple.com/documentation/xcode/packaging-mac-software-for-distribution)：文件夹镜像与只读安装容器；精确命令选项以固定 macOS runner 的 `man hdiutil` 为准
 - [GitHub Actions secure use](https://docs.github.com/en/actions/reference/security/secure-use)：输入隔离、最小权限、固定 action SHA
 - [GitHub Actions secrets](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets)：组织／仓库／environment secrets 与访问范围
 - [GitHub release asset API](https://docs.github.com/en/rest/releases/assets)：上传及 SHA-256 digest 校验

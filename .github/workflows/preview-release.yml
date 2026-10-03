@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Preview version, e.g. 0.1.0-preview.1 (without v)'
+        description: 'Preview version with canonical Markdown notes, e.g. 0.1.0-preview.2 (without v)'
         required: true
         type: string
       source_sha:
@@ -120,12 +120,13 @@ jobs:
       - name: Always remove temporary signing material
         if: always()
         run: python3 Scripts/preview-release.py cleanup
-      - name: Upload only the verified signed ZIP, checksums, and safe provenance
+      - name: Upload only the verified DMG and ZIP, checksums, and safe provenance
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: signed-preview-${{ github.sha }}-${{ github.run_attempt }}
           path: |
-            Preview/MoeKit-v${{ inputs.version }}-macOS-universal.zip
+            Preview/MoeKit-v${{ inputs.version }}-macOS.dmg
+            Preview/MoeKit-v${{ inputs.version }}-macOS.zip
             Preview/SHA256SUMS.txt
             Preview/BUILD_INFO.json
           if-no-files-found: error

@@ -8,7 +8,9 @@ import json
 import os
 from pathlib import Path
 import plistlib
+import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -29,10 +31,36 @@ def valid_environment():
 
 def valid_plist():
     return {"CFBundleIdentifier": release.BUNDLE_ID, "CFBundleExecutable": "MoeKit",
+            "CFBundlePackageType": "APPL", "CFBundleName": "MoeKit",
             "CFBundleShortVersionString": "0.1.0", "CFBundleVersion": "1",
             "LSMinimumSystemVersion": "15.0", "MoeKitSourceCommit": "a" * 40,
             "MoeKitPreviewVersion": "0.1.0-preview.1", "MoeKitBuildRunID": "101",
             "MoeKitBuildRunAttempt": "1"}
+
+
+def notes_text(version="0.1.0-preview.1"):
+    return ('---\ntitle: "Preview notes"\nversion: "' + version + '"\n'
+            'description: "Synthetic release notes"\nstatus: unreleased\n---\n\n'
+            '## 新增\n\n- Synthetic feature\n')
+
+
+def write_notes(context):
+    path = Path("website/content/changelog") / (context["version"] + ".md")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(notes_text(context["version"]), encoding="utf-8")
+    return path
+
+
+def signed_metadata(context, *, digest="c" * 64, artifacts=None, notes_hash="d" * 64):
+    info = release.metadata(context)
+    info.update(signing="Apple Development", signature_verified=True, expected_team_verified=True,
+                entitlements={}, app_content_sha256=digest,
+                artifacts=artifacts or {name: "e" * 64 for name in release.package_names(context)},
+                release_notes_sha256=notes_hash,
+                package_verification={"dmg_integrity": True, "dmg_read_only": True,
+                                      "dmg_app_signature_verified": True, "zip_app_signature_verified": True,
+                                      "identical_app_content": True})
+    return info
 
 
 class Inputs(unittest.TestCase):
@@ -94,7 +122,8 @@ class Artifacts(unittest.TestCase):
         release.inspect_zip(self.zip(), self.context)
 
     def test_rejects_zip_traversal_or_wrong_roots(self):
-        for path in ("MoeKit.app/../../bad", "/MoeKit.app/abs", "certificate.p12", "MoeKit.app\\bad"):
+        for path in ("MoeKit.app/../../bad", "/MoeKit.app/abs", "certificate.p12", "MoeKit.app\\bad",
+                     "MoeKit.app//Contents/extra", "MoeKit.app/./Contents/extra"):
             with self.subTest(path=path), self.assertRaises(release.ReleaseError):
                 release.inspect_zip(self.zip((path, b"bad")), self.context)
 
@@ -104,6 +133,20 @@ class Artifacts(unittest.TestCase):
         info.external_attr = 0o120777 << 16
         with self.assertRaises(release.ReleaseError):
             release.inspect_zip(self.zip((info, b"/tmp")), self.context)
+
+    def test_resource_metadata_cannot_hide_extra_payload(self):
+        for path, data in (("__MACOSX/extra-tool", b"extra"),
+                           ("__MACOSX/MoeKit.app/Contents/._missing", bytes.fromhex("0005160700020000")),
+                           ("__MACOSX/MoeKit.app/Contents/._Info.plist", b"synthetic executable")):
+            with self.subTest(path=path), self.assertRaises(release.ReleaseError):
+                release.inspect_zip(self.zip((path, data)), self.context)
+
+    def test_allows_only_corresponding_appledouble_resource_metadata(self):
+        path = self.zip(("__MACOSX/MoeKit.app/Contents/._Info.plist", bytes.fromhex("0005160700020000") + b"fixture"))
+        with zipfile.ZipFile(path, "a") as archive:
+            archive.writestr("__MACOSX/", b"")
+            archive.writestr("__MACOSX/MoeKit.app/", b"")
+        release.inspect_zip(path, self.context)
 
     def test_rejects_wrong_app_provenance(self):
         for key, value in (("CFBundleIdentifier", "com.attacker.App"), ("MoeKitSourceCommit", "b" * 40),
@@ -122,8 +165,9 @@ class Artifacts(unittest.TestCase):
         info = release.metadata(self.context)
         with self.assertRaises(release.ReleaseError):
             release.check_metadata(info, self.context, signed=True)
-        info.update(signing="Apple Development", signature_verified=True, expected_team_verified=True, entitlements={})
-        release.check_metadata(info, self.context, signed=True)
+        info = signed_metadata(self.context)
+        with patch.object(release, "release_notes", return_value=("notes", "d" * 64)):
+            release.check_metadata(info, self.context, signed=True)
         info["source_sha"] = "b" * 40
         with self.assertRaises(release.ReleaseError):
             release.check_metadata(info, self.context, signed=True)
@@ -167,13 +211,16 @@ class Publication(unittest.TestCase):
         directory = Path("Preview")
         directory.mkdir()
         self.context = release.validate_inputs(valid_environment())
-        self.zip_name = "MoeKit-v0.1.0-preview.1-macOS-universal.zip"
+        self.dmg_name, self.zip_name = release.package_names(self.context)
         with zipfile.ZipFile(directory / self.zip_name, "w") as archive:
             archive.writestr("MoeKit.app/Contents/Info.plist", plistlib.dumps(valid_plist()))
-        info = release.metadata(self.context)
-        info.update(signing="Apple Development", signature_verified=True, expected_team_verified=True, entitlements={})
+        (directory / self.dmg_name).write_bytes(b"Synthetic DMG fixture; native validation is tested on macOS.")
+        notes = write_notes(self.context)
+        info = signed_metadata(self.context, digest=release.inspect_zip(directory / self.zip_name, self.context),
+                               artifacts={name: release.sha256(directory / name) for name in (self.dmg_name, self.zip_name)},
+                               notes_hash=release.sha256(notes))
         release.write_json(directory / "BUILD_INFO.json", info)
-        release.write_checksums(directory, (self.zip_name, "BUILD_INFO.json"))
+        release.write_checksums(directory, (self.dmg_name, self.zip_name, "BUILD_INFO.json"))
 
     def tearDown(self):
         os.chdir(self.old_cwd)
@@ -245,7 +292,17 @@ class Publication(unittest.TestCase):
         with patch.object(release, "validate", return_value=self.context), patch.object(release, "GitHub", return_value=api):
             with patch.dict(os.environ, {"GITHUB_STEP_SUMMARY": ""}), redirect_stdout(io.StringIO()):
                 release.publish()
-        self.assertEqual(len(api.assets), 3)
+        self.assertEqual({item["name"] for item in api.assets},
+                         {self.dmg_name, self.zip_name, "BUILD_INFO.json", "SHA256SUMS.txt"})
+        created = next(body for method, path, body in api.calls if method == "POST" and path.endswith("/releases"))
+        self.assertEqual(created["name"], "v0.1.0-preview.1")
+        self.assertTrue(created["body"].startswith("[下载 DMG（推荐）]"))
+        self.assertIn("## 新增\n\n- Synthetic feature", created["body"])
+        self.assertNotIn("status: unreleased", created["body"])
+        self.assertIn("Apple Development", created["body"])
+        self.assertIn("未经过 Apple 公证", created["body"])
+        self.assertIn("/commit/" + "a" * 40, created["body"])
+        self.assertIn("/actions/runs/101", created["body"])
         self.assertEqual(api.calls[-1][0], "PATCH")
         self.assertFalse(api.calls[-1][2]["draft"])
         self.assertFalse(any(method == "DELETE" for method, _, _ in api.calls))
@@ -256,6 +313,329 @@ class Publication(unittest.TestCase):
             with self.assertRaises(release.ReleaseError):
                 release.publish()
         self.assertFalse(any(method in {"PATCH", "DELETE"} for method, _, _ in api.calls))
+
+    def assert_publish_stops_before_api(self):
+        with patch.object(release, "validate", return_value=self.context), patch.object(release, "GitHub") as api:
+            with self.assertRaises(release.ReleaseError):
+                release.publish()
+        api.assert_not_called()
+
+    def test_missing_dmg_or_extra_asset_stops_publication(self):
+        Path("Preview", self.dmg_name).unlink()
+        self.assert_publish_stops_before_api()
+        Path("Preview", self.dmg_name).write_bytes(b"restored fixture")
+        Path("Preview", "appcast.xml").write_text("unexpected")
+        release.write_checksums(Path("Preview"), (self.dmg_name, self.zip_name, "BUILD_INFO.json"))
+        self.assert_publish_stops_before_api()
+
+    def test_tampered_dmg_even_with_new_checksums_stops_publication(self):
+        Path("Preview", self.dmg_name).write_bytes(b"tampered image")
+        release.write_checksums(Path("Preview"), (self.dmg_name, self.zip_name, "BUILD_INFO.json"))
+        self.assert_publish_stops_before_api()
+
+    def test_missing_native_verification_flags_stop_publication(self):
+        path = Path("Preview/BUILD_INFO.json")
+        original = json.loads(path.read_text())
+        for flag in original["package_verification"]:
+            info = json.loads(json.dumps(original))
+            info["package_verification"][flag] = False
+            release.write_json(path, info)
+            release.write_checksums(Path("Preview"), (self.dmg_name, self.zip_name, "BUILD_INFO.json"))
+            with self.subTest(flag=flag):
+                self.assert_publish_stops_before_api()
+
+    def test_changed_version_notes_stop_publication(self):
+        path = Path("website/content/changelog/0.1.0-preview.1.md")
+        path.write_text(path.read_text() + "\nUnreviewed extra content\n")
+        self.assert_publish_stops_before_api()
+
+    def test_extra_artifact_provenance_key_stops_publication(self):
+        path = Path("Preview/BUILD_INFO.json")
+        info = json.loads(path.read_text())
+        info["artifacts"]["extra.zip"] = "0" * 64
+        release.write_json(path, info)
+        release.write_checksums(Path("Preview"), (self.dmg_name, self.zip_name, "BUILD_INFO.json"))
+        self.assert_publish_stops_before_api()
+
+    def test_wrong_app_digest_stops_publication(self):
+        path = Path("Preview/BUILD_INFO.json")
+        info = json.loads(path.read_text())
+        info["app_content_sha256"] = "0" * 64
+        release.write_json(path, info)
+        release.write_checksums(Path("Preview"), (self.dmg_name, self.zip_name, "BUILD_INFO.json"))
+        self.assert_publish_stops_before_api()
+
+
+class VersionNotes(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.old_cwd = Path.cwd()
+        os.chdir(self.temp.name)
+        self.context = release.validate_inputs(valid_environment())
+        self.path = write_notes(self.context)
+
+    def tearDown(self):
+        os.chdir(self.old_cwd)
+        self.temp.cleanup()
+
+    def test_strips_only_frontmatter_and_preserves_markdown(self):
+        body, digest = release.release_notes(self.context)
+        self.assertEqual(body, "## 新增\n\n- Synthetic feature")
+        self.assertEqual(digest, release.sha256(self.path))
+        self.assertIn("status: unreleased", self.path.read_text())
+
+    def test_missing_or_empty_notes_fail(self):
+        self.path.unlink()
+        with self.assertRaises(release.ReleaseError):
+            release.release_notes(self.context)
+        self.path.write_text(notes_text().split("## 新增")[0])
+        with self.assertRaises(release.ReleaseError):
+            release.release_notes(self.context)
+
+    def test_rejects_ambiguous_yaml_and_wrong_version(self):
+        original = notes_text()
+        bad = [original.replace('version: "0.1.0-preview.1"', 'version: "0.1.0-preview.2"'),
+               original.replace('title: "Preview notes"', 'title: "One"\ntitle: "Two"'),
+               original.replace('title: "Preview notes"', 'title: |\n  Block scalar'),
+               original.replace('title: "Preview notes"', 'title: &anchor "Alias"'),
+               original.replace('title: "Preview notes"', 'title: !!str "Tag"'),
+               original.replace('title: "Preview notes"', 'title: "Escaped\\nnewline"'),
+               original.replace('status: unreleased', 'status: released'),
+               original.replace('status: unreleased', 'status: unreleased\nunknown: "value"'),
+               original.replace('status: unreleased', 'status: unreleased\ndate: "2026-10-03"'),
+               original.replace('description: "Synthetic release notes"\n', ''),
+               original.replace('---\n\n', '\n\n', 1)]
+        for text in bad:
+            with self.subTest(text=text), self.assertRaises(release.ReleaseError):
+                self.path.write_text(text, encoding="utf-8")
+                release.release_notes(self.context)
+
+    def test_published_notes_require_matching_verified_provenance(self):
+        publication = ('status: prerelease\ndate: "2026-10-03"\nsourceCommit: ' + "a" * 40 + '\n'
+                       'releaseUrl: "https://github.com/cosZone/MoeKit/releases/tag/v0.1.0-preview.1"')
+        text = notes_text().replace("status: unreleased", publication)
+        self.path.write_text(text)
+        self.assertTrue(release.release_notes(self.context)[0])
+        for wrong in (text.replace("2026-10-03", "2026-02-30"), text.replace("a" * 40, "b" * 40),
+                      text.replace("https://github.com/cosZone/", "https://attacker.test/")):
+            with self.subTest(wrong=wrong), self.assertRaises(release.ReleaseError):
+                self.path.write_text(wrong)
+                release.release_notes(self.context)
+
+    def test_symlink_notes_are_rejected(self):
+        target = self.path.with_suffix(".copy")
+        self.path.rename(target)
+        self.path.symlink_to(target.name)
+        with self.assertRaises(release.ReleaseError):
+            release.release_notes(self.context)
+
+
+class DmgSafety(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.environment = patch.dict(os.environ, {"RUNNER_TEMP": self.temp.name})
+        self.environment.start()
+        self.context = release.validate_inputs(valid_environment())
+
+    def tearDown(self):
+        self.environment.stop()
+        self.temp.cleanup()
+
+    def app(self, parent):
+        app = parent / "MoeKit.app"
+        (app / "Contents/MacOS").mkdir(parents=True)
+        (app / "Contents/Info.plist").write_bytes(plistlib.dumps(valid_plist()))
+        (app / "Contents/MacOS/MoeKit").write_bytes(b"synthetic executable fixture")
+        (app / "Contents/MacOS/MoeKit").chmod(0o755)
+        return app
+
+    def test_content_digest_covers_signature_and_all_paths(self):
+        app = self.app(Path(self.temp.name))
+        original = release.app_content_digest(app)
+        (app / "Contents/_CodeSignature").mkdir()
+        (app / "Contents/_CodeSignature/CodeResources").write_bytes(b"synthetic seal")
+        self.assertNotEqual(original, release.app_content_digest(app))
+        (app / "Contents/link").symlink_to("/Applications")
+        with self.assertRaises(release.ReleaseError):
+            release.app_content_digest(app)
+
+    def test_exact_dmg_contents_and_app_bytes_are_required(self):
+        root = Path(self.temp.name) / "root"
+        root.mkdir()
+        app = self.app(root)
+        digest = release.app_content_digest(app)
+        (root / "Applications").symlink_to("/Applications")
+        with patch.object(release, "verify_app"), patch.object(release, "run") as run:
+            release.verify_dmg_contents(root, self.context, digest)
+            self.assertEqual(run.call_args.kwargs["operation"], "codesign-verify-dmg")
+            (app / "Contents/MacOS/MoeKit").write_bytes(b"different app")
+            with self.assertRaises(release.ReleaseError):
+                release.verify_dmg_contents(root, self.context, digest)
+
+    def test_extra_root_or_wrong_shortcut_are_rejected(self):
+        root = Path(self.temp.name) / "root"
+        root.mkdir()
+        app = self.app(root)
+        digest = release.app_content_digest(app)
+        shortcut = root / "Applications"
+        shortcut.symlink_to("/tmp")
+        with self.assertRaises(release.ReleaseError):
+            release.verify_dmg_contents(root, self.context, digest)
+        shortcut.unlink()
+        shortcut.symlink_to("/Applications")
+        (root / "extra-tool").write_bytes(b"not allowed")
+        with self.assertRaises(release.ReleaseError):
+            release.verify_dmg_contents(root, self.context, digest)
+
+    def test_mountpoint_is_outside_signing_recursive_cleanup(self):
+        self.assertNotIn(release.signing_directory(), release.dmg_mountpoint().parents)
+
+    def test_detach_uses_only_fixed_mountpoint_then_nonrecursive_remove(self):
+        mount = release.dmg_mountpoint()
+        mount.mkdir()
+        with patch.object(Path, "is_mount", side_effect=[True, False]), patch.object(release, "run") as command:
+            with patch.object(release.shutil, "rmtree") as recursive:
+                release.cleanup_dmg_mount()
+        command.assert_called_once_with("/usr/bin/hdiutil", "detach", str(mount), operation="dmg-detach")
+        recursive.assert_not_called()
+        self.assertFalse(mount.exists())
+
+    def test_failed_detach_preserves_mount_and_still_cleans_credentials(self):
+        mount = release.dmg_mountpoint()
+        mount.mkdir()
+        sentinel = mount / "do-not-delete"
+        sentinel.write_text("Synthetic mounted-volume marker")
+        scratch = release.signing_directory()
+        scratch.mkdir()
+        (scratch / "preview.keychain-db").write_bytes(b"synthetic keychain")
+        release.write_json(scratch / "original-keychains.json", ["/tmp/synthetic-login.keychain-db"])
+        operations = []
+        def command(*args, operation):
+            operations.append(operation)
+            if operation == "dmg-detach":
+                raise release.ReleaseError("Synthetic detach failure.")
+            return b""
+        with patch.object(Path, "is_mount", return_value=True), patch.object(release, "run", side_effect=command):
+            with self.assertRaises(release.ReleaseError):
+                release.cleanup()
+        self.assertTrue(sentinel.is_file())
+        self.assertFalse(scratch.exists())
+        self.assertEqual(operations, ["dmg-detach", "keychain-delete", "keychain-restore-search-list"])
+
+    def test_success_status_with_still_mounted_volume_fails_without_delete(self):
+        mount = release.dmg_mountpoint()
+        mount.mkdir()
+        with patch.object(Path, "is_mount", return_value=True), patch.object(release, "run"):
+            with self.assertRaises(release.ReleaseError):
+                release.cleanup_dmg_mount()
+        self.assertTrue(mount.exists())
+
+    def test_unmounted_nonempty_mountpoint_is_never_recursively_deleted(self):
+        mount = release.dmg_mountpoint()
+        mount.mkdir()
+        (mount / "keep").write_text("fixture")
+        with self.assertRaises(OSError):
+            release.cleanup_dmg_mount()
+        self.assertTrue((mount / "keep").exists())
+
+    def test_partial_attach_failure_still_attempts_cleanup(self):
+        scratch = release.signing_directory()
+        scratch.mkdir()
+        app = self.app(scratch)
+        digest = release.app_content_digest(app)
+        def command(*args, operation):
+            if operation == "dmg-stage":
+                shutil.copytree(args[1], args[2])
+            if operation == "dmg-attach":
+                raise release.ReleaseError("Synthetic partial attach failure.")
+            return b""
+        with patch.object(release, "run", side_effect=command), patch.object(release, "cleanup_dmg_mount") as cleanup:
+            with self.assertRaises(release.ReleaseError):
+                release.package_dmg(app, scratch / "fixture.dmg", scratch, self.context, digest)
+        cleanup.assert_called_once()
+
+    def test_readonly_mount_is_verified_before_app_inspection(self):
+        scratch = release.signing_directory()
+        scratch.mkdir()
+        app = self.app(scratch)
+        calls = []
+        def command(*args, operation):
+            calls.append((args, operation))
+            if operation == "dmg-stage":
+                shutil.copytree(args[1], args[2])
+            return b""
+        writable_filesystem = type("FilesystemFlags", (), {"f_flag": 0})()
+        with patch.object(release, "run", side_effect=command), patch.object(release, "cleanup_dmg_mount") as cleanup:
+            with patch.object(Path, "is_mount", return_value=True), patch.object(release.os, "statvfs", return_value=writable_filesystem):
+                with patch.object(release, "verify_dmg_contents") as inspection, self.assertRaises(release.ReleaseError):
+                    release.package_dmg(app, scratch / "fixture.dmg", scratch, self.context, release.app_content_digest(app))
+        inspection.assert_not_called()
+        cleanup.assert_called_once()
+        attach = next(args for args, operation in calls if operation == "dmg-attach")
+        self.assertEqual(attach[3:], ("-readonly", "-nobrowse", "-noautoopen", "-verify", "-mountpoint", str(release.dmg_mountpoint())))
+        self.assertIn("dmg-verify", [operation for _, operation in calls])
+
+    def test_hdiutil_exit_one_is_never_accepted(self):
+        result = subprocess.CompletedProcess([], 1, stdout=b"", stderr=b"synthetic private message")
+        with patch.object(release.subprocess, "run", return_value=result):
+            with self.assertRaises(release.ReleaseError):
+                release.run("/usr/bin/hdiutil", "create", operation="dmg-create")
+
+    def test_workflow_upload_allowlist_is_exact_and_has_no_new_privileges(self):
+        workflow = (Path(release.__file__).resolve().parents[1] / ".github/workflows/preview-release.yml").read_text()
+        expected = ["Preview/MoeKit-v${{ inputs.version }}-macOS.dmg",
+                    "Preview/MoeKit-v${{ inputs.version }}-macOS.zip",
+                    "Preview/SHA256SUMS.txt", "Preview/BUILD_INFO.json"]
+        actual = [line.strip() for line in workflow.splitlines() if line.strip().startswith("Preview/")]
+        self.assertEqual(actual, expected)
+        self.assertNotIn("macOS-universal.zip", workflow)
+        self.assertNotIn("create-dmg", workflow)
+        self.assertEqual(workflow.count("contents: write"), 1)
+        self.assertIn("if: always()\n        run: python3 Scripts/preview-release.py cleanup", workflow)
+
+
+@unittest.skipUnless(sys.platform == "darwin", "Native hdiutil/universal signing integration requires macOS; no app execution")
+class NativeDmgIntegration(unittest.TestCase):
+    def test_universal_fixture_round_trips_signed_zip_and_readonly_dmg(self):
+        # This is a synthetic never-executed app, with ad-hoc signing and no
+        # credentials. Avoid TemporaryDirectory: failed detach must never cause
+        # recursive cleanup of its parent, even in a regression test.
+        temporary = Path(tempfile.mkdtemp(prefix="moekit-dmg-test-"))
+        context = release.validate_inputs(valid_environment())
+        with patch.dict(os.environ, {"RUNNER_TEMP": str(temporary)}):
+            try:
+                app = temporary / "MoeKit.app"
+                (app / "Contents/MacOS").mkdir(parents=True)
+                (app / "Contents/Info.plist").write_bytes(plistlib.dumps(valid_plist()))
+                environment = {key: value for key, value in os.environ.items()
+                               if key not in (*release.SECRET_NAMES, "GH_TOKEN", "GITHUB_TOKEN")}
+                subprocess.run(["/usr/bin/xcrun", "clang", "-arch", "arm64", "-arch", "x86_64",
+                                "-mmacosx-version-min=15.0", "-x", "c", "-", "-o", str(app / "Contents/MacOS/MoeKit")],
+                               input=b"int main(void) { return 0; }\n", check=True,
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=environment, timeout=120)
+                release.run("/usr/bin/codesign", "--force", "--sign", "-", "--options", "runtime",
+                            "--timestamp=none", str(app), operation="codesign-sign")
+                release.verify_app(app, context)
+                digest = release.app_content_digest(app)
+                dmg_name, zip_name = release.package_names(context)
+                release.run("/usr/bin/ditto", "-c", "-k", "--sequesterRsrc", "--keepParent", str(app),
+                            str(temporary / zip_name), operation="archive-package")
+                self.assertEqual(release.inspect_zip(temporary / zip_name, context), digest)
+                release.run("/usr/bin/ditto", "-x", "-k", str(temporary / zip_name), str(temporary / "round-trip"),
+                            operation="archive-round-trip")
+                unpacked = temporary / "round-trip/MoeKit.app"
+                self.assertEqual(release.app_content_digest(unpacked), digest)
+                release.run("/usr/bin/codesign", "--verify", "--deep", "--strict", "--all-architectures", str(unpacked),
+                            operation="codesign-verify-packaged")
+                release.package_dmg(unpacked, temporary / dmg_name, temporary, context, digest)
+                self.assertTrue((temporary / dmg_name).is_file())
+                self.assertFalse(release.dmg_mountpoint().exists())
+            finally:
+                # Reaching parent removal requires successful cleanup, not just
+                # an existence check that might hide a filesystem error.
+                release.cleanup_dmg_mount()
+                if not release.dmg_mountpoint().exists():
+                    shutil.rmtree(temporary)
 
 
 class SafeCommandDiagnostics(unittest.TestCase):

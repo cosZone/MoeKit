@@ -8,6 +8,8 @@ final class WorkspaceStore {
     var projectFilter: ProjectFilter = .all
     var taskFilter: TaskFilter = .all
     var selectedCapability: MoleCapability = .space
+    var selectedToolID = MoleModule.id
+    let processes = ProcessInventoryStore()
     var projectSearch = ""
     var taskSearch = ""
     var toolSearch = ""
@@ -17,6 +19,7 @@ final class WorkspaceStore {
     var isInspectorPresented = false
     var isDemoEnabled: Bool {
         didSet {
+            processes.resetForModeChange()
             if isDemoEnabled { scanTask?.cancel(); importTask?.cancel() }
             selectedProjectID = nil
             selectedTaskID = nil
@@ -43,10 +46,29 @@ final class WorkspaceStore {
     init(isDemoEnabled: Bool = ProcessInfo.processInfo.arguments.contains("--demo"), persistence: CatalogPersistence = .init()) {
         self.isDemoEnabled = isDemoEnabled
         self.persistence = persistence
+        processes.onEvent = { [weak self] event in self?.recordProcessEvent(event) }
         do { projects = try persistence.load() }
         catch {
             catalogIsWritable = false
             errorMessage = String(localized: "The project catalog could not be read. Existing data was not replaced.")
+        }
+    }
+
+    private func recordProcessEvent(_ event: ProcessInventoryEvent) {
+        switch event {
+        case let .started(id, at):
+            tasks.insert(TaskRecord(id: id, title: String(localized: "Inspect processes"),
+                                    target: String(localized: "Current user · read-only"), tool: String(localized: "Processes & Ports"),
+                                    startedAt: at, status: .running), at: 0)
+        case let .finished(id, status, count):
+            let summary: String
+            switch status {
+            case .completed, .partial: summary = String(localized: "Observed \(count) processes. No processes were changed.")
+            case .cancelled: summary = String(localized: "Process scan cancelled. No processes were changed.")
+            default: summary = String(localized: "The process snapshot could not be read. No processes were changed.")
+            }
+            finishTask(id, status: status, summary: summary,
+                       diagnostics: "Read-only native snapshot. No argv, environment, process paths or process history stored in this task.")
         }
     }
 

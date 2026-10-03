@@ -8,12 +8,13 @@ Swift 6 · SwiftUI / AppKit · macOS 15+ · Tuist 4.148.3 · SPM
 
 已经写入源码：
 - **Projects**：原生表格、搜索与排序、项目详情 inspector、置顶项目、Finder 定位；选择文件夹后只读发现 Git 项目，再勾选导入
-- **Tools**：Mole 的 Space / Clean / Apps / Maintenance / Status 工作区；Space 可导入 Mole analyze JSON
+- **Tools**：Mole 的 Space / Clean / Apps / Maintenance / Status 工作区；Space 可导入 Mole analyze JSON；Processes & Ports 可由用户主动读取当前用户进程和 TCP 监听端口，按工作目录展示项目关联
+- **Processes & Ports**：原生密集表格、身份与关联证据、部分读取提示、项目相关进程入口，以及不可执行的精确选择停止计划预览；不读取命令参数/环境变量，不自动扫描或发送进程信号
 - **Tasks**：本次会话的发现任务、取消、状态与底部结果详情；可展开 Diagnostics
 - 独立 Demo 开关与明确示例标识；正常启动无虚构项目、运行结果或磁盘测量
 - 原生 NavigationSplitView、Table、工具栏与 SF Symbols；自定义应用图标
 
-尚未实现：CLI 进程执行、清理、卸载、维护、实时系统状态、提权、第三方插件加载及持久任务历史。导入报告不运行 Mole，报告数值不等于可回收空间。
+尚未实现：CLI 进程执行、停止/强制停止、清理、卸载、维护、实时系统指标、提权、第三方插件加载及持久任务历史。导入报告不运行 Mole，报告数值不等于可回收空间。
 
 **验证记录：** 提交 [`ba7709c`](https://github.com/cosZone/MoeKit/commit/ba7709cb81a32bdd3f6a918d7bd5cdac715972e7) 已在 [macOS CI](https://github.com/cosZone/MoeKit/actions/runs/37111995139) 上完成构建并通过 65 项 Swift 测试（Xcode 16.4 / Swift 6.1.2）。后续变更以对应提交的 CI 为准；原生视觉、VoiceOver、双架构实机运行和实际 Mac 交互仍需手动验收。
 
@@ -40,6 +41,7 @@ open DerivedData/Build/Products/Debug/MoeKit.app
 - [开发签名预览发布](Documentation/Signed-preview-release.md)：已编写独立的手动发布流程，待配置 Secrets、审核合入并实际运行；使用 Apple Development 签名，仍未公证，不等于 Developer ID 正式分发
 - [构建与交付说明](Documentation/Build-and-preview.md)
 - [架构与数据边界](Documentation/Architecture.md)
+- [进程与端口的范围、隐私与验证边界](Documentation/Processes-and-ports.md)
 - [原生验收清单](Documentation/Verification.md)
 
 ## 许可

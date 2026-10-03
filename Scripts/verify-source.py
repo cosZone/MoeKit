@@ -22,6 +22,10 @@ required = (
     "Sources/Core/DemoData.swift", "Sources/Core/ToolModule.swift",
     "Sources/Core/MoleReport.swift", "Sources/Services/RepositoryScanner.swift",
     "Tests/RepositoryScannerTests.swift", "Tests/MoleModuleTests.swift",
+    "Sources/Processes/ProcessModels.swift", "Sources/Processes/ProcessInventoryStore.swift",
+    "Sources/Services/NativeProcessInventoryProvider.swift", "Sources/UI/ProcessWorkspaceView.swift",
+    "Tests/ProcessModelsTests.swift", "Tests/ProcessInventoryStoreTests.swift",
+    "Tests/NativeProcessInventoryProviderTests.swift",
     "Resources/Localizable.xcstrings",
     "Resources/Assets.xcassets/AppIcon.appiconset/Contents.json",
     "Resources/Assets.xcassets/BrandMark.imageset/Contents.json",
@@ -74,8 +78,18 @@ for path in sources:
     for pattern in (r"\b(?:Process|NSTask|NSAppleScript)\s*\(",
                     r"\b(?:posix_spawn\w*|execve|execv|popen)\s*\(",
                     r"(?<![.\w])system\s*\(", r"\b(?:Darwin|Glibc)\.system\s*\(",
-                    r'"/bin/(?:sh|bash|zsh)"', r"\bAuthorizationExecuteWithPrivileges\b"):
+                    r'"/bin/(?:sh|bash|zsh)"', r"\bAuthorizationExecuteWithPrivileges\b",
+                    r"\b(?:kill|killpg|raise|proc_signal|proc_signal_with_audittoken)\s*\("):
         require(not re.search(pattern, text), f"Execution API outside this milestone: {path.relative_to(ROOT)} ({pattern})")
+
+process_sources = list((ROOT / "Sources/Processes").glob("*.swift"))
+process_sources += [ROOT / "Sources/Services/NativeProcessInventoryProvider.swift"]
+for path in process_sources:
+    if path.is_file():
+        text = path.read_text()
+        for pattern in (r"\bKERN_PROCARGS2?\b", r"\bgetenv\s*\(",
+                        r"ProcessInfo\.processInfo\.(?:arguments|environment)", r"\bTimer\.publish\s*\("):
+            require(not re.search(pattern, text), f"Process inventory privacy/explicit-scan guardrail: {path.relative_to(ROOT)} ({pattern})")
 
 store_path = ROOT / "Sources/Core/WorkspaceStore.swift"
 if store_path.is_file():

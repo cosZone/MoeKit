@@ -73,7 +73,7 @@ struct ToolModuleRegistry: Sendable {
     let modules: [any ToolModule]
 
     init() {
-        modules = [MoleModule()]
+        modules = [MoleModule(), ProcessModule()]
     }
 
     /// Explicit injection supports other built-in modules and deterministic tests.
@@ -197,6 +197,31 @@ struct MoleModule: ToolModule {
             keywords: ["mo", "CLI", "disk", "storage", "analyze", "cleanup", "uninstall", "optimize", "磁盘", "空间", "清理", "应用", "维护", "状态"],
             readiness: .unavailable(reason: String(localized: "Mole execution is not connected in this milestone.")),
             capabilities: MoleCapability.allCases.map(\.descriptor)
+        )
+    }
+}
+
+/// Read-only native inventory. Stop-plan inspection is not process execution.
+struct ProcessModule: ToolModule {
+    static let id = "processes"
+
+    var descriptor: ToolModuleDescriptor {
+        ToolModuleDescriptor(
+            id: Self.id,
+            title: String(localized: "Processes & Ports"),
+            summary: String(localized: "Inspect current-user processes, TCP listeners and observed project associations."),
+            systemImage: "list.bullet.rectangle.portrait",
+            category: .development,
+            keywords: ["process", "PID", "port", "TCP", "session", "进程", "端口", "项目"],
+            readiness: .available,
+            capabilities: [
+                ToolCapabilityDescriptor(id: "processes.snapshot", title: String(localized: "Read-only snapshot"),
+                                         summary: String(localized: "Scan on demand. No automatic polling or process changes."),
+                                         systemImage: "magnifyingglass", readiness: .available),
+                ToolCapabilityDescriptor(id: "processes.stop", title: String(localized: "Stop processes"),
+                                         summary: String(localized: "Inspect an exact-selection plan before a future stopping capability."),
+                                         systemImage: "stop.circle", readiness: .unavailable(reason: String(localized: "Stopping and force stopping are not implemented.")))
+            ]
         )
     }
 }

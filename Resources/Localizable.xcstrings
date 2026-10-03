@@ -1750,6 +1750,1076 @@
           }
         }
       }
+    },
+    "%lld exact targets": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 个精确目标"
+          }
+        }
+      }
+    },
+    "%lld inferred processes": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 个推断关联的进程"
+          }
+        }
+      }
+    },
+    "%lld processes exited, became unreadable, or could not be verified as belonging to the current user.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 个进程已退出、不可读取或无法确认属于当前用户。"
+          }
+        }
+      }
+    },
+    "%lld processes · %lld selected": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 个进程 · 已选 %lld 个"
+          }
+        }
+      }
+    },
+    "%lld rows were discarded because identity changed or could not be revalidated during the scan.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 个条目因扫描期间身份变化或无法重新验证而被舍弃。"
+          }
+        }
+      }
+    },
+    "A future stop must re-read identities and prefer cooperative shutdown. A submitted signal would not prove exit.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未来执行停止前必须重新读取身份，并优先协作式退出。提交信号并不代表进程已退出。"
+          }
+        }
+      }
+    },
+    "A matching MoeKit launch record is required.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "需要匹配的 MoeKit 启动记录。"
+          }
+        }
+      }
+    },
+    "Application, browser, IDE, database, VM, or shared-service hint. Review individually.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "具有应用、浏览器、IDE、数据库、虚拟机或共享服务特征，请逐项检查。"
+          }
+        }
+      }
+    },
+    "Association evidence": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关联依据"
+          }
+        }
+      }
+    },
+    "Association is inferred from the working directory. Opening this view does not scan.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "根据工作目录推断关联。打开此视图不会启动扫描。"
+          }
+        }
+      }
+    },
+    "Cancel scan": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消扫描"
+          }
+        }
+      }
+    },
+    "Close": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关闭"
+          }
+        }
+      }
+    },
+    "Current UID: %lld": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前 UID：%lld"
+          }
+        }
+      }
+    },
+    "Current user only. TCP listening ports and project associations reflect this snapshot; unknown readings are not empty results.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅显示当前用户的进程。TCP 监听端口与项目关联仅反映此快照；未知读数不代表没有结果。"
+          }
+        }
+      }
+    },
+    "Current user · read-only": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前用户 · 只读"
+          }
+        }
+      }
+    },
+    "Executable path": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可执行文件路径"
+          }
+        }
+      }
+    },
+    "Executable path unavailable; process identity is incomplete.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可执行文件路径不可用，进程身份信息不完整。"
+          }
+        }
+      }
+    },
+    "Execution unavailable": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法执行"
+          }
+        }
+      }
+    },
+    "Inferred from working directory": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "根据工作目录推断"
+          }
+        }
+      }
+    },
+    "Inspect an exact-selection plan before a future stopping capability.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在后续停止功能接入前，检查精确选择的计划。"
+          }
+        }
+      }
+    },
+    "Inspect current-user processes, TCP listeners and observed project associations.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看当前用户的进程、TCP 监听端口与观察到的项目关联。"
+          }
+        }
+      }
+    },
+    "Inspect exact targets and risks. Stopping processes is unavailable.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看精确目标与风险。尚不支持停止进程。"
+          }
+        }
+      }
+    },
+    "Inspect processes": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查进程"
+          }
+        }
+      }
+    },
+    "Inspect running processes": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看运行中的进程"
+          }
+        }
+      }
+    },
+    "Inspection only. Process stopping, graceful termination, and force termination are unavailable. No signals will be sent.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅供查看。尚不支持停止进程、正常终止或强制终止。不会发送任何信号。"
+          }
+        }
+      }
+    },
+    "Listening ports": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "监听端口"
+          }
+        }
+      }
+    },
+    "Multiple processes selected": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已选择多个进程"
+          }
+        }
+      }
+    },
+    "No flagged risks": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未标记风险"
+          }
+        }
+      }
+    },
+    "No flagged risks. This is not a safety guarantee.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未标记风险，但这不保证安全。"
+          }
+        }
+      }
+    },
+    "No matching processes": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有匹配的进程"
+          }
+        }
+      }
+    },
+    "No project association was established from readable metadata.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未能从可读取的元数据确定项目关联。"
+          }
+        }
+      }
+    },
+    "No project ownership was established.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚未确定项目所有权。"
+          }
+        }
+      }
+    },
+    "None observed": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未观察到"
+          }
+        }
+      }
+    },
+    "Not scanned": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚未扫描"
+          }
+        }
+      }
+    },
+    "Observed %lld processes. No processes were changed.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "观察到 %lld 个进程，未更改任何进程。"
+          }
+        }
+      }
+    },
+    "Observed association": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "观察到的关联"
+          }
+        }
+      }
+    },
+    "Observed working directory is inside this project's canonical folder. This is an association, not ownership.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "观察到的工作目录位于此项目的规范路径内。这仅表明关联，不代表所有权。"
+          }
+        }
+      }
+    },
+    "Only exact selected identities are listed. Parents, children and process groups are not added automatically.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅列出精确选中的进程身份，不会自动加入父进程、子进程或整个进程组。"
+          }
+        }
+      }
+    },
+    "Open related processes": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开关联进程"
+          }
+        }
+      }
+    },
+    "PID": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PID"
+          }
+        }
+      }
+    },
+    "Parent PID": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "父进程 PID"
+          }
+        }
+      }
+    },
+    "Parent is unavailable or reparented. This does not mean the process is abandoned.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "父进程不可用或已重新指定，不代表此进程已被遗留。"
+          }
+        }
+      }
+    },
+    "Partial snapshot": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不完整快照"
+          }
+        }
+      }
+    },
+    "Plan warnings": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "计划警告"
+          }
+        }
+      }
+    },
+    "Preview only. Stopping and force stopping are not implemented.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅供预览，尚未实现停止和强制停止。"
+          }
+        }
+      }
+    },
+    "Process details": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "进程详情"
+          }
+        }
+      }
+    },
+    "Process group": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "进程组"
+          }
+        }
+      }
+    },
+    "Process identity is incomplete.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "进程身份信息不完整。"
+          }
+        }
+      }
+    },
+    "Process name is unavailable.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "进程名称不可用。"
+          }
+        }
+      }
+    },
+    "Process name unavailable.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "进程名称不可用。"
+          }
+        }
+      }
+    },
+    "Process scan cancelled. No processes were changed.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "进程扫描已取消，未更改任何进程。"
+          }
+        }
+      }
+    },
+    "Process scanning is unavailable in Demo. Exit Demo to explicitly scan your current user’s processes.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "演示模式下无法扫描进程。退出演示模式后，可手动扫描当前用户的进程。"
+          }
+        }
+      }
+    },
+    "Process start time is inconsistent with this snapshot.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "进程启动时间与此快照不一致。"
+          }
+        }
+      }
+    },
+    "Process start time unavailable; process identity is incomplete.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "启动时间不可用，进程身份信息不完整。"
+          }
+        }
+      }
+    },
+    "Processes & Ports": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "进程与端口"
+          }
+        }
+      }
+    },
+    "Project association": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "项目关联"
+          }
+        }
+      }
+    },
+    "Protected": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "受保护"
+          }
+        }
+      }
+    },
+    "Protection": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保护状态"
+          }
+        }
+      }
+    },
+    "Read a bounded snapshot of the current user’s processes and TCP listening ports": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "读取当前用户的进程与 TCP 监听端口的有范围限制快照"
+          }
+        }
+      }
+    },
+    "Read-only snapshot": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "只读快照"
+          }
+        }
+      }
+    },
+    "Read-only · no process signals are sent": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "只读 · 不发送进程信号"
+          }
+        }
+      }
+    },
+    "Refresh": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刷新"
+          }
+        }
+      }
+    },
+    "Related processes": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关联进程"
+          }
+        }
+      }
+    },
+    "Review stop plan": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看停止计划"
+          }
+        }
+      }
+    },
+    "Review the plan to inspect every selected identity and its risks. No stop action is available.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看计划以检查每个所选进程的身份与风险。尚不支持执行停止操作。"
+          }
+        }
+      }
+    },
+    "Scan diagnostics": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "扫描诊断"
+          }
+        }
+      }
+    },
+    "Scan on demand. No automatic polling or process changes.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按需扫描，不自动轮询或更改进程。"
+          }
+        }
+      }
+    },
+    "Scanning…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在扫描…"
+          }
+        }
+      }
+    },
+    "Select a process": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择一个进程"
+          }
+        }
+      }
+    },
+    "Select a row to inspect identity, listening ports, project evidence, and protection reasons.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择一行以查看进程身份、监听端口、项目关联依据与保护原因。"
+          }
+        }
+      }
+    },
+    "Selected project": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所选项目"
+          }
+        }
+      }
+    },
+    "Show all processes": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示所有进程"
+          }
+        }
+      }
+    },
+    "Snapshot": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "快照"
+          }
+        }
+      }
+    },
+    "Snapshot ID": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "快照 ID"
+          }
+        }
+      }
+    },
+    "Some metadata is unavailable or incomplete.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "部分元数据不可用或不完整。"
+          }
+        }
+      }
+    },
+    "Some selected identities are no longer in this snapshot.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "部分选中的进程身份已不在此快照中。"
+          }
+        }
+      }
+    },
+    "Start a bounded, read-only scan when you’re ready. Nothing is scanned automatically.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "准备好后启动有范围限制的只读扫描。不会自动扫描。"
+          }
+        }
+      }
+    },
+    "Start identity (s / µs)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "启动时间标识（秒 / 微秒）"
+          }
+        }
+      }
+    },
+    "Start scan": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "开始扫描"
+          }
+        }
+      }
+    },
+    "Started by MoeKit": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "由 MoeKit 启动"
+          }
+        }
+      }
+    },
+    "Stop processes": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "停止进程"
+          }
+        }
+      }
+    },
+    "Stopping and force stopping are not implemented.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚未实现停止和强制停止。"
+          }
+        }
+      }
+    },
+    "System process or MoeKit itself.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "系统进程或 MoeKit 自身。"
+          }
+        }
+      }
+    },
+    "System service or shared shell. Review individually.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "系统服务或共享 shell，请逐项检查。"
+          }
+        }
+      }
+    },
+    "TCP listener coverage unknown: a local listener address could not be decoded.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "TCP 监听覆盖情况未知：无法解析本地监听地址。"
+          }
+        }
+      }
+    },
+    "TCP listener coverage unknown: a socket closed or became unreadable during the scan.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "TCP 监听覆盖情况未知：socket 在扫描期间关闭或变得不可读。"
+          }
+        }
+      }
+    },
+    "TCP listener coverage unknown: a socket descriptor was invalid.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "TCP 监听覆盖情况未知：socket 描述符无效。"
+          }
+        }
+      }
+    },
+    "TCP listener coverage unknown: file descriptors could not be read.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "TCP 监听覆盖情况未知：无法读取文件描述符。"
+          }
+        }
+      }
+    },
+    "TCP listener coverage unknown: the per-process file descriptor limit was reached.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "TCP 监听覆盖情况未知：已达到每进程文件描述符上限。"
+          }
+        }
+      }
+    },
+    "The current user's process list could not be read (system error %d).": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法读取当前用户的进程列表（系统错误 %d）。"
+          }
+        }
+      }
+    },
+    "The observed process group includes unselected processes. No group action is planned.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "观察到的进程组包含未选中的进程，不会计划对整个组执行操作。"
+          }
+        }
+      }
+    },
+    "The process limit was reached; some processes were not inspected.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已达到进程数量上限，部分进程未检查。"
+          }
+        }
+      }
+    },
+    "The process owner is different or unknown.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "进程所属用户不同或未知。"
+          }
+        }
+      }
+    },
+    "The process snapshot could not be read. No processes were changed.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法读取进程快照，未更改任何进程。"
+          }
+        }
+      }
+    },
+    "The scan time budget was reached; unfinished rows were discarded.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已达到扫描时限，未完成读取的条目已舍弃。"
+          }
+        }
+      }
+    },
+    "This is a partial snapshot; unseen processes or dependencies may exist.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这是部分快照，可能存在尚未观察到的进程或依赖关系。"
+          }
+        }
+      }
+    },
+    "This snapshot is stale or has an invalid timestamp. Refresh before reviewing a future action.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此快照已过期或时间戳无效，请刷新后再评估后续操作。"
+          }
+        }
+      }
+    },
+    "Try another search or project filter. A partial snapshot may omit unreadable processes.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请尝试其他搜索条件或项目筛选。不完整快照可能遗漏无法读取的进程。"
+          }
+        }
+      }
+    },
+    "UID": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "UID"
+          }
+        }
+      }
+    },
+    "Unattributed": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "归属未知"
+          }
+        }
+      }
+    },
+    "Unavailable in Demo": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "演示模式下不可用"
+          }
+        }
+      }
+    },
+    "Unavailable metadata": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法读取的元数据"
+          }
+        }
+      }
+    },
+    "Use 1–16,384 processes, 1–4,096 descriptors per process, and a finite duration above zero and at most 30 seconds.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "进程上限须为 1–16,384，每进程描述符上限为 1–4,096，时限须大于零且不超过 30 秒。"
+          }
+        }
+      }
+    },
+    "Wait a moment before starting another process scan.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请稍候再开始下一次进程扫描。"
+          }
+        }
+      }
+    },
+    "Working directory": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工作目录"
+          }
+        }
+      }
+    },
+    "Working directory unavailable or could not be resolved.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工作目录不可用或无法解析。"
+          }
+        }
+      }
+    },
+    "Cancel process scan": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消进程扫描"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

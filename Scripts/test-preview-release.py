@@ -31,7 +31,7 @@ def valid_environment():
 
 def valid_plist():
     return {"CFBundleIdentifier": release.BUNDLE_ID, "CFBundleExecutable": "MoeKit",
-            "CFBundlePackageType": "APPL", "CFBundleName": "MoeKit",
+            "CFBundlePackageType": "APPL", "CFBundleName": "MoeKit", "CFBundleInfoDictionaryVersion": "6.0",
             "CFBundleShortVersionString": "0.1.0", "CFBundleVersion": "1",
             "LSMinimumSystemVersion": "15.0", "MoeKitSourceCommit": "a" * 40,
             "MoeKitPreviewVersion": "0.1.0-preview.1", "MoeKitBuildRunID": "101",
@@ -61,6 +61,32 @@ def signed_metadata(context, *, digest="c" * 64, artifacts=None, notes_hash="d" 
                                       "dmg_app_signature_verified": True, "zip_app_signature_verified": True,
                                       "identical_app_content": True})
     return info
+
+
+def compile_native_fixture(temporary, executable):
+    # Darwin universal builds run separate architecture jobs; both must be able
+    # to reopen the input. A shared stdin stream is not a reusable source file.
+    source = temporary / "fixture.c"
+    source.write_text("int main(void) { return 0; }\n", encoding="ascii")
+    allowed_environment = {"PATH", "HOME", "TMPDIR", "DEVELOPER_DIR", "SDKROOT",
+                           "MACOSX_DEPLOYMENT_TARGET", "LANG", "LC_ALL", "LC_CTYPE"}
+    environment = {key: value for key, value in os.environ.items() if key in allowed_environment}
+    try:
+        result = subprocess.run(["/usr/bin/xcrun", "clang", "-arch", "arm64", "-arch", "x86_64",
+                                 "-mmacosx-version-min=15.0", str(source), "-o", str(executable)],
+                                stdin=subprocess.DEVNULL, check=False, stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE, env=environment, timeout=120)
+    except subprocess.TimeoutExpired:
+        raise AssertionError("Synthetic universal fixture compilation timed out after 120 seconds.") from None
+    except OSError as error:
+        raise AssertionError(f"Synthetic universal fixture compiler could not start (OS error {error.errno}).") from None
+    if result.returncode:
+        # Only the no-secrets compiler for this fixed synthetic C source gets
+        # bounded stderr. Signing/hdiutil diagnostics remain fixed-label-only.
+        # repr escapes newlines and terminal controls into one inert log line.
+        diagnostic = repr(result.stderr[:4096].decode("utf-8", errors="backslashreplace"))[:4096]
+        raise AssertionError(f"Synthetic universal fixture compilation failed (exit {result.returncode}); "
+                             f"bounded compiler stderr: {diagnostic}")
 
 
 class Inputs(unittest.TestCase):
@@ -594,6 +620,47 @@ class DmgSafety(unittest.TestCase):
         self.assertIn("if: always()\n        run: python3 Scripts/preview-release.py cleanup", workflow)
 
 
+class NativeFixtureCompilation(unittest.TestCase):
+    def test_compiler_reopens_source_file_for_both_architectures(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            result = subprocess.CompletedProcess([], 0, stdout=b"", stderr=b"")
+            hidden = {key: "synthetic-sensitive-value" for key in
+                      (*release.SECRET_NAMES, "GH_TOKEN", "GITHUB_TOKEN", "ACTIONS_RUNTIME_TOKEN", "UNREVIEWED_VARIABLE")}
+            allowed = {"PATH": "/usr/bin:/bin", "DEVELOPER_DIR": "/Applications/SyntheticXcode.app/Contents/Developer"}
+            with patch.dict(os.environ, hidden | allowed, clear=True), patch.object(subprocess, "run", return_value=result) as compiler:
+                compile_native_fixture(root, root / "MoeKit")
+            arguments = compiler.call_args.args[0]
+            self.assertEqual(arguments, ["/usr/bin/xcrun", "clang", "-arch", "arm64", "-arch", "x86_64",
+                                         "-mmacosx-version-min=15.0", str(root / "fixture.c"), "-o", str(root / "MoeKit")])
+            self.assertEqual((root / "fixture.c").read_text(), "int main(void) { return 0; }\n")
+            self.assertNotIn("input", compiler.call_args.kwargs)
+            self.assertEqual(compiler.call_args.kwargs["stdin"], subprocess.DEVNULL)
+            self.assertEqual(compiler.call_args.kwargs["env"], allowed)
+            self.assertEqual(compiler.call_args.kwargs["timeout"], 120)
+
+    def test_failure_reports_bounded_inert_compiler_stderr_only(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            result = subprocess.CompletedProcess([], 1, stdout=b"DO-NOT-REPORT-STDOUT",
+                                                 stderr=b"ld: undefined symbol: _main\n\x1b[31m" + b"x" * 9000)
+            with patch.object(subprocess, "run", return_value=result), self.assertRaises(AssertionError) as failure:
+                compile_native_fixture(Path(temporary), Path(temporary) / "MoeKit")
+            message = str(failure.exception)
+            self.assertIn("exit 1", message)
+            self.assertIn("undefined symbol: _main", message)
+            self.assertLessEqual(len(message), 4200)
+            self.assertNotIn("\n", message)
+            self.assertNotIn("\x1b", message)
+            self.assertNotIn("DO-NOT-REPORT-STDOUT", message)
+
+    def test_timeout_does_not_dump_command_or_captured_streams(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            error = subprocess.TimeoutExpired(["synthetic-command"], 120, stderr=b"withheld output")
+            with patch.object(subprocess, "run", side_effect=error), self.assertRaises(AssertionError) as failure:
+                compile_native_fixture(Path(temporary), Path(temporary) / "MoeKit")
+            self.assertEqual(str(failure.exception), "Synthetic universal fixture compilation timed out after 120 seconds.")
+
+
 @unittest.skipUnless(sys.platform == "darwin", "Native hdiutil/universal signing integration requires macOS; no app execution")
 class NativeDmgIntegration(unittest.TestCase):
     def test_universal_fixture_round_trips_signed_zip_and_readonly_dmg(self):
@@ -607,12 +674,7 @@ class NativeDmgIntegration(unittest.TestCase):
                 app = temporary / "MoeKit.app"
                 (app / "Contents/MacOS").mkdir(parents=True)
                 (app / "Contents/Info.plist").write_bytes(plistlib.dumps(valid_plist()))
-                environment = {key: value for key, value in os.environ.items()
-                               if key not in (*release.SECRET_NAMES, "GH_TOKEN", "GITHUB_TOKEN")}
-                subprocess.run(["/usr/bin/xcrun", "clang", "-arch", "arm64", "-arch", "x86_64",
-                                "-mmacosx-version-min=15.0", "-x", "c", "-", "-o", str(app / "Contents/MacOS/MoeKit")],
-                               input=b"int main(void) { return 0; }\n", check=True,
-                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=environment, timeout=120)
+                compile_native_fixture(temporary, app / "Contents/MacOS/MoeKit")
                 release.run("/usr/bin/codesign", "--force", "--sign", "-", "--options", "runtime",
                             "--timestamp=none", str(app), operation="codesign-sign")
                 release.verify_app(app, context)

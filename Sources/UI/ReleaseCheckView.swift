@@ -21,7 +21,6 @@ struct ReleaseCheckView: View {
             }
             Section {
                 VStack(alignment: .leading, spacing: 8) { result }
-                    .installerCaptureIdentity("updates.result", text: "Release check result")
                 if let date = updates.checkedAt {
                     LabeledContent("Checked", value: date.formatted(date: .abbreviated, time: .standard))
                         .font(.caption).foregroundStyle(.secondary)
@@ -53,18 +52,26 @@ struct ReleaseCheckView: View {
     @ViewBuilder private var result: some View {
         switch updates.state {
         case .idle: Text("Ready to check for a newer release.")
+                .installerCaptureIdentity("updates.result", text: "Release check result")
         case .checking: ProgressView("Checking GitHub…")
+                .installerCaptureIdentity("updates.result", text: "Release check result")
         case .cancelled: Text("Update check cancelled.")
+                .installerCaptureIdentity("updates.result", text: "Release check result")
         case .noReleases: Text("No supported releases were found for this channel.")
+                .installerCaptureIdentity("updates.result", text: "Release check result")
         case .failed(let message): Label(message, systemImage: "exclamationmark.triangle").textSelection(.enabled)
+                .installerCaptureIdentity("updates.result", text: "Release check result")
         case .available(let release):
             Label("A newer release is available: \(release.version.description)", systemImage: "arrow.down.circle")
+                .installerCaptureIdentity("updates.result", text: "Release check result")
             Link("View release and download", destination: release.pageURL)
                 .installerCaptureIdentity("updates.download", text: String(localized: "View release and download"))
         case .current(let version):
             Label("No release newer than \(version.description) was found in this channel.", systemImage: "checkmark.circle")
+                .installerCaptureIdentity("updates.result", text: "Release check result")
         case .latestForDevelopment(let release):
             Text("Latest published release: \(release.version.description)")
+                .installerCaptureIdentity("updates.result", text: "Release check result")
             Text("A development build cannot be compared with a published release.")
                 .font(.caption).foregroundStyle(.secondary)
             Link("View release and download", destination: release.pageURL)

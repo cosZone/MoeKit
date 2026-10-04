@@ -14,6 +14,88 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  universal-archive:
+    name: Unsigned universal archive
+    runs-on: macos-15
+    timeout-minutes: 20
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+        with:
+          version: '2026.3.10'
+      - name: Generate the exact source with pinned tools
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$(tuist version)" = '4.148.3'
+          test "$(xcodebuild -version | head -1)" = 'Xcode 16.4'
+          tuist generate --no-open
+      - name: Archive both architectures with script sandboxing enabled
+        run: |
+          set -euo pipefail
+          args=(archive -workspace MoeKit.xcworkspace -scheme MoeKit
+                -configuration Release -destination 'generic/platform=macOS'
+                -derivedDataPath DerivedDataArchive -archivePath build/MoeKit.xcarchive
+                'ARCHS=arm64 x86_64' ONLY_ACTIVE_ARCH=NO
+                CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
+                CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY= DEVELOPMENT_TEAM=
+                MARKETING_VERSION=0.1.0 CURRENT_PROJECT_VERSION=1)
+          xcodebuild "${args[@]}" -showBuildSettings -json > ArchiveBuildSettings.json
+          xcodebuild "${args[@]}" | tee ArchiveBuild.log
+      - name: Verify the archive layout with the release validator
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' | tee ArchiveVerification.json
+          import hashlib
+          import importlib.util
+          import json
+          import os
+          from pathlib import Path
+
+          spec = importlib.util.spec_from_file_location("preview_release", "Scripts/preview-release.py")
+          release = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(release)
+          settings = json.loads(Path("ArchiveBuildSettings.json").read_text())
+          app_settings = next(entry["buildSettings"] for entry in settings if entry["target"] == "MoeKit")
+          release.require(app_settings.get("ENABLE_USER_SCRIPT_SANDBOXING") == "YES",
+                          "The archive must preserve script sandboxing.")
+          release.require(app_settings.get("CODE_SIGNING_ALLOWED") == "NO",
+                          "This archive gate must not sign with a certificate.")
+          release.require(app_settings.get("DEPLOYMENT_LOCATION") == "YES" and
+                          app_settings.get("MOLE_SUPERVISOR_SOURCE_DIR") ==
+                          str(Path(app_settings["UNINSTALLED_PRODUCTS_DIR"]) / app_settings["PLATFORM_NAME"]),
+                          "The archive must declare the exact physical helper input.")
+          app = Path("build/MoeKit.xcarchive/Products/Applications/MoeKit.app")
+          release.require(set(app.parent.iterdir()) == {app} and
+                          set(app.parent.parent.iterdir()) == {app.parent},
+                          "The archive must install only MoeKit.app.")
+          release.verify_app(app, {"marketing_version": "0.1.0", "run_number": "1"}, provenance=False)
+          print(json.dumps({"source_sha": os.environ["SOURCE_SHA"],
+                            "script_sandboxing": True,
+                            "architectures_per_code_object": list(release.ARCHITECTURES),
+                            "code_objects": {path: hashlib.sha256((app / path).read_bytes()).hexdigest()
+                                             for path in sorted(release.EXECUTABLE_PATHS)},
+                            "scope": "Unsigned archive layout only; no certificate, launch or publication."}, indent=2))
+          PY
+          git diff --exit-code HEAD --
+      - name: Preserve archive diagnostics without distributing the unsigned app
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: universal-archive-check-${{ env.SOURCE_SHA }}
+          path: |
+            ArchiveBuild.log
+            ArchiveBuildSettings.json
+            ArchiveVerification.json
+          if-no-files-found: ignore
+          retention-days: 14
+
   build-and-test:
     runs-on: macos-15
     timeout-minutes: 25

@@ -44,15 +44,24 @@ let project = Project(
             scripts: [.post(
                 script: """
                 set -eu
-                /bin/cp -p "${BUILT_PRODUCTS_DIR}/MoleAnalysisSupervisor" "${TARGET_BUILD_DIR}/${EXECUTABLE_FOLDER_PATH}/MoleAnalysisSupervisor"
+                /bin/cp -p "${SCRIPT_INPUT_FILE_0}" "${SCRIPT_OUTPUT_FILE_0}"
                 """,
                 name: "Embed verified Mole analysis supervisor",
-                inputPaths: ["$(BUILT_PRODUCTS_DIR)/MoleAnalysisSupervisor"],
+                inputPaths: ["$(MOLE_SUPERVISOR_SOURCE_DIR)/MoleAnalysisSupervisor"],
                 outputPaths: ["$(TARGET_BUILD_DIR)/$(EXECUTABLE_FOLDER_PATH)/MoleAnalysisSupervisor"],
                 basedOnDependencyAnalysis: true
             )],
             dependencies: [.target(name: "MoleAnalysisSupervisor")],
-            settings: .settings(base: ["ASSETCATALOG_COMPILER_APPICON_NAME": "AppIcon", "ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME": ""])
+            settings: .settings(base: [
+                "ASSETCATALOG_COMPILER_APPICON_NAME": "AppIcon",
+                "ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME": "",
+                // Archive/install builds put SKIP_INSTALL helper products behind
+                // a BUILT_PRODUCTS_DIR symlink. Declare the exact physical input
+                // so the build script sandbox can read it without directory grants.
+                "MOLE_SUPERVISOR_SOURCE_DIR": "$(MOLE_SUPERVISOR_SOURCE_DIR_$(DEPLOYMENT_LOCATION))",
+                "MOLE_SUPERVISOR_SOURCE_DIR_NO": "$(BUILT_PRODUCTS_DIR)",
+                "MOLE_SUPERVISOR_SOURCE_DIR_YES": "$(UNINSTALLED_PRODUCTS_DIR)/$(PLATFORM_NAME)",
+            ])
         ),
         .target(
             name: "MoleAnalysisSupervisor",

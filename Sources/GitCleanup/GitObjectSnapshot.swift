@@ -15,7 +15,7 @@ final class GitObjectSnapshot {
     private var binaryDigest = ""
     var provenance: String { version + "|" + binaryDigest }
     init(common: InstallerDirectoryAnchor, temporaryRoot: URL? = nil) throws {
-        let objectDirectory = try common.child("objects")
+        let objectDirectory = try GitCleanupInspectionStage.check("object directory anchor") { try common.child("objects") }
         source = objectDirectory
         let objects = GitCleanupCapture(maximumBytes: 256 * 1_024 * 1_024)
         try GitCleanupInspectionStage.check("object capture") { try objects.collect(objectDirectory) }
@@ -23,13 +23,13 @@ final class GitObjectSnapshot {
               objects.files.keys.allSatisfy(Self.allowedObject) else { throw GitCleanupFailure.unsupported }
         fingerprint = objects.fingerprint
         let temp = (temporaryRoot ?? FileManager.default.temporaryDirectory).resolvingSymlinksInPath()
-        let tempAnchor = try InstallerDirectoryAnchor.open(temp)
+        let tempAnchor = try GitCleanupInspectionStage.check("temporary directory anchor") { try InstallerDirectoryAnchor.open(temp) }
         try GitCleanupInspectionStage.check("temporary ancestry") { try tempAnchor.validateTrustedMutationAncestry() }
         let name = "MoeKit-Git-" + UUID().uuidString
         directory = temp.appendingPathComponent(name, isDirectory: true)
         git = directory.appendingPathComponent("git")
         guard mkdirat(tempAnchor.fd, name, 0o700) == 0 else { throw GitCleanupFailure.helper }
-        privateRoot = try tempAnchor.child(name)
+        privateRoot = try GitCleanupInspectionStage.check("private snapshot anchor") { try tempAnchor.child(name) }
         do {
             try GitCleanupInspectionStage.check("private snapshot root") { try InstallerFileAccess.validatePrivate(privateRoot.fd, directory: true) }
             try Data(name.utf8).write(to: directory.appendingPathComponent(".moekit-owner"), options: .withoutOverwriting)
@@ -73,7 +73,8 @@ final class GitObjectSnapshot {
         } catch {}
     }
     func validateSource() throws {
-        let current = GitCleanupCapture(maximumBytes: 256 * 1_024 * 1_024); try current.collect(source)
+        let current = GitCleanupCapture(maximumBytes: 256 * 1_024 * 1_024)
+        try GitCleanupInspectionStage.check("object recapture") { try current.collect(source) }
         guard current.fingerprint == fingerprint else { throw GitCleanupFailure.changed }
     }
     func treeOID(_ oid: String) throws -> String { try GitCleanupInspection.oid(run(oid, "-")) }
@@ -85,15 +86,16 @@ final class GitObjectSnapshot {
         try GitCleanupInspectionStage.check("private executable namespace") {
             try privateRoot.validate(); try InstallerFileAccess.validatePrivate(privateRoot.fd, directory: true)
         }
-        let executable = try InstallerFileDescriptor(parent: privateRoot, name: "git")
+        let executable = try GitCleanupInspectionStage.check("copied executable anchor") { try InstallerFileDescriptor(parent: privateRoot, name: "git") }
         defer { withExtendedLifetime(executable) {} }
-        let expected = try InstallerFileAccess.snapshot(executable.fd)
+        let expected = try GitCleanupInspectionStage.check("copied executable identity") { try InstallerFileAccess.snapshot(executable.fd) }
         guard expected.mode & UInt32(S_IFMT) == UInt32(S_IFREG), expected.uid == geteuid(), expected.mode & 0o777 == 0o700,
               expected.links == 1, expected.flags == 0 else { throw GitCleanupFailure.helper }
         try GitCleanupInspectionStage.check("executable ACL") { try InstallerFileAccess.rejectMutationGrantingACL(executable.fd) }
         let bytes = try BoundedRegularFileReader.read(descriptor: executable.fd, maximumBytes: 32 * 1_024 * 1_024)
+        let named = try GitCleanupInspectionStage.check("copied executable named identity") { try InstallerFileAccess.snapshotAt(privateRoot.fd, "git") }
         guard SHA256.hash(data: bytes).map({ String(format: "%02x", $0) }).joined() == binaryDigest,
-              expected == (try InstallerFileAccess.snapshotAt(privateRoot.fd, "git")) else { throw GitCleanupFailure.changed }
+              expected == named else { throw GitCleanupFailure.changed }
         guard let helper = Bundle.main.executableURL?.deletingLastPathComponent().appendingPathComponent("GitObjectInspector"),
               FileManager.default.isExecutableFile(atPath: helper.path) else { throw GitCleanupFailure.helper }
         let process = Process()

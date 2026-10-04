@@ -9,12 +9,12 @@ final class GitCleanupStore {
     private(set) var isMutating = false
     private(set) var error: String?
     private(set) var outcome: String?
-    @ObservationIgnored private let executor: NativeGitCleanupExecutor
+    @ObservationIgnored private let executor: any GitCleanupExecuting
     @ObservationIgnored private var generation = UUID()
     @ObservationIgnored private var task: Task<Void, Never>?
     @ObservationIgnored private var permit: GitCleanupPermit?
     @ObservationIgnored var onMutation: (@MainActor (GitCleanupPlan, Bool) -> Void)?
-    init(executor: NativeGitCleanupExecutor = .init()) { self.executor = executor }
+    init(executor: any GitCleanupExecuting = NativeGitCleanupExecutor()) { self.executor = executor }
     func invalidate() {
         generation = UUID(); task?.cancel(); task = nil; permit?.invalidate(); permit = nil
         plan = nil
@@ -36,8 +36,8 @@ final class GitCleanupStore {
             if generation == current { isBusy = false; task = nil }
         }
     }
-    func confirm() {
-        guard !isBusy, let plan else { return }
+    func confirm(planID: UUID? = nil) {
+        guard !isBusy, let plan, plan.id == planID else { return }
         let current = generation, permit = GitCleanupPermit()
         self.permit = permit; self.plan = nil; error = nil; isBusy = true; isMutating = true
         task = Task {
@@ -55,8 +55,8 @@ final class GitCleanupStore {
             if generation == current { task = nil; self.permit = nil }
         }
     }
-    func restore() {
-        guard !isBusy, let receipt else { return }
+    func restore(receiptID: UUID? = nil) {
+        guard !isBusy, let receipt, receipt.id == receiptID else { return }
         let current = generation, permit = GitCleanupPermit()
         self.permit = permit; error = nil; isBusy = true; isMutating = true
         task = Task {

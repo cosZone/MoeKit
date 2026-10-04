@@ -11,7 +11,7 @@ struct GitCleanupView: View {
     @State private var branch = ""
     @State private var stoppedWork = false
     @State private var confirmation = ""
-    @State private var restoreConfirmation = false
+    @State private var restoreTarget: GitCleanupReceipt?
 
     var body: some View {
         let state = workspace.gitCleanup
@@ -44,12 +44,13 @@ struct GitCleanupView: View {
                         Text("Cancelling stops further checks. A running private Git query can take up to 15 seconds to finish or time out.").font(.caption).foregroundStyle(.secondary)
                     }
                     if let error = state.error { Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.orange).textSelection(.enabled) }
-                    if let plan = state.plan {
+                    if let plan = state.plan, matchesCurrentSelection(plan) {
                         Divider()
                         Text("Review this exact operation").font(.headline)
                         LabeledContent("Action", value: plan.request.action.title)
                         LabeledContent("Branch", value: plan.request.branch)
                         Text("Commit: " + plan.targetOID).font(.caption).textSelection(.enabled)
+                        Text("Exact target: " + plan.request.project.path).font(.caption).textSelection(.enabled)
                         Text(plan.gitVersion).font(.caption).foregroundStyle(.secondary)
                         Text("Kept base: " + plan.request.baseBranch + " · " + plan.baseOID).font(.caption).textSelection(.enabled)
                         Text("Recovery: " + plan.recovery.path).font(.caption).textSelection(.enabled)
@@ -63,15 +64,17 @@ struct GitCleanupView: View {
                         TextField("Type the exact branch name to confirm", text: $confirmation)
                         Button(plan.request.action.title, role: .destructive) {
                             guard !workspace.isDemoEnabled, stoppedWork, confirmation == plan.request.branch else { return }
-                            state.confirm(); stoppedWork = false; confirmation = ""
+                            state.confirm(planID: plan.id); stoppedWork = false; confirmation = ""
                         }.disabled(state.isBusy || !stoppedWork || confirmation != plan.request.branch || workspace.isDemoEnabled)
                     }
                     if let outcome = state.outcome { Label(outcome, systemImage: "checkmark.circle").textSelection(.enabled) }
                     if let receipt = state.receipt {
+                        Text("Last operation: " + receipt.plan.request.action.title + " · " + receipt.plan.request.branch).font(.headline)
+                        Text("Original target: " + receipt.plan.request.project.path).font(.caption).textSelection(.enabled)
                         Text(receipt.plan.recovery.path).font(.caption).textSelection(.enabled)
                         HStack {
                             Button("Reveal recovery folder") { NSWorkspace.shared.activateFileViewerSelecting([receipt.plan.recovery]) }
-                            Button("Review restore…") { restoreConfirmation = true }.disabled(state.isBusy || workspace.isDemoEnabled)
+                            Button("Review restore…") { restoreTarget = receipt }.disabled(state.isBusy || workspace.isDemoEnabled)
                         }
                         Text("Restore is available in this session. After restarting, keep the recovery folder and its JSON receipts; they record the original paths and commit. No recovery data is automatically purged.").font(.caption).foregroundStyle(.secondary)
                     }
@@ -88,11 +91,19 @@ struct GitCleanupView: View {
             .onChange(of: baseBranch) { _, _ in state.invalidate() }
             .onChange(of: workspace.isDemoEnabled) { _, _ in state.invalidate(); dismiss() }
             .onDisappear { state.invalidate() }
-            .confirmationDialog("Restore the recorded target to its original location?", isPresented: $restoreConfirmation) {
-                Button("Restore without overwrite") { if !workspace.isDemoEnabled { state.restore() } }
-                Button("Cancel", role: .cancel) {}
+            .confirmationDialog("Restore the recorded target to its original location?", isPresented: Binding(
+                get: { restoreTarget != nil }, set: { if !$0 { restoreTarget = nil } })) {
+                if let target = restoreTarget {
+                    Button("Restore without overwrite") {
+                        if !workspace.isDemoEnabled { state.restore(receiptID: target.id) }
+                        restoreTarget = nil
+                    }
+                }
+                Button("Cancel", role: .cancel) { restoreTarget = nil }
             } message: {
-                Text("Close tools using either location. The original path and Git registration must be absent. Existing files or refs are never overwritten.")
+                if let target = restoreTarget {
+                    Text("Branch: \(target.plan.request.branch)\nOriginal target: \(target.plan.request.project.path)\nRepository: \(target.plan.commonDirectory.path)\nRecovery: \(target.plan.recovery.path)\n\nClose tools using either location. Existing files, refs and registrations are never overwritten.")
+                }
             }
     }
     private func chooseScope() {
@@ -100,5 +111,9 @@ struct GitCleanupView: View {
         let panel = NSOpenPanel(); panel.canChooseDirectories = true; panel.canChooseFiles = false; panel.allowsMultipleSelection = false
         panel.prompt = "Use shared parent"; panel.message = "Choose a parent containing both the main repository and the linked worktree."
         if panel.runModal() == .OK, let url = panel.url { scope = url; workspace.gitCleanup.invalidate() }
+    }
+    private func matchesCurrentSelection(_ plan: GitCleanupPlan) -> Bool {
+        plan.request.project == project && plan.request.scope == scope && plan.request.action == action
+            && plan.request.branch == branch && plan.request.baseBranch == baseBranch
     }
 }

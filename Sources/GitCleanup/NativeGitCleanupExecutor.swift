@@ -3,9 +3,15 @@ import Foundation
 
 enum GitCleanupCheckpoint: Sendable, Equatable { case beforeWorktreeMove, afterWorktreeMove, beforeBranchMove, beforeRestoreMove }
 
+protocol GitCleanupExecuting: Sendable {
+    func prepare(_ request: GitCleanupRequest) async throws -> GitCleanupPlan
+    func execute(_ id: UUID, permit: GitCleanupPermit) async throws -> GitCleanupReceipt
+    func restore(_ id: UUID, permit: GitCleanupPermit) async throws
+}
+
 /// All user-target mutations are same-volume, exclusive renames. There is no
 /// recursive deletion, force flag, shell, Git worktree remove, or Git branch -D.
-actor NativeGitCleanupExecutor {
+actor NativeGitCleanupExecutor: GitCleanupExecuting {
     private var prepared: GitCleanupPlan?
     private var preparedCatalog: InstallerCatalogSnapshot?
     private var preparedDeadline: TimeInterval?

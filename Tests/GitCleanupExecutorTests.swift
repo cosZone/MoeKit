@@ -634,7 +634,7 @@ struct GitCleanupExecutorTests {
         #expect(throws: (any Error).self) { _ = try InstallerDirectoryAnchor.open(alias) }
         let snapshot = try GitObjectSnapshot(common: InstallerDirectoryAnchor.open(fixture.common), temporaryRoot: alias)
         defer { snapshot.remove() }
-        #expect(snapshot.directory.deletingLastPathComponent() == temporary)
+        #expect(snapshot.directory.deletingLastPathComponent().path == temporary.path)
         #expect(!snapshot.version.isEmpty)
         try fixture.assertNoRecovery()
     }

@@ -77,7 +77,8 @@ final class WorkspaceStore {
          reportImporter: any WorkspaceReportImporting = MoleReportImporter(),
          toolPreparation: ToolPreparationStore? = nil,
          moleAnalysis: MoleAnalysisStore? = nil,
-         installerTrash: InstallerTrashStore? = nil) {
+         installerTrash: InstallerTrashStore? = nil,
+         gitCleanup: GitCleanupStore? = nil) {
         self.isDemoEnabled = isDemoEnabled
         self.persistence = persistence
         self.gettingStarted = gettingStarted
@@ -85,7 +86,7 @@ final class WorkspaceStore {
         self.reportImporter = reportImporter
         self.moleAnalysis = moleAnalysis ?? MoleAnalysisStore()
         self.installerTrash = installerTrash ?? InstallerTrashStore()
-        self.gitCleanup = GitCleanupStore()
+        self.gitCleanup = gitCleanup ?? GitCleanupStore()
         // Construct the MainActor model in this initializer, not in a nested
         // actor-isolated default argument inside SwiftUI State initialization.
         let preparation = toolPreparation ?? ToolPreparationStore()
@@ -102,7 +103,9 @@ final class WorkspaceStore {
                     self.projects.append(plan.request.project)
                 }
             } else { self.projects.removeAll { $0.id == plan.request.project.id } }
-            self.saveCatalog()
+            // A real operation past its first move must finish bookkeeping even
+            // if Demo was opened meanwhile. This never persists Demo fixtures.
+            self.persistRealCatalog()
         }
         do { projects = try persistence.load() }
         catch {
@@ -386,9 +389,12 @@ final class WorkspaceStore {
     }
     private func saveCatalog() {
         guard !isDemoEnabled else { return }
+        persistRealCatalog()
+    }
+    private func persistRealCatalog() {
         guard catalogIsWritable else {
             catalogWarning = String(localized: "The existing catalog could not be read. Changes are temporary until the catalog is recovered; the original file was not overwritten.")
-            errorMessage = catalogWarning
+            if !isDemoEnabled { errorMessage = catalogWarning }
             return
         }
         do {
@@ -400,7 +406,7 @@ final class WorkspaceStore {
             // filesystem errors can contain user paths and are never displayed.
             catalogWarning = (error as? CatalogPersistence.CatalogError)?.errorDescription
                 ?? String(localized: "Changes could not be saved. They are temporary; check available disk space and folder access, then try again.")
-            errorMessage = catalogWarning
+            if !isDemoEnabled { errorMessage = catalogWarning }
         }
     }
     private func finishTask(_ id: UUID, status: TaskStatus, summary: String, items: [TaskItemResult] = [], diagnostics: String = "") {

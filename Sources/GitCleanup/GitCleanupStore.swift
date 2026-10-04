@@ -43,13 +43,7 @@ final class GitCleanupStore {
         task = Task {
             do {
                 let result = try await executor.execute(plan.id, permit: permit)
-                // An operation already past its first rename finishes safely even
-                // if navigation changes. Preserve its result without reviving a plan.
-                receipt = result
-                outcome = plan.request.action == .retireWorktree
-                    ? "Worktree retired. Its branch and all files are retained in the recovery folder. Disk space has not been reclaimed."
-                    : "Local branch removed. Its previous ref is retained for restore; no remote branch was changed."
-                onMutation?(plan, false)
+                await completeMutation(plan, receipt: result)
             } catch { self.error = error.localizedDescription }
             isMutating = false; isBusy = false
             if generation == current { task = nil; self.permit = nil }
@@ -62,11 +56,31 @@ final class GitCleanupStore {
         task = Task {
             do {
                 try await executor.restore(receipt.id, permit: permit)
-                self.receipt = nil; outcome = "Restored to the original location without overwriting an existing target."
-                onMutation?(receipt.plan, true)
+                await completeMutation(receipt.plan, receipt: nil)
             } catch { self.error = error.localizedDescription }
             isMutating = false; isBusy = false
             if generation == current { task = nil; self.permit = nil }
         }
+    }
+
+    private func completeMutation(_ plan: GitCleanupPlan, receipt: GitCleanupReceipt?) async {
+        // This unstructured MainActor task does not inherit cancellation. Only a
+        // confirmed final executor result reaches it; it grants no new mutation
+        // authority. A completed move still needs catalog bookkeeping when its
+        // original task was cancelled after mutation started.
+        await Task { @MainActor in
+            // Updating the catalog invalidates cleanup context. Detach the old
+            // operation first so that callback cannot cancel its own persistence.
+            task = nil; permit = nil
+            self.receipt = receipt
+            if receipt == nil {
+                outcome = "Restored to the original location without overwriting an existing target."
+            } else {
+                outcome = plan.request.action == .retireWorktree
+                    ? "Worktree retired. Its branch and all files are retained in the recovery folder. Disk space has not been reclaimed."
+                    : "Local branch removed. Its previous ref is retained for restore; no remote branch was changed."
+            }
+            onMutation?(plan, receipt == nil)
+        }.value
     }
 }

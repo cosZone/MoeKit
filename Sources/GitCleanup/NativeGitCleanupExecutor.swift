@@ -48,8 +48,9 @@ actor NativeGitCleanupExecutor: GitCleanupExecuting {
         let lease = try InstallerCatalogLease(app: InstallerDirectoryAnchor.open(catalogDirectory))
         defer { withExtendedLifetime(lease) {} }
         try GitCleanupInspectionStage.check("catalog lease") { try lease.requireSnapshot(catalog) }
-        // No cancellation after the first mutation: finish the bounded pair or
-        // leave an explicit recovery record. Cancellation never triggers deletion.
+        // Once namespace changes start, finish the bounded pair or retain an
+        // explicit recovery record. Bounded read checks may still observe Task
+        // cancellation; the partial path never triggers deletion or retry.
         let recoveryRoot = try ensurePrivateChild(fresh.common, "moekit-recovery")
         guard mkdirat(recoveryRoot.fd, id.uuidString, 0o700) == 0 else { throw GitCleanupFailure.occupied }
         guard fsync(fresh.common.fd) == 0, fsync(recoveryRoot.fd) == 0 else { throw GitCleanupFailure.changed }

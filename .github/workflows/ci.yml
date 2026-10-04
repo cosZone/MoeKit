@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   installer-idle-probe:
-    name: Native idle-use probe (clean Intel runner)
+    name: Native idle-use evidence (positive or verified refusal)
     runs-on: macos-15-intel
     timeout-minutes: 10
     permissions:
@@ -31,18 +31,8 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
-      - name: Compile and run the actual provider before Xcode test services
-        run: |
-          set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
-          test "$(uname -m)" = x86_64
-          mkdir -m 700 InstallerIdleEvidence
-          build_dir=$(mktemp -d "$RUNNER_TEMP/MoeKit-idle-probe.XXXXXX")
-          swiftc -swift-version 6 -parse-as-library -target x86_64-apple-macosx15.0 \
-            Sources/Installer/InstallerUseEvidence.swift Scripts/InstallerIdleProbe.swift \
-            -framework OpenDirectory -o "$build_dir/moekit-installer-idle-probe"
-          "$build_dir/moekit-installer-idle-probe" | tee InstallerIdleProbe.log
-          python3 Scripts/verify-installer-fixture-evidence.py --directory InstallerIdleEvidence --source-sha "$SOURCE_SHA" --kinds idle-use
+      - name: Verify actual current eligibility or explicit source-bound unsupported evidence
+        run: python3 Scripts/run-installer-idle-probe.py
       - name: Preserve exact-commit idle-use proof and diagnostics
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -51,6 +41,7 @@ jobs:
           path: |
             InstallerIdleEvidence/
             InstallerIdleProbe.log
+            InstallerIdleInvocation.json
           if-no-files-found: ignore
           retention-days: 14
 
@@ -164,6 +155,7 @@ jobs:
           python3 Scripts/test-ui-render-artifacts.py
           python3 Scripts/test-mole-supervisor.py
           python3 Scripts/test-installer-fixture-evidence.py
+          python3 Scripts/test-installer-conditional-evidence.py
           xcodebuild -version
           xcodebuild -help > XcodeHelp.txt 2>&1
           grep -F -- '-testLanguage' XcodeHelp.txt

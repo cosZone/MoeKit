@@ -29,6 +29,7 @@ enum InstallerIdleProbe {
                 await printHandleStageDiagnostics(fixture: fixture, target: target)
                 let deadline = ProcessInfo.processInfo.systemUptime + 25
                 var latest = "No complete observation finished."
+                var hadOtherUnavailable = false
                 var duplicate = fcntl(fixture.fd, F_DUPFD_CLOEXEC, 0)
                 guard duplicate >= 0 else { throw ProbeFailure("The owned positive-control descriptor could not be duplicated.") }
                 defer { if duplicate >= 0 { close(duplicate) } }
@@ -38,10 +39,20 @@ enum InstallerIdleProbe {
                     let remaining = deadline - ProcessInfo.processInfo.systemUptime
                     guard remaining > 0 else { break }
                     let provider = NativeInstallerUseEvidenceProvider(maximumDuration: min(8, remaining))
-                    switch await provider.evidence(for: target) {
+                    let fullEvidence = await provider.evidence(for: target)
+                    switch fullEvidence {
                     case .observedUse: observed = true
                     case .noUseObserved: throw ProbeFailure("The actual provider missed the unexcluded owned duplicate descriptor.")
-                    case .unavailable(let reason): latest = reason
+                    case .unavailable(let reason):
+                        if !hadOtherUnavailable, env["MOEKIT_INSTALLER_CONDITIONAL_IDLE"] == "1",
+                           fullEvidence == .unavailable(reason: InstallerUseEvidence.attachedImageLimitation) {
+                            close(duplicate); duplicate = -1
+                            try await recordUnsupportedEnvironment(fixture: fixture, target: target, directory: evidence,
+                                                                   sha: sha, fullEvidence: fullEvidence)
+                            exit(3) // Distinct unsupported status; never full current eligibility.
+                        }
+                        latest = reason
+                        hadOtherUnavailable = true
                     }
                     try fixture.validate()
                     if observed { break }
@@ -57,10 +68,19 @@ enum InstallerIdleProbe {
                     let remaining = deadline - ProcessInfo.processInfo.systemUptime
                     guard remaining > 0 else { break }
                     let provider = NativeInstallerUseEvidenceProvider(maximumDuration: min(8, remaining))
-                    switch await provider.evidence(for: target) {
+                    let fullEvidence = await provider.evidence(for: target)
+                    switch fullEvidence {
                     case .noUseObserved: accepted = true
                     case .observedUse(let reason): throw ProbeFailure("Unexpected use of the owned fixture: \(reason)")
-                    case .unavailable(let reason): latest = reason
+                    case .unavailable(let reason):
+                        if !hadOtherUnavailable, env["MOEKIT_INSTALLER_CONDITIONAL_IDLE"] == "1",
+                           fullEvidence == .unavailable(reason: InstallerUseEvidence.attachedImageLimitation) {
+                            try await recordUnsupportedEnvironment(fixture: fixture, target: target, directory: evidence,
+                                                                   sha: sha, fullEvidence: fullEvidence)
+                            exit(3)
+                        }
+                        latest = reason
+                        hadOtherUnavailable = true
                     }
                     try fixture.validate()
                     if accepted { break }
@@ -148,14 +168,88 @@ enum InstallerIdleProbe {
     }
 
     private static func recordEvidence(directory: ProbeDirectory, sha: String, source: ProbeSnapshot) throws {
-        try directory.validate()
-        try directory.requirePrivate()
         let record: [String: Any] = ["schema": 1, "kind": "idle-use", "sourceSHA": sha, "detail": [
             "result": "noUseObserved", "sourceDevice": String(source.device), "sourceInode": String(source.inode), "observedUseControl": "true"
         ]]
+        try writeEvidence(record, directory: directory, filename: "idle-use.json")
+    }
+
+    /// Current refusal is a different result and filename from positive proof.
+    /// A separate source/recipe-bound verifier must validate historical proof;
+    /// this method cannot emit the positive artifact or return success exit0.
+    private static func recordUnsupportedEnvironment(fixture: ProbeFixture, target: InstallerUseTarget,
+        directory: ProbeDirectory, sha: String, fullEvidence: InstallerUseEvidence) async throws {
+        guard fullEvidence == .unavailable(reason: InstallerUseEvidence.attachedImageLimitation) else {
+            throw ProbeFailure("Only an exact actual attached-image refusal can enter conditional verification.")
+        }
+        let env = ProcessInfo.processInfo.environment
+        guard let providerDigest = env["MOEKIT_INSTALLER_PROVIDER_SHA256"],
+              let recipeDigest = env["MOEKIT_INSTALLER_COMPILER_CONTRACT_SHA256"],
+              [providerDigest, recipeDigest].allSatisfy({ $0.count == 64 && $0.utf8.allSatisfy({ (48...57).contains($0) || (97...102).contains($0) }) }) else {
+            throw ProbeFailure("Conditional evidence requires a verified provider and compiler contract.")
+        }
+        try fixture.validate()
+        let before = try await completeNonemptyInventory()
+        var duplicate = fcntl(fixture.fd, F_DUPFD_CLOEXEC, 0)
+        guard duplicate >= 0 else { throw ProbeFailure("The fresh conditional positive-control handle could not be created.") }
+        defer { if duplicate >= 0 { close(duplicate) } }
+        let deadline = ProcessInfo.processInfo.systemUptime + 25
+        let positive = try await retryHandleDiagnostic(fixture: fixture, target: target, deadline: deadline)
+        guard case .observedHandleUse = positive else { throw ProbeFailure("Fresh conditional handle-positive observation failed.") }
+        close(duplicate); duplicate = -1
+        let negative = try await retryHandleDiagnostic(fixture: fixture, target: target, deadline: deadline)
+        guard negative == .noHandleUseObserved else { throw ProbeFailure("Fresh complete conditional handle-negative observation failed.") }
+        let after = try await completeNonemptyInventory()
+        guard NSArray(array: before).isEqual(to: after) else {
+            throw ProbeFailure("The complete unsupported image inventory changed during fresh handle controls.")
+        }
+        try fixture.validate()
+        let source = fixture.initial
+        try fixture.remove()
+        let record: [String: Any] = ["schema": 1, "kind": "idle-use-unsupported-environment", "sourceSHA": sha,
+            "providerSHA256": providerDigest, "compilerContractSHA256": recipeDigest,
+            "detail": ["result": "unsupported-current-environment", "fullProviderResult": "unavailable-attached-images",
+                       "fullProviderReason": InstallerUseEvidence.attachedImageLimitation,
+                       "handlePositiveControl": "observedHandleUse", "handleNegativeControl": "noHandleUseObserved",
+                       "inventoryBeforeCount": String(before.count), "inventoryAfterCount": String(after.count),
+                       "inventoryStable": "true", "fixtureCleanup": "verified", "priorIdenticalSourcePositiveRequired": "true",
+                       "sourceDevice": String(source.device), "sourceInode": String(source.inode)]]
+        try writeEvidence(record, directory: directory, filename: "idle-use-unsupported-environment.json")
+        print("Unsupported current environment: stable nonempty images and exact full-provider refusal; fresh handle controls passed. Current noUseObserved was NOT established. Prior identical-source positive verification is required.")
+    }
+
+    private static func completeNonemptyInventory() async throws -> [[String: Any]] {
+        let data = try await InstallerDiskImageInventory.shared.read(deadline: ProcessInfo.processInfo.systemUptime + 8)
+        guard !data.isEmpty, data.count <= InstallerDiskImageInventory.maximumOutput,
+              let root = try PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any],
+              let records = root["images"] as? [[String: Any]], !records.isEmpty, records.count <= 64 else {
+            throw ProbeFailure("Conditional verification requires a complete bounded nonempty image inventory.")
+        }
+        var sources: Set<String> = []
+        for record in records {
+            guard let path = record["image-path"] as? String, path.hasPrefix("/"), !path.utf8.contains(0), path.utf8.count < Int(PATH_MAX),
+                  sources.insert(path).inserted, let entities = record["system-entities"] as? [[String: Any]],
+                  !entities.isEmpty, entities.count <= 32 else { throw ProbeFailure("A partial image record prevents conditional verification.") }
+            var devices: Set<String> = []
+            for entity in entities {
+                guard let device = entity["dev-entry"] as? String, safeDevice(device) == device,
+                      devices.insert(device).inserted else { throw ProbeFailure("An incomplete or duplicate image device prevents conditional verification.") }
+                if let value = entity["mount-point"] {
+                    guard let path = value as? String, path.hasPrefix("/"), !path.utf8.contains(0), path.utf8.count < Int(PATH_MAX) else {
+                        throw ProbeFailure("An invalid mounted-image record prevents conditional verification.")
+                    }
+                }
+            }
+        }
+        return records
+    }
+
+    private static func writeEvidence(_ record: [String: Any], directory: ProbeDirectory, filename: String) throws {
+        try directory.validate()
+        try directory.requirePrivate()
         let bytes = try JSONSerialization.data(withJSONObject: record, options: [.sortedKeys])
         guard bytes.count < 8192 else { throw ProbeFailure("The runtime evidence exceeds its byte budget.") }
-        let fd = openat(directory.fd, "idle-use.json", O_RDWR | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0o600)
+        let fd = openat(directory.fd, filename, O_RDWR | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0o600)
         guard fd >= 0 else { throw ProbeFailure("Runtime evidence could not be exclusively created.") }
         defer { close(fd) }
         guard bytes.withUnsafeBytes({ write(fd, $0.baseAddress, $0.count) }) == bytes.count, fsync(fd) == 0 else {
@@ -163,7 +257,7 @@ enum InstallerIdleProbe {
         }
         let snapshot = try ProbeSnapshot.read(fd)
         guard snapshot.regular, snapshot.links == 1, snapshot.uid == geteuid(), snapshot.mode & 0o777 == 0o600,
-              snapshot == (try ProbeSnapshot.at(directory.fd, "idle-use.json")) else {
+              snapshot == (try ProbeSnapshot.at(directory.fd, filename)) else {
             throw ProbeFailure("Runtime evidence identity or permissions changed.")
         }
         try requireBytes(fd, expected: bytes)

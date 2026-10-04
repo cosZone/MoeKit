@@ -49,7 +49,10 @@ final class InstallerTrashViewTests: XCTestCase {
                 hosting.sizingOptions = []; hosting.frame = NSRect(origin: .zero, size: size); hosting.appearance = appearance
                 let window = NSWindow(contentRect: hosting.frame, styleMask: [.titled, .resizable], backing: .buffered, defer: false)
                 window.isReleasedWhenClosed = false; window.appearance = appearance; window.contentView = hosting
-                defer { window.contentView = nil; window.close() }
+                defer { window.orderOut(nil); window.contentView = nil; window.close() }
+                // A hidden NSWindow need not populate SwiftUI's accessibility
+                // hierarchy. Order only this synthetic owned window.
+                window.orderFront(nil)
                 for _ in 0..<5 { hosting.layoutSubtreeIfNeeded(); try await Task.sleep(for: .milliseconds(50)); window.setContentSize(size) }
                 // The last setContentSize above can leave layout/display
                 // invalidated. Flush that final size before raster capture.
@@ -58,12 +61,14 @@ final class InstallerTrashViewTests: XCTestCase {
                 resetScrollOrigins(in: hosting)
                 hosting.layoutSubtreeIfNeeded()
                 hosting.displayIfNeeded()
-                let frameEvidence = try verifyRequiredFrames(in: hosting, window: window, scenario: scenario)
+                XCTAssertTrue(window.isVisible)
+                let name = "installer-\(scenario)-\(language)-\(dark ? "dark" : "light")-720x1600"
+                let frameEvidence = try await verifyRequiredFrames(in: hosting, window: window, scenario: scenario, store: store, name: name)
+                hosting.displayIfNeeded()
                 let bitmap = try XCTUnwrap(hosting.bitmapImageRepForCachingDisplay(in: hosting.bounds))
                 appearance.performAsCurrentDrawingAppearance { hosting.cacheDisplay(in: hosting.bounds, to: bitmap) }
                 let png = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
                 let attachment = XCTAttachment(data: png, uniformTypeIdentifier: "public.png")
-                let name = "installer-\(scenario)-\(language)-\(dark ? "dark" : "light")-720x1600"
                 attachment.name = name + ".png"
                 attachment.lifetime = .keepAlways; add(attachment)
                 XCTAssertGreaterThan(png.count, 1000)
@@ -81,7 +86,7 @@ final class InstallerTrashViewTests: XCTestCase {
                 Attestation title: \(String(localized: "I have finished installing and using this disk image"))
                 Unknown recovery title: \(String(localized: "Recovery record unavailable; outcome unknown"))
                 Mutation calls: \(mutationCount)
-                Required heading/action frames inside capture: \(frameEvidence.count)
+                Required identified content/control frames inside capture: \(frameEvidence.count)
                 \(frameEvidence.joined(separator: "\n"))
                 Scope: owned installer view with synthetic paths and receipts only.
                 Scenario: \(scenario). No native executor, process inspection, disk-image inventory or real file moves.
@@ -94,42 +99,136 @@ final class InstallerTrashViewTests: XCTestCase {
         }
     }
 
-    /// Read frame metadata from this owned view only. This is a geometric
-    /// capture check, not keyboard navigation or VoiceOver acceptance.
-    @MainActor private func verifyRequiredFrames(in hosting: NSView, window: NSWindow, scenario: String) throws -> [String] {
-        var labels = [String(localized: "Downloaded disk image"), String(localized: "Read recovery records")]
+    private struct CaptureRequirement {
+        let id: String
+        var exactPath: String? = nil
+    }
+
+    /// Identifiers refer to existing displayed content, not localized Label
+    /// composition. These requirements are identical in en and zh-Hans runs.
+    @MainActor private func captureRequirements(scenario: String, store: InstallerTrashStore) -> [CaptureRequirement] {
+        var requirements = [CaptureRequirement(id: "installer.heading"), .init(id: "installer.recovery.read")]
+        func require(_ prefix: String, _ suffixes: [String]) {
+            requirements += suffixes.map { .init(id: prefix + "." + $0) }
+        }
+        func requirePath(_ id: String, _ url: URL) {
+            requirements.append(.init(id: id, exactPath: InstallerPathDisplay.quoted(url.path)))
+        }
+        func requireStorage(_ prefix: String, _ operation: URL) {
+            let root = operation.deletingLastPathComponent()
+            requirePath(prefix + ".parent-path", root.deletingLastPathComponent())
+            requirePath(prefix + ".recovery-root-path", root)
+            requirePath(prefix + ".operation-lock-path", root.appendingPathComponent("operations.lock"))
+            requirePath(prefix + ".catalog-lock-path", root.deletingLastPathComponent().appendingPathComponent("projects.json.lock"))
+            requirePath(prefix + ".journal-path", operation)
+        }
         switch scenario {
         case "trash-confirmation":
-            labels += [String(localized: "Confirm native macOS Trash"), String(localized: "I have finished installing and using this disk image"),
-                       String(localized: "Move this file to Trash"), String(localized: "Cancel plan")]
+            require("installer.trash", ["heading", "effects", "lock-effects", "journal-effects", "inventory-effects", "scope-effects",
+                                        "attestation", "confirm", "cancel"])
+            if let plan = store.plan {
+                requirePath("installer.trash.original-path", plan.originalURL)
+                requirePath("installer.trash.staging-path", plan.recoveryURL.appendingPathComponent(plan.originalURL.lastPathComponent))
+                requireStorage("installer.trash", plan.recoveryURL)
+                requirePath("installer.trash.record-path", plan.recoveryURL.appendingPathComponent("000000.json"))
+            } else { XCTFail("Trash render must retain its confirmation plan") }
+            XCTAssertEqual(requirements.count, 19)
         case "restore-confirmation":
-            labels += [String(localized: "Confirm original-path restore"), String(localized: "Restore to original path"), String(localized: "Cancel plan")]
+            require("installer.restore", ["heading", "effects", "lock-effects", "confirm", "cancel"])
+            if let plan = store.restorePlan {
+                requirePath("installer.restore.source-path", plan.sourceURL)
+                requirePath("installer.restore.destination-path", plan.receipt.originalURL)
+                requirePath("installer.restore.staging-path", plan.receipt.operationURL.appendingPathComponent("restore.dmg"))
+                requireStorage("installer.restore", plan.receipt.operationURL)
+                requirePath("installer.restore.record-path", plan.receipt.operationURL.appendingPathComponent(String(format: "%06d.json", plan.receipt.sequence + 1)))
+            } else { XCTFail("Restore render must retain its confirmation plan") }
+            XCTAssertEqual(requirements.count, 16)
         case "incomplete-recovery":
-            labels += [String(localized: "Recovery record unavailable; outcome unknown"), String(localized: "Reveal validated recovery location")]
-        default: break
+            require("installer.recovery", ["unknown", "effects", "reveal"])
+            if let item = store.recoveryItems.first { requirePath("installer.recovery.operation-path", item.operationURL) }
+            else { XCTFail("Incomplete recovery render must retain its record") }
+            XCTAssertEqual(requirements.count, 6)
+        default: XCTAssertEqual(requirements.count, 2)
         }
+        return requirements
+    }
+
+    /// Read metadata from this owned view only. Exact identifiers, displayed
+    /// escaped paths and viewport containment are affirmative capture evidence;
+    /// this does not establish keyboard navigation or VoiceOver acceptance.
+    @MainActor private func verifyRequiredFrames(in hosting: NSView, window: NSWindow, scenario: String, store: InstallerTrashStore, name: String) async throws -> [String] {
+        let requirements = captureRequirements(scenario: scenario, store: store)
+        var elements: [any NSAccessibilityProtocol] = []
+        var wasTruncated = false
+        for _ in 0..<10 {
+            hosting.layoutSubtreeIfNeeded()
+            let snapshot = accessibleElements(in: hosting)
+            elements = snapshot.elements; wasTruncated = snapshot.truncated
+            if requirements.allSatisfy({ requirement in elements.contains { $0.accessibilityIdentifier() == requirement.id && validCaptureFrame($0.accessibilityFrame()) } }) { break }
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        let captured = window.convertToScreen(hosting.convert(hosting.bounds, to: nil))
+        let tree = elements.map { element in
+            let content = captureText(element).map { InstallerPathDisplay.quoted(String($0.prefix(1_024))) }.joined(separator: " | ")
+            return "\(String(describing: type(of: element))) | id=\(element.accessibilityIdentifier() ?? "") | role=\(element.accessibilityRole()?.rawValue ?? "") | text=\(content) | frame=\(NSStringFromRect(element.accessibilityFrame()))"
+        }
+        let diagnostic = XCTAttachment(string: "Owned synthetic window visible: \(window.isVisible)\nCapture frame: \(NSStringFromRect(captured))\nTree truncated: \(wasTruncated)\n" + tree.joined(separator: "\n"))
+        diagnostic.name = name + "-ax-tree.txt"; diagnostic.lifetime = .keepAlways; add(diagnostic)
+        XCTAssertFalse(wasTruncated, "Owned accessibility tree exceeded the capture-check bound")
+        var evidence: [String] = []
+        for requirement in requirements {
+            let matches = elements.filter { $0.accessibilityIdentifier() == requirement.id && validCaptureFrame($0.accessibilityFrame()) }
+            guard let first = matches.first else {
+                // Fail affirmatively while keeping all screenshots and tree
+                // diagnostics, including the remaining mandatory scenarios.
+                XCTFail("Required capture identifier missing: \(requirement.id); inspect \(name)-ax-tree.txt")
+                continue
+            }
+            // An identifier can be exposed by a Label and its text/icon peers.
+            // Require their entire geometry, never just the smallest child.
+            let frame = matches.dropFirst().reduce(first.accessibilityFrame()) { $0.union($1.accessibilityFrame()) }
+            guard captured.insetBy(dx: -0.5, dy: -0.5).contains(frame) else {
+                XCTFail("Required content outside captured viewport: \(requirement.id), frame \(frame), capture \(captured)")
+                continue
+            }
+            let text = matches.flatMap { captureText($0) }
+            guard text.contains(where: { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) else {
+                XCTFail("Required captured content is empty: \(requirement.id)")
+                continue
+            }
+            if let path = requirement.exactPath, !text.contains(where: { $0.contains(path) }) {
+                XCTFail("Exact escaped path missing from \(requirement.id): \(path)")
+                continue
+            }
+            evidence.append("Captured identifier: \(requirement.id) · screen frame: \(NSStringFromRect(frame))" + (requirement.exactPath.map { " · exact path: " + $0 } ?? ""))
+        }
+        XCTAssertEqual(evidence.count, requirements.count, "Every mandatory content/control must be visible in this capture")
+        return evidence
+    }
+
+    private func validCaptureFrame(_ frame: NSRect) -> Bool {
+        !frame.isEmpty && frame.origin.x.isFinite && frame.origin.y.isFinite && frame.width.isFinite && frame.height.isFinite
+    }
+
+    @MainActor private func captureText(_ element: any NSAccessibilityProtocol) -> [String] {
+        [element.accessibilityLabel(), element.accessibilityTitle(), element.accessibilityValue() as? String,
+         (element.accessibilityValue() as? NSAttributedString)?.string].compactMap { $0 }
+    }
+
+    @MainActor private func accessibleElements(in hosting: NSView) -> (elements: [any NSAccessibilityProtocol], truncated: Bool) {
         var queue: [Any] = [hosting]
         var seen: Set<ObjectIdentifier> = []
         var elements: [any NSAccessibilityProtocol] = []
         while !queue.isEmpty, seen.count < 1_024 {
             let next = queue.removeFirst()
-            guard let element = next as? any NSAccessibilityProtocol else { continue }
-            guard seen.insert(ObjectIdentifier(element)).inserted else { continue }
+            guard let object = next as? NSObject, seen.insert(ObjectIdentifier(object)).inserted else { continue }
+            if let view = object as? NSView { queue += view.subviews }
+            guard let element = object as? any NSAccessibilityProtocol else { continue }
             elements.append(element)
             queue += element.accessibilityChildren() ?? []
+            queue += (element.accessibilityChildrenInNavigationOrder() ?? []).map { $0 as Any }
         }
-        XCTAssertTrue(queue.isEmpty, "Owned accessibility tree exceeded the capture-check bound")
-        let captured = window.convertToScreen(hosting.convert(hosting.bounds, to: nil))
-        var evidence: [String] = []
-        for label in labels {
-            let matches = elements.filter { element in
-                [element.accessibilityLabel(), element.accessibilityTitle(), element.accessibilityValue() as? String].contains(label)
-            }.map { $0.accessibilityFrame() }.filter { !$0.isEmpty && $0.width.isFinite && $0.height.isFinite }
-            let frame = try XCTUnwrap(matches.min(by: { $0.width * $0.height < $1.width * $1.height }), "Required capture element missing: \(label)")
-            XCTAssertTrue(captured.insetBy(dx: -0.5, dy: -0.5).contains(frame), "Required element outside the captured viewport: \(label), frame \(frame), capture \(captured)")
-            evidence.append("Captured element: \(label) · screen frame: \(NSStringFromRect(frame))")
-        }
-        return evidence
+        return (elements, !queue.isEmpty)
     }
 
     /// An initially focused action button can cause an AppKit scroll view to

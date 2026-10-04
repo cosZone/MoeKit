@@ -133,7 +133,7 @@ struct GettingStartedTests {
         defer { try? FileManager.default.removeItem(at: root) }
         let store = WorkspaceStore(isDemoEnabled: false, persistence: CatalogPersistence(directory: root))
         for goal in [.demo, .demo, .processes, .projects, .demo, .projects] as [GettingStartedGoal] {
-            store.showGettingStarted()
+            #expect(store.showGettingStarted())
             store.gettingStarted.selectedGoal = goal
             store.openGettingStartedGoal(goal)
             #expect(store.isDemoEnabled == (goal == .demo))

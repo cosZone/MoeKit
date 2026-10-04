@@ -795,24 +795,63 @@ private final class InstallerMountFixtureCI {
     }
 
     private func run(_ arguments: [String]) throws -> Data {
-        let process = Process(), pipe = Pipe()
+        let process = Process(), stdout = Pipe(), stderr = Pipe()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/hdiutil")
         process.arguments = arguments
         process.environment = ["PATH": "/usr/bin:/bin", "LC_ALL": "C"]
         process.standardInput = FileHandle.nullDevice
-        process.standardOutput = pipe
-        process.standardError = FileHandle.nullDevice
+        process.standardOutput = stdout
+        process.standardError = stderr
+        let readers = [stdout.fileHandleForReading, stderr.fileHandleForReading]
+        defer { for reader in readers { try? reader.close() } }
+        // Drain both streams together so diagnostic stderr can never block the
+        // child behind a full pipe. Memory remains bounded, even on failure.
+        for reader in readers {
+            let flags = fcntl(reader.fileDescriptor, F_GETFL)
+            guard flags >= 0, fcntl(reader.fileDescriptor, F_SETFL, flags | O_NONBLOCK) == 0 else {
+                throw InstallerUseReadError.unavailable("The owned fixture diagnostic pipe could not be configured.")
+            }
+        }
         try process.run()
-        try? pipe.fileHandleForWriting.close()
-        defer { try? pipe.fileHandleForReading.close() }
-        var output = Data(), overflow = false
-        while let bytes = try pipe.fileHandleForReading.read(upToCount: 16_384), !bytes.isEmpty {
-            if bytes.count <= 2 * 1_024 * 1_024 - output.count && !overflow { output.append(bytes) }
-            else { overflow = true }
+        try? stdout.fileHandleForWriting.close()
+        try? stderr.fileHandleForWriting.close()
+        var descriptors = readers.map { pollfd(fd: $0.fileDescriptor, events: Int16(POLLIN | POLLHUP | POLLERR), revents: 0) }
+        var output = Data(), diagnostic = InstallerFixtureCommandDiagnostics()
+        var overflow = false, readFailure = false
+        var exitedAt: TimeInterval?
+        var buffer = [UInt8](repeating: 0, count: 16_384)
+        while descriptors.contains(where: { $0.fd >= 0 }) {
+            if !process.isRunning {
+                if exitedAt == nil { exitedAt = ProcessInfo.processInfo.systemUptime }
+                // A descendant-held diagnostic pipe must not stall this test.
+                if ProcessInfo.processInfo.systemUptime - (exitedAt ?? 0) > 2 { break }
+            }
+            let ready = descriptors.withUnsafeMutableBufferPointer {
+                Darwin.poll($0.baseAddress, nfds_t($0.count), 100)
+            }
+            if ready < 0 {
+                if errno == EINTR { continue }
+                readFailure = true; break
+            }
+            for index in descriptors.indices where descriptors[index].fd >= 0 && descriptors[index].revents != 0 {
+                let count = buffer.withUnsafeMutableBytes { Darwin.read(descriptors[index].fd, $0.baseAddress, $0.count) }
+                if count > 0 {
+                    if index == 0 {
+                        if !overflow && count <= 2 * 1_024 * 1_024 - output.count { output.append(contentsOf: buffer.prefix(count)) }
+                        else { overflow = true }
+                    } else { diagnostic.append(buffer.prefix(count)) }
+                } else if count == 0 { descriptors[index].fd = -1 }
+                else if errno != EINTR && errno != EAGAIN {
+                    readFailure = true; descriptors[index].fd = -1
+                }
+            }
         }
         process.waitUntilExit()
-        guard process.terminationReason == .exit, process.terminationStatus == 0, !overflow else {
-            throw InstallerUseReadError.unavailable("The owned DMG fixture system operation did not complete.")
+        let complete = !descriptors.contains(where: { $0.fd >= 0 }) && !readFailure
+        guard process.terminationReason == .exit, process.terminationStatus == 0, !overflow, complete else {
+            // Only fixed categories and numeric/boolean fields are emitted.
+            // Never expose raw stderr, command arguments, paths or plist bytes.
+            throw InstallerUseReadError.unavailable("The owned DMG fixture system operation did not complete. reason=\(process.terminationReason.rawValue) status=\(process.terminationStatus) stdoutOverflow=\(overflow) streamsComplete=\(complete) stderrCategory=\(diagnostic.category) stderrTruncated=\(diagnostic.truncated)")
         }
         return output
     }
@@ -861,5 +900,52 @@ private enum InstallerUseCIFixtureGate {
         guard env["GITHUB_ACTIONS"] == "true", env["RUNNER_ENVIRONMENT"] == "github-hosted" else {
             throw InstallerUseReadError.unavailable("An opted-in native fixture requires a verified ephemeral GitHub-hosted runner; the fixture did not run.")
         }
+    }
+}
+
+
+/// Test-only fixed-category diagnostics. Original bytes never become log text.
+private struct InstallerFixtureCommandDiagnostics {
+    static let maximumBytes = 8_192
+    private(set) var prefix = Data()
+    private(set) var truncated = false
+    mutating func append(_ bytes: ArraySlice<UInt8>) {
+        let available = Self.maximumBytes - prefix.count
+        prefix.append(contentsOf: bytes.prefix(available))
+        if bytes.count > available { truncated = true }
+    }
+    var category: String {
+        guard !prefix.isEmpty else { return "empty" }
+        let text = String(decoding: prefix, as: UTF8.self).lowercased()
+        let patterns: [(String, [String])] = [
+            ("resource-busy", ["resource busy"]),
+            ("permission-denied", ["permission denied", "operation not permitted"]),
+            ("no-mountable-filesystem", ["no mountable file systems"]),
+            ("device-unavailable", ["device not configured", "no such device"]),
+            ("input-output", ["input/output error", "i/o error"]),
+            ("invalid-format", ["not recognized", "invalid argument"]),
+            ("checksum", ["checksum"]),
+        ]
+        return patterns.first { $0.1.contains { text.contains($0) } }?.0 ?? "unclassified"
+    }
+}
+
+extension InstallerUseEvidenceTests {
+    @Test func boundsAndCategoriesNeverReturnOriginalBytes() {
+        for (text, category) in [("hdiutil: attach failed - Resource busy", "resource-busy"),
+                                 ("private fixture: Operation not permitted", "permission-denied"),
+                                 ("attach failed - no mountable file systems", "no-mountable-filesystem"),
+                                 ("private path unknown message", "unclassified"), ("", "empty")] {
+            var diagnostic = InstallerFixtureCommandDiagnostics()
+            diagnostic.append(Array(text.utf8)[...])
+            #expect(diagnostic.category == category)
+            #expect(!diagnostic.truncated)
+        }
+        var bounded = InstallerFixtureCommandDiagnostics()
+        bounded.append(Array(repeating: UInt8(65), count: 20_000)[...])
+        #expect(bounded.prefix.count == 8_192 && bounded.truncated)
+        #expect(bounded.category == "unclassified")
+        bounded.append(Array("Resource busy".utf8)[...])
+        #expect(bounded.prefix.count == 8_192 && bounded.category == "unclassified")
     }
 }

@@ -36,6 +36,7 @@ class RenderArtifactTests(unittest.TestCase):
         scenarios += ["tool-preparation-" + state for state in ("unchecked", "observed", "demo", "mole-guidance", "git-guidance", "mole-command")]
         scenarios += ["mole-analysis-" + state for state in ("initial", "confirmation", "partial", "failure")]
         scenarios += ["installer-" + state for state in ("disabled", "trash-confirmation", "restore-confirmation", "incomplete-recovery")]
+        scenarios += ["installer-" + state + "-compact" for state in ("trash-confirmation", "restore-confirmation")]
         attachments = []
         for scenario in scenarios:
             sizes = ((520, 600),) if scenario.startswith("settings-") else (((520, 480), (620, 580)) if scenario.startswith("getting-started-") else ((960, 620), (1280, 800)))
@@ -44,7 +45,7 @@ class RenderArtifactTests(unittest.TestCase):
             if scenario.startswith("mole-analysis-"):
                 sizes = ((720, 560), (900, 800))
             if scenario.startswith("installer-"):
-                sizes = ((720, 1600),)
+                sizes = ((720, 560),) if scenario.endswith("-compact") else ((720, 1600),)
             for appearance in ("light", "dark"):
                 for width, height in sizes:
                     name = f"{scenario}-{language}-{appearance}-{width}x{height}"
@@ -63,6 +64,8 @@ class RenderArtifactTests(unittest.TestCase):
                             stream.write(f"Attestation title: {'我已完成此磁盘映像的安装和使用' if language == 'zh-Hans' else 'I have finished installing and using this disk image'}\n")
                             stream.write(f"Unknown recovery title: {'恢复记录不可用；结果未知' if language == 'zh-Hans' else 'Recovery record unavailable; outcome unknown'}\n")
                             stream.write("Mutation calls: 0\nScope: owned installer view with synthetic paths and receipts only.\n")
+                            if scenario.endswith("-compact"):
+                                stream.write("Capture mode: compact confirmation controls after explicit scroll\nScrollable content exceeds viewport: true\nScrolled confirmation/cancel inside capture: 2\n")
                     attachments.extend([
                         {"exportedFileName": image, "suggestedHumanReadableName": name + "_0_UUID.png"},
                         {"exportedFileName": text, "suggestedHumanReadableName": name + "-scope_0_UUID.txt"},
@@ -72,7 +75,7 @@ class RenderArtifactTests(unittest.TestCase):
         return manifest
 
     def test_complete_english_and_chinese(self):
-        for language, count in [("en", 100), ("zh-Hans", 92)]:
+        for language, count in [("en", 104), ("zh-Hans", 96)]:
             with self.subTest(language=language), tempfile.TemporaryDirectory() as path:
                 root = Path(path)
                 self.fixture(root, language)
@@ -93,11 +96,11 @@ class RenderArtifactTests(unittest.TestCase):
             manifest = self.fixture(root, "zh-Hans")
             manifest[0]["attachments"].pop()
             (root / "manifest.json").write_text(json.dumps(manifest))
-            with self.assertRaisesRegex(ValueError, "Expected 92"):
+            with self.assertRaisesRegex(ValueError, "Expected 96"):
                 module.verify(root, "zh-Hans")
 
     def test_rejects_missing_installer_image_or_scope(self):
-        for language, count in (("en", 100), ("zh-Hans", 92)):
+        for language, count in (("en", 104), ("zh-Hans", 96)):
             for suffix in (".png", ".txt"):
                 with self.subTest(language=language, suffix=suffix), tempfile.TemporaryDirectory() as path:
                     root = Path(path)
@@ -109,15 +112,40 @@ class RenderArtifactTests(unittest.TestCase):
                     with self.assertRaisesRegex(ValueError, f"Expected {count}"):
                         module.verify(root, language)
 
+    def test_rejects_missing_compact_installer_image_or_scope(self):
+        for language, count in (("en", 104), ("zh-Hans", 96)):
+            for suffix in (".png", ".txt"):
+                with self.subTest(language=language, suffix=suffix), tempfile.TemporaryDirectory() as path:
+                    root = Path(path)
+                    manifest = self.fixture(root, language)
+                    attachments = manifest[0]["attachments"]
+                    target = next(item for item in attachments if "-compact-" in item["exportedFileName"] and item["exportedFileName"].endswith(suffix))
+                    attachments.remove(target)
+                    (root / "manifest.json").write_text(json.dumps(manifest))
+                    with self.assertRaisesRegex(ValueError, f"Expected {count}"):
+                        module.verify(root, language)
+
+    def test_rejects_missing_compact_scroll_or_control_evidence(self):
+        for before, after in (("Scrollable content exceeds viewport: true", "Scrollable content exceeds viewport: false"),
+                              ("Scrolled confirmation/cancel inside capture: 2", "Scrolled confirmation/cancel inside capture: 1")):
+            with self.subTest(before=before), tempfile.TemporaryDirectory() as path:
+                root = Path(path)
+                manifest = self.fixture(root, "en")
+                target = next(item for item in manifest[0]["attachments"] if "-compact-" in item["exportedFileName"] and item["exportedFileName"].endswith(".txt"))
+                text = root / target["exportedFileName"]
+                text.write_text(text.read_text().replace(before, after))
+                with self.assertRaisesRegex(ValueError, "localization"):
+                    module.verify(root, "en")
+
     def test_accepts_installer_retina_bitmap_for_every_scenario(self):
-        for language, count in (("en", 100), ("zh-Hans", 92)):
+        for language, count in (("en", 104), ("zh-Hans", 96)):
             with self.subTest(language=language), tempfile.TemporaryDirectory() as path:
                 root = Path(path)
                 manifest = self.fixture(root, language)
                 captures = [item for item in manifest[0]["attachments"] if item["exportedFileName"].startswith("installer-") and item["exportedFileName"].endswith(".png")]
-                self.assertEqual(len(captures), 8)
+                self.assertEqual(len(captures), 12)
                 for item in captures:
-                    (root / item["exportedFileName"]).write_bytes(png(1440, 3200))
+                    (root / item["exportedFileName"]).write_bytes(png(1440, 1120 if "-compact-" in item["exportedFileName"] else 3200))
                 self.assertEqual(module.verify(root, language), count)
 
     def test_rejects_installer_localization_fallback(self):

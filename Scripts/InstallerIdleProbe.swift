@@ -32,7 +32,7 @@ enum InstallerIdleProbe {
                 var hadOtherUnavailable = false
                 var duplicate = fcntl(fixture.fd, F_DUPFD_CLOEXEC, 0)
                 guard duplicate >= 0 else { throw ProbeFailure("The owned positive-control descriptor could not be duplicated.") }
-                defer { if duplicate >= 0 { close(duplicate) } }
+                defer { if duplicate >= 0 { try? closeOwnedDuplicate(&duplicate, fixture: fixture) } }
                 var observed = false
                 while ProcessInfo.processInfo.systemUptime < deadline {
                     try fixture.validate()
@@ -46,7 +46,7 @@ enum InstallerIdleProbe {
                     case .unavailable(let reason):
                         if !hadOtherUnavailable, env["MOEKIT_INSTALLER_CONDITIONAL_IDLE"] == "1",
                            fullEvidence == .unavailable(reason: InstallerUseEvidence.attachedImageLimitation) {
-                            close(duplicate); duplicate = -1
+                            try closeOwnedDuplicate(&duplicate, fixture: fixture)
                             try await recordUnsupportedEnvironment(fixture: fixture, target: target, directory: evidence,
                                                                    sha: sha, fullEvidence: fullEvidence)
                             exit(3) // Distinct unsupported status; never full current eligibility.
@@ -58,10 +58,11 @@ enum InstallerIdleProbe {
                     if observed { break }
                     if ProcessInfo.processInfo.systemUptime + 0.2 < deadline { try await Task.sleep(for: .milliseconds(200)) }
                 }
-                close(duplicate); duplicate = -1
+                try closeOwnedDuplicate(&duplicate, fixture: fixture)
                 guard observed else {
                     throw ProbeFailure("The actual provider could not observe the owned positive-control descriptor. Last cause: \(latest)")
                 }
+                printExactTargetHandles(target, observerOnly: true)
                 var accepted = false
                 while ProcessInfo.processInfo.systemUptime < deadline {
                     try fixture.validate()
@@ -71,7 +72,9 @@ enum InstallerIdleProbe {
                     let fullEvidence = await provider.evidence(for: target)
                     switch fullEvidence {
                     case .noUseObserved: accepted = true
-                    case .observedUse(let reason): throw ProbeFailure("Unexpected use of the owned fixture: \(reason)")
+                    case .observedUse(let reason):
+                        printExactTargetHandles(target)
+                        throw ProbeFailure("Unexpected use of the owned fixture: \(reason)")
                     case .unavailable(let reason):
                         if !hadOtherUnavailable, env["MOEKIT_INSTALLER_CONDITIONAL_IDLE"] == "1",
                            fullEvidence == .unavailable(reason: InstallerUseEvidence.attachedImageLimitation) {
@@ -115,11 +118,11 @@ enum InstallerIdleProbe {
             try fixture.validate()
             var duplicate = fcntl(fixture.fd, F_DUPFD_CLOEXEC, 0)
             guard duplicate >= 0 else { throw ProbeFailure("The diagnostic duplicate could not be retained.") }
-            defer { if duplicate >= 0 { close(duplicate) } }
+            defer { if duplicate >= 0 { try? closeOwnedDuplicate(&duplicate, fixture: fixture) } }
             let deadline = ProcessInfo.processInfo.systemUptime + 25
             let positive = try await retryHandleDiagnostic(fixture: fixture, target: target, deadline: deadline)
             result["positiveControl"] = handleDiagnosticLabel(positive)
-            close(duplicate); duplicate = -1
+            try closeOwnedDuplicate(&duplicate, fixture: fixture)
             if case .observedHandleUse = positive {
                 let negative = try await retryHandleDiagnostic(fixture: fixture, target: target, deadline: deadline)
                 result["negativeControl"] = handleDiagnosticLabel(negative)
@@ -154,6 +157,66 @@ enum InstallerIdleProbe {
         case .observedHandleUse: "observedHandleUse"
         case .noHandleUseObserved: "noHandleUseObserved"
         case .unavailable: "unavailable"
+        }
+    }
+
+    private static func closeOwnedDuplicate(_ descriptor: inout Int32, fixture: ProbeFixture) throws {
+        let fd = descriptor
+        // Never retry a close or later close a potentially reused descriptor.
+        descriptor = -1
+        let flags = fcntl(fd, F_GETFD)
+        guard fd >= 0, flags >= 0, flags & FD_CLOEXEC != 0,
+              fixture.initial == (try ProbeSnapshot.read(fd)) else {
+            throw ProbeFailure("The owned duplicate identity or close-on-exec flag changed before close.")
+        }
+        guard close(fd) == 0 else { throw ProbeFailure("The owned duplicate close failed; descriptor state is uncertain.") }
+        print("Owned positive-control duplicate closed successfully: descriptor=\(fd), closeOnExec=true.")
+    }
+
+    /// Diagnosis only: no process names, argv, paths, unrelated handles or
+    /// absence conclusion. Known use remains a failure even if its opener has
+    /// already closed by the time this bounded second observation runs.
+    private static func printExactTargetHandles(_ target: InstallerUseTarget, observerOnly: Bool = false) {
+        let system = NativeInstallerUseSystem()
+        let deadline = ProcessInfo.processInfo.systemUptime + 3
+        var matches: [[String: Any]] = []
+        var inspected = 0, failures = 0, truncated = false
+        do {
+            let pids = try (observerOnly ? [system.observerPID] : system.processes(maximum: 4096))
+            for pid in pids {
+                guard ProcessInfo.processInfo.systemUptime < deadline, matches.count < 16 else { truncated = true; break }
+                do {
+                    let identity = try system.identity(pid: pid)
+                    guard identity.uid == system.currentUID, identity.pid == pid else { failures += 1; continue }
+                    if identity.isZombie { continue }
+                    inspected += 1
+                    for handle in try system.descriptors(pid: pid, maximum: 16_384) where handle.isVnode {
+                        guard ProcessInfo.processInfo.systemUptime < deadline, matches.count < 16 else { truncated = true; break }
+                        guard let fd = Int32(exactly: handle.number) else { failures += 1; continue }
+                        do {
+                            if try system.descriptorIdentity(pid: pid, descriptor: fd) == target.identity {
+                                matches.append(["pid": pid, "isObserver": pid == system.observerPID, "kind": "fd",
+                                                "descriptor": fd, "excludedObserverHandle": pid == system.observerPID && target.observerRetainedFileDescriptors.contains(fd)])
+                            }
+                        } catch { failures += 1 }
+                    }
+                    guard ProcessInfo.processInfo.systemUptime < deadline, matches.count < 16 else { truncated = true; break }
+                    for handle in try system.fileports(pid: pid, maximum: 16_384) where handle.isVnode {
+                        guard ProcessInfo.processInfo.systemUptime < deadline, matches.count < 16 else { truncated = true; break }
+                        do {
+                            if try system.fileportIdentity(pid: pid, port: handle.number) == target.identity {
+                                matches.append(["pid": pid, "isObserver": pid == system.observerPID, "kind": "fileport", "descriptor": handle.number])
+                            }
+                        } catch { failures += 1 }
+                    }
+                } catch { failures += 1 }
+            }
+        } catch { failures += 1 }
+        let output: [String: Any] = ["diagnosticOnly": true, "knownUseStillBlocks": true, "matches": matches,
+                                     "scope": observerOnly ? "observer-only-before-full-negative" : "current-user-after-observed-use",
+                                     "inspectedCurrentUserProcesses": inspected, "readFailures": failures, "truncated": truncated]
+        if let bytes = try? JSONSerialization.data(withJSONObject: output, options: [.sortedKeys]) {
+            print("Exact owned-target handle snapshot: \(String(decoding: bytes, as: UTF8.self))")
         }
     }
 
@@ -192,12 +255,13 @@ enum InstallerIdleProbe {
         let before = try await completeNonemptyInventory()
         var duplicate = fcntl(fixture.fd, F_DUPFD_CLOEXEC, 0)
         guard duplicate >= 0 else { throw ProbeFailure("The fresh conditional positive-control handle could not be created.") }
-        defer { if duplicate >= 0 { close(duplicate) } }
+        defer { if duplicate >= 0 { try? closeOwnedDuplicate(&duplicate, fixture: fixture) } }
         let deadline = ProcessInfo.processInfo.systemUptime + 25
         let positive = try await retryHandleDiagnostic(fixture: fixture, target: target, deadline: deadline)
         guard case .observedHandleUse = positive else { throw ProbeFailure("Fresh conditional handle-positive observation failed.") }
-        close(duplicate); duplicate = -1
+        try closeOwnedDuplicate(&duplicate, fixture: fixture)
         let negative = try await retryHandleDiagnostic(fixture: fixture, target: target, deadline: deadline)
+        if case .observedHandleUse = negative { printExactTargetHandles(target) }
         guard negative == .noHandleUseObserved else { throw ProbeFailure("Fresh complete conditional handle-negative observation failed.") }
         let after = try await completeNonemptyInventory()
         guard NSArray(array: before).isEqual(to: after) else {

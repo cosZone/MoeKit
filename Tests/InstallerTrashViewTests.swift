@@ -40,14 +40,17 @@ final class InstallerTrashViewTests: XCTestCase {
                 _ = NSApplication.shared
                 let appearance = try XCTUnwrap(NSAppearance(named: dark ? .darkAqua : .aqua))
                 let size = NSSize(width: 720, height: 1600)
-                let view = ScrollView { InstallerTrashView().padding(20) }.environment(workspace)
-                    .environment(\.colorScheme, dark ? .dark : .light)
-                    .environment(\.locale, Locale.current)
-                    .frame(width: size.width, height: size.height)
-                    .background(Color(nsColor: .windowBackgroundColor))
-                let hosting = NSHostingView(rootView: view)
+                let makeView = { (canvas: NSSize) in
+                    ScrollView { InstallerTrashView().padding(20) }.environment(workspace)
+                        .environment(\.colorScheme, dark ? .dark : .light)
+                        .environment(\.locale, Locale.current)
+                        .environment(\.accessibilityEnabled, true)
+                        .frame(width: canvas.width, height: canvas.height)
+                        .background(Color(nsColor: .windowBackgroundColor))
+                }
+                let hosting = NSHostingView(rootView: makeView(size))
                 hosting.sizingOptions = []; hosting.frame = NSRect(origin: .zero, size: size); hosting.appearance = appearance
-                let window = NSWindow(contentRect: hosting.frame, styleMask: [.titled, .resizable], backing: .buffered, defer: false)
+                let window = InstallerCaptureWindow(contentRect: hosting.frame, styleMask: [.titled, .resizable], backing: .buffered, defer: false)
                 window.isReleasedWhenClosed = false; window.appearance = appearance; window.contentView = hosting
                 defer { window.orderOut(nil); window.contentView = nil; window.close() }
                 // A hidden NSWindow need not populate SwiftUI's accessibility
@@ -91,10 +94,53 @@ final class InstallerTrashViewTests: XCTestCase {
                 Scope: owned installer view with synthetic paths and receipts only.
                 Scenario: \(scenario). No native executor, process inspection, disk-image inventory or real file moves.
                 The scroll container keeps controls reachable beyond the captured viewport.
+                Accessibility environment enabled only in this owned fixture. No keyboard or VoiceOver interaction performed.
                 These images are review evidence, not native interaction, keyboard or accessibility acceptance.
                 """)
                 metadata.name = name + "-scope.txt"
                 metadata.lifetime = .keepAlways; add(metadata)
+                if scenario == "trash-confirmation" || scenario == "restore-confirmation" {
+                    let compactSize = NSSize(width: 720, height: 560)
+                    hosting.rootView = makeView(compactSize)
+                    window.setContentSize(compactSize)
+                    for _ in 0..<5 { hosting.layoutSubtreeIfNeeded(); try await Task.sleep(for: .milliseconds(50)) }
+                    XCTAssertEqual(hosting.bounds.size, compactSize)
+                    resetScrollOrigins(in: hosting)
+                    hosting.layoutSubtreeIfNeeded()
+                    let prefix = scenario == "trash-confirmation" ? "installer.trash" : "installer.restore"
+                    let controls = [CaptureRequirement(id: prefix + ".confirm"), CaptureRequirement(id: prefix + ".cancel")]
+                    let didScroll = await scrollToControls(controls, in: hosting, window: window)
+                    let compactName = "installer-\(scenario)-compact-\(language)-\(dark ? "dark" : "light")-720x560"
+                    let compactEvidence = try await verifyRequiredFrames(in: hosting, window: window, scenario: scenario, store: store,
+                                                                         name: compactName, requirements: controls)
+                    hosting.displayIfNeeded()
+                    let compactBitmap = try XCTUnwrap(hosting.bitmapImageRepForCachingDisplay(in: hosting.bounds))
+                    appearance.performAsCurrentDrawingAppearance { hosting.cacheDisplay(in: hosting.bounds, to: compactBitmap) }
+                    let compactPNG = try XCTUnwrap(compactBitmap.representation(using: .png, properties: [:]))
+                    let compactImage = XCTAttachment(data: compactPNG, uniformTypeIdentifier: "public.png")
+                    compactImage.name = compactName + ".png"; compactImage.lifetime = .keepAlways; add(compactImage)
+                    let compactMutations = await executor.mutationCount
+                    XCTAssertEqual(compactMutations, 0)
+                    let compactScope = XCTAttachment(string: """
+                    Content size: 720 × 560 points
+                    Process locale: \(Locale.current.identifier)
+                    Bundle language: \(language)
+                    Projects title: \(WorkspaceSection.projects.title)
+                    Partial-result title: \(TaskStatus.partial.title)
+                    Trash action title: \(String(localized: "Move this file to Trash"))
+                    Restore action title: \(String(localized: "Restore to original path"))
+                    Attestation title: \(String(localized: "I have finished installing and using this disk image"))
+                    Unknown recovery title: \(String(localized: "Recovery record unavailable; outcome unknown"))
+                    Mutation calls: \(compactMutations)
+                    Scope: owned installer view with synthetic paths and receipts only.
+                    Capture mode: compact confirmation controls after explicit scroll
+                    Scrollable content exceeds viewport: \(didScroll)
+                    Scrolled confirmation/cancel inside capture: \(compactEvidence.count)
+                    \(compactEvidence.joined(separator: "\n"))
+                    Accessibility environment enabled only in this owned fixture. No keyboard or VoiceOver interaction performed.
+                    """)
+                    compactScope.name = compactName + "-scope.txt"; compactScope.lifetime = .keepAlways; add(compactScope)
+                }
             }
         }
     }
@@ -156,28 +202,28 @@ final class InstallerTrashViewTests: XCTestCase {
     /// Read metadata from this owned view only. Exact identifiers, displayed
     /// escaped paths and viewport containment are affirmative capture evidence;
     /// this does not establish keyboard navigation or VoiceOver acceptance.
-    @MainActor private func verifyRequiredFrames(in hosting: NSView, window: NSWindow, scenario: String, store: InstallerTrashStore, name: String) async throws -> [String] {
-        let requirements = captureRequirements(scenario: scenario, store: store)
-        var elements: [any NSAccessibilityProtocol] = []
+    @MainActor private func verifyRequiredFrames(in hosting: NSView, window: NSWindow, scenario: String, store: InstallerTrashStore, name: String, requirements explicitRequirements: [CaptureRequirement]? = nil) async throws -> [String] {
+        let requirements = explicitRequirements ?? captureRequirements(scenario: scenario, store: store)
+        var elements: [CaptureElement] = []
         var wasTruncated = false
         for _ in 0..<10 {
             hosting.layoutSubtreeIfNeeded()
             let snapshot = accessibleElements(in: hosting)
             elements = snapshot.elements; wasTruncated = snapshot.truncated
-            if requirements.allSatisfy({ requirement in elements.contains { $0.accessibilityIdentifier() == requirement.id && validCaptureFrame($0.accessibilityFrame()) } }) { break }
+            if requirements.allSatisfy({ requirement in elements.contains { $0.id == requirement.id && validCaptureFrame($0.frame) } }) { break }
             try await Task.sleep(for: .milliseconds(50))
         }
         let captured = window.convertToScreen(hosting.convert(hosting.bounds, to: nil))
         let tree = elements.map { element in
-            let content = captureText(element).map { InstallerPathDisplay.quoted(String($0.prefix(1_024))) }.joined(separator: " | ")
-            return "\(String(describing: type(of: element))) | id=\(element.accessibilityIdentifier() ?? "") | role=\(element.accessibilityRole()?.rawValue ?? "") | text=\(content) | frame=\(NSStringFromRect(element.accessibilityFrame()))"
+            let content = element.text.map { InstallerPathDisplay.quoted(String($0.prefix(1_024))) }.joined(separator: " | ")
+            return "\(element.typeName) | id=\(element.id ?? "") | role=\(element.role ?? "") | text=\(content) | frame=\(NSStringFromRect(element.frame)) | \(element.protocols) | children=\(element.childCount)"
         }
         let diagnostic = XCTAttachment(string: "Owned synthetic window visible: \(window.isVisible)\nCapture frame: \(NSStringFromRect(captured))\nTree truncated: \(wasTruncated)\n" + tree.joined(separator: "\n"))
         diagnostic.name = name + "-ax-tree.txt"; diagnostic.lifetime = .keepAlways; add(diagnostic)
         XCTAssertFalse(wasTruncated, "Owned accessibility tree exceeded the capture-check bound")
         var evidence: [String] = []
         for requirement in requirements {
-            let matches = elements.filter { $0.accessibilityIdentifier() == requirement.id && validCaptureFrame($0.accessibilityFrame()) }
+            let matches = elements.filter { $0.id == requirement.id && validCaptureFrame($0.frame) }
             guard let first = matches.first else {
                 // Fail affirmatively while keeping all screenshots and tree
                 // diagnostics, including the remaining mandatory scenarios.
@@ -186,12 +232,12 @@ final class InstallerTrashViewTests: XCTestCase {
             }
             // An identifier can be exposed by a Label and its text/icon peers.
             // Require their entire geometry, never just the smallest child.
-            let frame = matches.dropFirst().reduce(first.accessibilityFrame()) { $0.union($1.accessibilityFrame()) }
+            let frame = matches.dropFirst().reduce(first.frame) { $0.union($1.frame) }
             guard captured.insetBy(dx: -0.5, dy: -0.5).contains(frame) else {
                 XCTFail("Required content outside captured viewport: \(requirement.id), frame \(frame), capture \(captured)")
                 continue
             }
-            let text = matches.flatMap { captureText($0) }
+            let text = matches.flatMap { $0.text }
             guard text.contains(where: { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) else {
                 XCTFail("Required captured content is empty: \(requirement.id)")
                 continue
@@ -210,25 +256,111 @@ final class InstallerTrashViewTests: XCTestCase {
         !frame.isEmpty && frame.origin.x.isFinite && frame.origin.y.isFinite && frame.width.isFinite && frame.height.isFinite
     }
 
-    @MainActor private func captureText(_ element: any NSAccessibilityProtocol) -> [String] {
-        [element.accessibilityLabel(), element.accessibilityTitle(), element.accessibilityValue() as? String,
-         (element.accessibilityValue() as? NSAttributedString)?.string].compactMap { $0 }
+    private struct CaptureElement {
+        let typeName: String
+        let id: String?
+        let role: String?
+        let text: [String]
+        let frame: NSRect
+        let protocols: String
+        let childCount: Int
     }
 
-    @MainActor private func accessibleElements(in hosting: NSView) -> (elements: [any NSAccessibilityProtocol], truncated: Bool) {
+    /// SwiftUI navigation children are only guaranteed to implement the small
+    /// NSAccessibilityElementProtocol, not the full NSAccessibilityProtocol.
+    /// Read its frame directly and public object-valued getters by selector;
+    /// never discard semantic children because they lack the full protocol.
+    @MainActor private func accessibleElements(in hosting: NSView) -> (elements: [CaptureElement], truncated: Bool) {
         var queue: [Any] = [hosting]
         var seen: Set<ObjectIdentifier> = []
-        var elements: [any NSAccessibilityProtocol] = []
-        while !queue.isEmpty, seen.count < 1_024 {
+        var elements: [CaptureElement] = []
+        var visited = 0
+        while !queue.isEmpty, visited < 1_024 {
             let next = queue.removeFirst()
-            guard let object = next as? NSObject, seen.insert(ObjectIdentifier(object)).inserted else { continue }
-            if let view = object as? NSView { queue += view.subviews }
-            guard let element = object as? any NSAccessibilityProtocol else { continue }
-            elements.append(element)
-            queue += element.accessibilityChildren() ?? []
-            queue += (element.accessibilityChildrenInNavigationOrder() ?? []).map { $0 as Any }
+            visited += 1
+            let object = next as AnyObject
+            guard seen.insert(ObjectIdentifier(object)).inserted else { continue }
+            var children = objectValue(object, #selector(NSAccessibilityProtocol.accessibilityChildren)) as? [Any] ?? []
+            children += objectValue(object, #selector(NSAccessibilityProtocol.accessibilityChildrenInNavigationOrder)) as? [Any] ?? []
+            if let view = object as? NSView { children += view.subviews }
+            let minimal = object as? any NSAccessibilityElementProtocol
+            let full = object as? any NSAccessibilityProtocol
+            let selectors = [#selector(NSAccessibilityProtocol.accessibilityLabel), #selector(NSAccessibilityProtocol.accessibilityTitle),
+                             #selector(NSAccessibilityProtocol.accessibilityValue)]
+            let text = selectors.compactMap { selector -> String? in
+                let value = objectValue(object, selector)
+                return (value as? String) ?? (value as? NSAttributedString)?.string
+            }
+            elements.append(.init(typeName: String(describing: type(of: object)),
+                                  id: full?.accessibilityIdentifier() ?? minimal?.accessibilityIdentifier?()
+                                      ?? (objectValue(object, #selector(NSAccessibilityProtocol.accessibilityIdentifier)) as? String),
+                                  role: objectValue(object, #selector(NSAccessibilityProtocol.accessibilityRole)) as? String,
+                                  text: text, frame: minimal?.accessibilityFrame() ?? full?.accessibilityFrame() ?? .zero,
+                                  protocols: "NSObject subclass: \(object is NSObject); minimal AX protocol: \(minimal != nil); full AX protocol: \(full != nil)", childCount: children.count))
+            queue += children
         }
         return (elements, !queue.isEmpty)
+    }
+
+    /// All selectors passed here are documented, zero-argument, object-valued
+    /// accessibility getters. There is no KVC, private selector or AX mutation.
+    @MainActor private func objectValue(_ object: AnyObject, _ selector: Selector) -> Any? {
+        guard let object = object as? any NSObjectProtocol, object.responds(to: selector) else { return nil }
+        return object.perform(selector)?.takeUnretainedValue()
+    }
+
+    /// A separate 720×560 fixture must actually overflow and scroll. No button
+    /// is pressed: after scrolling, the same ID/frame proof verifies both
+    /// confirmation controls against the compact viewport before PNG capture.
+    @MainActor private func scrollToControls(_ controls: [CaptureRequirement], in hosting: NSView, window: NSWindow) async -> Bool {
+        func scrollViews(_ view: NSView) -> [NSScrollView] {
+            (view as? NSScrollView).map { [$0] } ?? view.subviews.flatMap { scrollViews($0) }
+        }
+        guard let scroll = scrollViews(hosting).first, let document = scroll.documentView else {
+            XCTFail("Compact confirmation must have a native scroll container")
+            return false
+        }
+        guard document.bounds.height > scroll.contentView.bounds.height else {
+            XCTFail("Compact confirmation must genuinely exceed its viewport")
+            return false
+        }
+        let before = scroll.contentView.bounds.origin
+        let documentBounds = document.bounds
+        let viewportHeight = scroll.contentView.bounds.height
+        let maximumY = max(documentBounds.minY, documentBounds.maxY - viewportHeight)
+        for attempt in 0..<16 {
+            hosting.layoutSubtreeIfNeeded()
+            let snapshot = accessibleElements(in: hosting)
+            let frames = controls.compactMap { control -> NSRect? in
+                let matches = snapshot.elements.filter { $0.id == control.id && validCaptureFrame($0.frame) }
+                guard let first = matches.first else { return nil }
+                return matches.dropFirst().reduce(first.frame) { $0.union($1.frame) }
+            }
+            if frames.count == controls.count, let first = frames.first {
+                let screenTarget = frames.dropFirst().reduce(first) { $0.union($1) }
+                let windowTarget = window.convertFromScreen(screenTarget)
+                let hostingTarget = hosting.convert(windowTarget, from: nil)
+                let documentTarget = document.convert(hostingTarget, from: hosting)
+                let centeredY = min(max(documentTarget.midY - viewportHeight / 2, documentBounds.minY), maximumY)
+                document.scroll(NSPoint(x: documentBounds.minX, y: centeredY))
+                scroll.reflectScrolledClipView(scroll.contentView)
+                hosting.layoutSubtreeIfNeeded()
+                try? await Task.sleep(for: .milliseconds(50))
+                XCTAssertNotEqual(scroll.contentView.bounds.origin, before, "Compact confirmation controls must require a real scroll")
+                return scroll.contentView.bounds.origin != before
+            }
+            // Some accessibility trees expose only the visible descendants.
+            // Traverse bounded overlapping viewports until both exact IDs can
+            // be located, then center their union rather than assuming they
+            // are the final content (recovery receipts follow them).
+            let distance = min(CGFloat(attempt + 1) * viewportHeight / 2, maximumY - documentBounds.minY)
+            let y = document.isFlipped ? documentBounds.minY + distance : maximumY - distance
+            document.scroll(NSPoint(x: documentBounds.minX, y: y))
+            scroll.reflectScrolledClipView(scroll.contentView)
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+        XCTFail("Compact confirmation controls not found during bounded viewport traversal")
+        return false
     }
 
     /// An initially focused action button can cause an AppKit scroll view to
@@ -311,4 +443,11 @@ private actor RenderInstallerExecutor: InstallerTrashExecuting {
     }
     private static let file = InstallerFileSnapshot(device: 1, inode: 2, mode: 0o100600, uid: 501, gid: 20, links: 1, flags: 0,
         bytes: 4096, modifiedSeconds: 1, modifiedNanoseconds: 0, changedSeconds: 1, changedNanoseconds: 0)
+}
+
+/// The artifact canvas intentionally exceeds the hosted CI display. AppKit
+/// normally constrains a titled resizable window to that display when ordered.
+/// Preserve the owned capture size without changing application window policy.
+@MainActor private final class InstallerCaptureWindow: NSWindow {
+    override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect { frameRect }
 }

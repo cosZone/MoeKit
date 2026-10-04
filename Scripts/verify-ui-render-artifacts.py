@@ -109,6 +109,11 @@ def verify(directory: Path, language: str) -> int:
         for scenario in ("disabled", "trash-confirmation", "restore-confirmation", "incomplete-recovery")
         for appearance in ("light", "dark")
     })
+    expected.update({
+        f"installer-{scenario}-compact-{language}-{appearance}-720x560": (720, 560)
+        for scenario in ("trash-confirmation", "restore-confirmation")
+        for appearance in ("light", "dark")
+    })
     manifest = json.loads((directory / "manifest.json").read_text())
     images, scopes = {}, {}
     for test in manifest:
@@ -158,6 +163,12 @@ def verify(directory: Path, language: str) -> int:
                 "Mutation calls: 0",
                 "Scope: owned installer view with synthetic paths and receipts only.",
             })
+            if "-compact-" in name:
+                required.update({
+                    "Capture mode: compact confirmation controls after explicit scroll",
+                    "Scrollable content exceeds viewport: true",
+                    "Scrolled confirmation/cancel inside capture: 2",
+                })
         if not required.issubset(lines):
             raise ValueError(f"Missing runtime localization/size evidence: {name}")
         locale_prefix = "zh" if language == "zh-Hans" else "en"

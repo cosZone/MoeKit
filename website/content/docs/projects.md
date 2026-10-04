@@ -34,10 +34,12 @@ Git file 可以出现在 worktree 或 submodule 布局中，不能单靠它推�
 
 项目详情中的 Related processes 打开一个筛选视图，不会隐式扫描。进入后由你主动刷新；关联依据仅是进程工作目录位于项目路径之内，不能证明进程由 MoeKit 启动或归项目独占。[了解进程关联](/docs/processes)
 
-## Git 整理（未发布源码）
+## Git 整理（preview.9）
 
 Projects → Git cleanup… 可分别检查并确认一个干净 linked worktree 的退役，或一个已合并、未检出的 loose 本地分支移除。要选择同时覆盖主仓库和 worktree 的父目录，指定保留的本地 base，并确认停止使用目标；不会自动 fetch。
 
 操作把 worktree／登记或 ref 移入主仓库 `.git/moekit-recovery/<操作 UUID>`，保留数据；退役不删除分支，删除分支必须另行确认。会话内可另行确认原路径恢复，不覆盖。移动不释放磁盘空间，没有 force 或永久删除入口。重启后保留恢复目录与 JSON 凭据，不会自动恢复或清空。
 
-普通 SHA-1／index v2、同卷本地目录是首个支持范围。脏文件、untracked／ignored、独有提交、当前或锁定分支、主 worktree、符号链接、邻居项目、跨范围、packed 删除目标及未知配置均保护。Git 只读取配置隔离的临时对象副本，不运行目标仓库的 hooks、filters 或脚本。该源码能力不包含在 preview.7 安装包中，具体测试以精确提交 CI 为准。
+普通 SHA-1／index v2、同卷本地目录是首个支持范围。退役拒绝脏文件、untracked／ignored、独有提交、锁定或主 worktree 及重叠项目；分支移除拒绝任何 worktree 正在检出的分支和 packed 删除目标。链接、跨范围、受保护或未知配置同样不可操作。Git 只读取配置隔离的临时对象副本，不运行目标仓库的 hooks、filters 或脚本；不自动下载安装或捆绑 Apple Git。
+
+这套操作已随 [preview.9](/changelog/0.1.0-preview.9) 交付，preview.8 不包含。恢复另行确认，不覆盖原路径；两个移动不是事务，部分结果保留数据并停止，不自动重试。详细预算、工具来源和恢复限制见 [设计记录](https://github.com/cosZone/MoeKit/blob/c5de70153e2eb6f9d1c547c17cf3926565514e50/Documentation/Git-cleanup-design.md)。

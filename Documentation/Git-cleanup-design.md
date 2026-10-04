@@ -48,6 +48,6 @@
 
 ## 验证
 
-纯 parser tests 包含由唯一临时系统 Git 仓库捕获的 index/tree 固定参考；helper tests 只使用 app-owned 合成仓库与固定测试程序。取消检查会阻止后续查询；一个已经运行的私有 Git 查询可能持续到 15 秒退出／超时边界，不把关闭 UI 描述成即时进程终止。Native fixtures opt-in 在 CI 的唯一用户主目录子文件夹中构建并执行真实退役、branch 移除和恢复；绝不对用户项目运行测试。覆盖 staged／untracked／ignored、独有提交、stale ref/index、锁、跨范围、符号链接、checked-out／主 worktree、packed refs、配置拒绝、重复确认和失败保留。
+纯 parser tests 包含由唯一临时系统 Git 仓库捕获的 index/tree 固定参考；helper tests 只使用 app-owned 合成仓库与固定测试程序。取消检查会阻止后续查询；一个已经运行的私有 Git 查询可能持续到 supervisor 的 15 秒退出／超时边界。stdout EOF 后，父进程为退出状态观察与 stderr 收尾各设 2 秒上限，不调用可能卡住的 Foundation `waitUntilExit`；未知退出保留私有对象副本，直到已拥有的 helper 实际退出才释放其身份句柄，不按裸 PID 发送信号。stdout 仍是同步 EOF 读取，因此这些是分阶段边界，不是强制端到端期限，也不把关闭 UI 描述成即时进程终止。Native fixtures opt-in 在 CI 的唯一用户主目录子文件夹中构建并执行真实退役、branch 移除和恢复；绝不对用户项目运行测试。覆盖 staged／untracked／ignored、独有提交、stale ref/index、锁、跨范围、符号链接、checked-out／主 worktree、packed refs、配置拒绝、重复确认和失败保留。
 
 一手格式与命令资料：[index 格式](https://git-scm.com/docs/gitformat-index)、[Git 环境和全局选项](https://git-scm.com/docs/git)、[worktree 管理](https://git-scm.com/docs/git-worktree)。

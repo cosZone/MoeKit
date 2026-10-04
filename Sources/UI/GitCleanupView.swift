@@ -41,7 +41,7 @@ struct GitCleanupView: View {
                     }.disabled(state.isBusy || workspace.isDemoEnabled || scope == nil || branch.isEmpty || baseBranch.isEmpty)
                     if state.isBusy {
                         ProgressView("Rechecking exact target…").controlSize(.small)
-                        Text("Cancelling stops further checks. A running private Git query can take up to 15 seconds to finish or time out.").font(.caption).foregroundStyle(.secondary)
+                        Text("Cancelling stops further checks. A running private query must finish its supervisor timeout and exit checks; closing this view is not immediate termination.").font(.caption).foregroundStyle(.secondary)
                     }
                     if let error = state.error { Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.orange).textSelection(.enabled) }
                     if let plan = state.plan, matchesCurrentSelection(plan) {

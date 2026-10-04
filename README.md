@@ -15,24 +15,24 @@ Swift 6 · SwiftUI / AppKit · macOS 15+ · Tuist 4.148.3 · SPM
 - **Tasks**：本次会话的发现任务、取消、状态与底部结果详情；可展开 Diagnostics
 - 独立 Demo 开关与明确示例标识；正常启动无虚构项目、运行结果或磁盘测量
 - 可跳过、可重开的上手引导：项目整理、进程查看或示例体验；先说明范围，再由用户主动选择文件夹或开始扫描
-- 菜单栏原生入口，Dock / 菜单栏图标独立设置与重开恢复；主动检查 GitHub 新版本并手动下载，尚未启用 Sparkle 自动安装。详见 [更新与应用入口](Documentation/Updates-and-app-icons.md)
+- **当前源码，尚未包含在 preview.8 安装包**：菜单栏原生入口，Dock / 菜单栏图标独立设置与重开恢复；主动检查 GitHub 新版本并手动下载，尚未启用 Sparkle 自动安装。详见 [更新与应用入口](Documentation/Updates-and-app-icons.md)
 - 原生 NavigationSplitView、Table、工具栏与 SF Symbols；自定义应用图标
 
 尚未实现：任意 CLI 执行、AI 专用无头浏览器归属与清理、广域 Mole 清理、卸载、维护、实时系统指标、提权、第三方插件加载及持久任务历史。导入报告不运行 Mole，报告数值不等于可回收空间。
 
 **实际 Mole 分析的边界：** 目前只支持匹配精确 SHA-256 的 V1.57.0 官方发布分析器，常见官方脚本安装位置为 `~/.config/mole/bin/analyze-go`；Homebrew 与自编译版本暂不匹配该校验。工具准备页提供精确受支持文件的手动下载链接与复制命令，校验大小和 SHA-256 后才添加执行权限；详见 [工具准备](Documentation/Tool-preparation.md)。每次分析前显示范围及私有临时副本/缓存写入并要求确认，可取消，失败或未知覆盖不冒充成功。工具以普通用户权限运行，没有 OS 沙箱；没有自动安装、更新、提权；Mole 分析本身不执行目标清理。详见 [执行设计与验证](Documentation/Mole-analysis-execution-design.md)。本节描述当前源码，具体构建/测试以对应提交 CI 为准。
 
-**原生废纸篓的边界：** 仅支持本地内置 APFS 上、Downloads 直属的单个常规 `.dmg`；导入 JSON、Demo、`.pkg`、链接、云占位、项目与 worktree 不能授权。必须取得完整且为空的磁盘映像清单；只可自行推出自己打开的映像，不要触碰系统管理的映像，系统映像仍存在时此操作不可用。当前用户文件描述符／fileport 检查不等于全局未使用证明，无法覆盖所有内存映射、系统服务和其他用户。每次操作及恢复都重新复查并确认，移入废纸篓不会释放占用空间；不确定结果保留数据并停止。详见 [设计与恢复边界](Documentation/Installer-trash-design.md)。
+**下载磁盘映像操作的边界：** 仅支持本地内置 APFS 上、Downloads 直属的单个常规 `.dmg`；导入 JSON、Demo、`.pkg`、链接、云占位、项目与 worktree 不能授权。必须取得完整且为空的磁盘映像清单；只可自行推出自己打开的映像，不要触碰系统管理的映像，系统映像仍存在时此操作不可用。当前用户文件描述符／fileport 检查不等于全局未使用证明，无法覆盖所有内存映射、系统服务和其他用户。每次操作及恢复都重新复查并确认，移入废纸篓不会释放占用空间；不确定结果保留数据并停止。详见 [设计与恢复边界](Documentation/Installer-trash-design.md)。
 
-**未发布的 Git 整理：** Projects → Git cleanup… 可单独复查并确认一个干净 linked worktree 的退役，或一个未检出且完全包含于指定本地 base 的 loose 分支移除。所有数据移入主仓库的私有恢复目录，保留分支或 ref 备份；会话内另行确认恢复，不覆盖、不 force、不永久删除，也不释放磁盘空间。拒绝脏文件、untracked／ignored、独有提交、锁、链接、跨范围及不支持布局；Git 只查看配置隔离的对象副本。详见 [设计与限制](Documentation/Git-cleanup-design.md)。此功能不包含在 preview.7。
+**未发布的 Git 整理：** Projects → Git cleanup… 可单独复查并确认一个干净 linked worktree 的退役，或一个未检出且完全包含于指定本地 base 的 loose 分支移除。所有数据移入主仓库的私有恢复目录，保留分支或 ref 备份；会话内另行确认恢复，不覆盖、不 force、不永久删除，也不释放磁盘空间。拒绝脏文件、untracked／ignored、独有提交、锁、链接、跨范围及不支持布局；Git 只查看配置隔离的对象副本。详见 [设计与限制](Documentation/Git-cleanup-design.md)。此功能不包含在已发布的 preview.8。
 
-精确分析器下载指引和原生单个 `.dmg` 操作已随下方 preview.7 安装包交付；此前的 preview.6 不包含这两项改动。
+精确分析器下载指引和原生单个 `.dmg` 操作从 preview.7 起交付；preview.8 保留这些能力，并新增独立的精确进程停止与原生缓存工作流。
 
-**预览验证记录：** `0.1.0-preview.7` 的精确源码 [`a420ade`](https://github.com/cosZone/MoeKit/commit/a420ade54c8a251688072af70345f1bc18db8da3) 已完成 [发布运行](https://github.com/cosZone/MoeKit/actions/runs/37215418463)，提供通过公开下载字节、校验和、来源与 App 内容摘要核对的 DMG／ZIP。主 App 与原创监督辅助程序均已完成双架构开发签名验证。发布 Swift Testing 报告 406 项，其中 6 项 opt-in 原生检查跳过，另有 12 项 XCTest 与 89 项发布辅助测试通过；实际 Trash／恢复与拒绝 fixture 在同源码 [Native CI](https://github.com/cosZone/MoeKit/actions/runs/37214748071) 验证。该 CI 的使用证据 job 正确拒绝当前非空映像环境，未建立当前 `noUseObserved`。完整验证边界见 [preview.7 记录](website/content/changelog/0.1.0-preview.7.md)；完整窗口、键盘、VoiceOver、双架构实机与真实目录权限仍需手动验收。
+**预览验证记录：** `0.1.0-preview.8` 的精确源码 [`b0bdd59`](https://github.com/cosZone/MoeKit/commit/b0bdd59ff672efe16a23a20b422e0e433179be11) 已完成 [发布运行](https://github.com/cosZone/MoeKit/actions/runs/37225799139)，提供通过公开下载字节、校验和、来源与完整 App 内容摘要核对的 DMG／ZIP。主 App 与原创监督辅助程序均完成双架构开发签名验证。发布 Swift Testing 报告 458 项，其中 7 项 opt-in 原生检查跳过，另有 14 项 XCTest 与 89 项发布辅助测试通过；实际原生缓存、进程与安装器 fixture 以同源码 [Native CI](https://github.com/cosZone/MoeKit/actions/runs/37225038573) 为准。该 CI 的安装器使用证据 job 正确拒绝当前非空映像环境，未建立当前 `noUseObserved`。完整验证边界见 [preview.8 记录](website/content/changelog/0.1.0-preview.8.md)；完整窗口、键盘、VoiceOver、双架构实机与真实目录权限仍需手动验收。
 
-## 下一版源码：真实缓存清理
+## preview.8：真实缓存清理
 
-Tools → Mole → Cleanup 新增原生批量缓存清理：主动检查用户缓存目录 → 选择多个精确缓存 → 复查完整清单并确认 → 移入废纸篓；每项记录可独立确认原路径恢复，或另行确认不可恢复的永久移除。移动到废纸篓不释放空间，永久移除也不保证等量物理空间立即回收。此工作流未包含在 preview.7；当前验证以对应 PR 精确提交 CI 为准。支持范围、限制和使用方式见 [原生缓存清理](Documentation/Native-cache-cleanup.md)。
+Tools → Mole → Cleanup 新增原生批量缓存清理：主动检查用户缓存目录 → 选择多个精确缓存 → 复查完整清单并确认 → 移入废纸篓；每项记录可独立确认原路径恢复，或另行确认不可恢复的永久移除。移动到废纸篓不释放空间，永久移除也不保证等量物理空间立即回收。此工作流已随 preview.8 交付，preview.7 不包含；验证记录绑定上方精确源码，后续源码改动不自动进入已发布安装包。支持范围、限制和使用方式见 [原生缓存清理](Documentation/Native-cache-cleanup.md)。
 
 ## 构建
 
@@ -54,9 +54,9 @@ open DerivedData/Build/Products/Debug/MoeKit.app
 
 - [Actions](https://github.com/cosZone/MoeKit/actions)：Native CI 构建与测试；手动运行 Preview app artifact 可下载包含 `.app` 的 ZIP、源码 SHA、SHA-256 校验和与构建信息
 - Actions 的 Preview app artifact 仅 **ad-hoc 签名，没有 Developer ID 签名、没有公证**；该工作流不会创建 tag 或 GitHub Release
-- [0.1.0-preview.7](https://github.com/cosZone/MoeKit/releases/tag/v0.1.0-preview.7) 已发布：[DMG（推荐）](https://github.com/cosZone/MoeKit/releases/download/v0.1.0-preview.7/MoeKit-v0.1.0-preview.7-macOS.dmg) · [ZIP](https://github.com/cosZone/MoeKit/releases/download/v0.1.0-preview.7/MoeKit-v0.1.0-preview.7-macOS.zip)。两种包内是同一份 universal Release App，包含精确分析器下载指引、逐次确认的单个 Downloads 磁盘映像废纸篓与凭据恢复，并保留此前的 Mole 分析、上手引导和工作区改进，并附校验和与构建信息
+- [0.1.0-preview.8](https://github.com/cosZone/MoeKit/releases/tag/v0.1.0-preview.8) 已发布：[DMG（推荐）](https://github.com/cosZone/MoeKit/releases/download/v0.1.0-preview.8/MoeKit-v0.1.0-preview.8-macOS.dmg) · [ZIP](https://github.com/cosZone/MoeKit/releases/download/v0.1.0-preview.8/MoeKit-v0.1.0-preview.8-macOS.zip)。两种包内是同一份 universal Release App，新增逐次确认的精确进程停止、原生多缓存废纸篓、原路径恢复与另行确认的记录内缓存永久删除，并保留此前的 Mole 分析与单个 Downloads `.dmg` 操作；附校验和及构建信息
 - 使用 **Apple Development 签名，未公证**，不等于 Developer ID 正式分发，Gatekeeper 仍可能阻止打开；DMG 格式不会改变这一限制
-- 按版本的实际交付说明见 [preview.7 更新记录](website/content/changelog/0.1.0-preview.7.md)；preview.1 至 preview.6 保持原样。文档网站独立部署，不随 App 安装。维护者流程见 [开发签名预览发布](Documentation/Signed-preview-release.md)
+- 按版本的实际交付说明见 [preview.8 更新记录](website/content/changelog/0.1.0-preview.8.md)；preview.1 至 preview.7 保持原样。文档网站独立部署，不随 App 安装。维护者流程见 [开发签名预览发布](Documentation/Signed-preview-release.md)
 - [构建与交付说明](Documentation/Build-and-preview.md)
 - [架构与数据边界](Documentation/Architecture.md)
 - [工具准备与安装边界](Documentation/Tool-preparation.md)

@@ -105,6 +105,19 @@ struct GitCleanupInspectionTests {
         }
     }
 
+    @Test("Post-EOF helper observation is bounded and requires an actual finished observation")
+    func boundedHelperSettlement() {
+        var observations = 0
+        #expect(GitHelperSettlement.observe(timeout: 0.1) {
+            observations += 1; return observations == 2
+        })
+        #expect(observations == 2)
+        #expect(!GitHelperSettlement.observe(timeout: 0.001) { false })
+        for timeout in [Double.infinity, Double.nan, 0, -1, 3] {
+            #expect(!GitHelperSettlement.observe(timeout: timeout) { true })
+        }
+    }
+
     @Test("Scope membership uses path components rather than a string prefix")
     func scopeComponents() {
         let root = URL(fileURLWithPath: "/fixture/project")

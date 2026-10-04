@@ -1,6 +1,6 @@
 # 原生缓存批量清理
 
-当前源码新增 Tools → Mole → Cleanup 的真实批量缓存操作。此页描述源码能力；未发布版本的验证状态以对应 PR 的精确提交 CI 为准。preview.7 不包含此工作流。
+Tools → Mole → Cleanup 的真实批量缓存操作已随 [0.1.0-preview.8](https://github.com/cosZone/MoeKit/releases/tag/v0.1.0-preview.8) 交付；preview.7 不包含此工作流。精确源码、测试、签名与下载验证范围见 [版本记录](../website/content/changelog/0.1.0-preview.8.md)。后续源码改动不自动计入既有安装包。
 
 ## 如何使用
 

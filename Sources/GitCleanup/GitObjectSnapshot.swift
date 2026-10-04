@@ -13,6 +13,7 @@ final class GitObjectSnapshot {
     private let privateRoot: InstallerDirectoryAnchor
     private(set) var version = ""
     private var binaryDigest = ""
+    private var removalIsSafe = true
     var provenance: String { version + "|" + binaryDigest }
     init(common: InstallerDirectoryAnchor, temporaryRoot: URL? = nil) throws {
         let objectDirectory = try GitCleanupInspectionStage.check("object directory anchor") { try common.child("objects") }
@@ -71,6 +72,7 @@ final class GitObjectSnapshot {
         } catch { remove(); throw error }
     }
     func remove() {
+        guard removalIsSafe else { return } // retain the private snapshot after uncertain helper settlement
         do {
             try privateRoot.validate(); try InstallerFileAccess.validatePrivate(privateRoot.fd, directory: true)
             guard try GitCleanupInspection.read(privateRoot, ".moekit-owner", maximum: 128) == Data(directory.lastPathComponent.utf8) else { return }
@@ -110,7 +112,11 @@ final class GitObjectSnapshot {
         process.environment = ["PATH": "/usr/bin:/bin", "LC_ALL": "C"]
         process.currentDirectoryURL = directory
         process.standardInput = input; process.standardOutput = output; process.standardError = errors
-        try process.run()
+        let lifetime = GitHelperLifetime(process: process, root: privateRoot)
+        defer { withExtendedLifetime(lifetime) {} }
+        removalIsSafe = false
+        do { try process.run() }
+        catch { lifetime.settled(); removalIsSafe = true; throw error }
         // Helper buffers at most 128 stdout + 64 KiB stderr bytes and has a 15s
         // wall deadline. Drain stderr concurrently to avoid pipe backpressure.
         let drained = DispatchGroup(); drained.enter()
@@ -119,9 +125,16 @@ final class GitObjectSnapshot {
             drained.leave()
         }
         let result = output.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit(); try? input.fileHandleForWriting.close(); drained.wait()
+        try? input.fileHandleForWriting.close()
+        // Foundation waitUntilExit can stall even after isRunning is false in
+        // a Swift-concurrency test host. Bound only the post-stdout-EOF wait;
+        // the synchronous stdout read above is not an end-to-end deadline.
+        guard GitHelperSettlement.observe(timeout: 2, finished: { !process.isRunning }),
+              drained.wait(timeout: .now() + 2) == .success,
+              process.terminationReason == .exit else { throw GitCleanupFailure.helper }
+        removalIsSafe = true
         try Task.checkCancellation()
-        guard process.terminationReason == .exit, result.count <= 128 else { throw GitCleanupFailure.helper }
+        guard result.count <= 128 else { throw GitCleanupFailure.helper }
         if process.terminationStatus == 75 { throw GitCleanupFailure.uniqueCommits }
         if [71, 72, 76].contains(process.terminationStatus) { throw GitCleanupFailure.budget }
         guard process.terminationStatus == 0 else { throw GitCleanupFailure.helper }
@@ -147,5 +160,35 @@ final class GitObjectSnapshot {
             return name.dropFirst(5).dropLast(suffix.count).utf8.allSatisfy(hex)
         }
         return parts[0].count == 2 && parts[1].count == 38 && parts.joined().utf8.allSatisfy(hex)
+    }
+}
+
+/// Retain the owned process and root through actual helper termination even if
+/// post-EOF observation times out. The callback only releases this lifetime;
+/// it never signals by PID, deletes a snapshot or retries an operation.
+private final class GitHelperLifetime: @unchecked Sendable {
+    private let lock = NSLock()
+    private var process: Process?
+    private var root: InstallerDirectoryAnchor?
+    init(process: Process, root: InstallerDirectoryAnchor) {
+        self.process = process; self.root = root
+        process.terminationHandler = { [self] _ in settled() }
+    }
+    func settled() {
+        lock.lock(); defer { lock.unlock() }
+        // Break the retaining cycle without mutating Process from its callback.
+        process = nil; root = nil
+    }
+}
+
+enum GitHelperSettlement {
+    static func observe(timeout: TimeInterval, finished: () -> Bool) -> Bool {
+        guard timeout.isFinite, timeout > 0, timeout <= 2 else { return false }
+        let deadline = ProcessInfo.processInfo.systemUptime + timeout
+        while !finished() {
+            guard ProcessInfo.processInfo.systemUptime < deadline else { return false }
+            usleep(10_000)
+        }
+        return true
     }
 }

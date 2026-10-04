@@ -20,7 +20,7 @@ Swift 6 · SwiftUI / AppKit · macOS 15+ · Tuist 4.148.3 · SPM
 
 **实际 Mole 分析的边界：** 目前只支持匹配精确 SHA-256 的 V1.57.0 官方发布分析器，常见官方脚本安装位置为 `~/.config/mole/bin/analyze-go`；Homebrew 与自编译版本暂不匹配该校验。每次分析前显示范围及私有临时副本/缓存写入并要求确认，可取消，失败或未知覆盖不冒充成功。工具以普通用户权限运行，没有 OS 沙箱；没有自动安装、更新、提权或目标清理。详见 [执行设计与验证](Documentation/Mole-analysis-execution-design.md)。本节描述当前源码，具体构建/测试以对应提交 CI 为准。
 
-**预览验证记录：** `0.1.0-preview.5` 的精确源码 [`c54eb38`](https://github.com/cosZone/MoeKit/commit/c54eb38eaa56aa209c3761cc0d14e4b34caa99ed) 已在 [发布运行](https://github.com/cosZone/MoeKit/actions/runs/37192663888) 通过 246 项 Release Swift 测试、7 项合成视图渲染测试与 74 项发布辅助测试，包括实际 macOS DMG 创建、只读挂载、签名一致性与卸载检查。同源码 [Native CI](https://github.com/cosZone/MoeKit/actions/runs/37192263616) 还通过完整优化 Release、定向 AddressSanitizer 和中文渲染检查。DMG、ZIP 及校验信息已公开下载并核对；完整窗口、键盘、VoiceOver、双架构实机与真实权限仍需手动验收。
+**预览验证记录：** `0.1.0-preview.6` 的精确源码 [`2050435`](https://github.com/cosZone/MoeKit/commit/20504353f96aaa135c1ba1eaa551301e8d3eb008) 已在 [发布运行](https://github.com/cosZone/MoeKit/actions/runs/37201568085) 通过 327 项 Release Swift 测试、10 项渲染 XCTest 方法与 89 项发布辅助测试，包含官方分析器的真实合成目录测试。主 App 与原创监督辅助程序均已完成双架构签名验证，DMG／ZIP 内容和公开下载校验一致。同源码 [Native CI](https://github.com/cosZone/MoeKit/actions/runs/37201095817) 还通过定向 ASan、监督辅助程序和通用归档检查。完整窗口、键盘、VoiceOver、双架构实机与真实目录权限仍需手动验收。
 
 ## 构建
 
@@ -42,9 +42,9 @@ open DerivedData/Build/Products/Debug/MoeKit.app
 
 - [Actions](https://github.com/cosZone/MoeKit/actions)：Native CI 构建与测试；手动运行 Preview app artifact 可下载包含 `.app` 的 ZIP、源码 SHA、SHA-256 校验和与构建信息
 - Actions 的 Preview app artifact 仅 **ad-hoc 签名，没有 Developer ID 签名、没有公证**；该工作流不会创建 tag 或 GitHub Release
-- [0.1.0-preview.5](https://github.com/cosZone/MoeKit/releases/tag/v0.1.0-preview.5) 已发布：[DMG（推荐）](https://github.com/cosZone/MoeKit/releases/download/v0.1.0-preview.5/MoeKit-v0.1.0-preview.5-macOS.dmg) · [ZIP](https://github.com/cosZone/MoeKit/releases/download/v0.1.0-preview.5/MoeKit-v0.1.0-preview.5-macOS.zip)。两种包内是同一份 universal Release App，新增可跳过、可重开的上手引导和空状态说明，保留此前的只读工作区与可靠性改进，并附校验和与构建信息
+- [0.1.0-preview.6](https://github.com/cosZone/MoeKit/releases/tag/v0.1.0-preview.6) 已发布：[DMG（推荐）](https://github.com/cosZone/MoeKit/releases/download/v0.1.0-preview.6/MoeKit-v0.1.0-preview.6-macOS.dmg) · [ZIP](https://github.com/cosZone/MoeKit/releases/download/v0.1.0-preview.6/MoeKit-v0.1.0-preview.6-macOS.zip)。两种包内是同一份 universal Release App，包含逐次确认的官方固定版本 Mole 目录分析与工具准备，保留此前的上手引导和工作区改进，并附校验和与构建信息
 - 使用 **Apple Development 签名，未公证**，不等于 Developer ID 正式分发，Gatekeeper 仍可能阻止打开；DMG 格式不会改变这一限制
-- 按版本的实际交付说明见 [preview.5 更新记录](website/content/changelog/0.1.0-preview.5.md)；preview.1 至 preview.4 保持原样。文档网站独立部署，不随 App 安装。维护者流程见 [开发签名预览发布](Documentation/Signed-preview-release.md)
+- 按版本的实际交付说明见 [preview.6 更新记录](website/content/changelog/0.1.0-preview.6.md)；preview.1 至 preview.5 保持原样。文档网站独立部署，不随 App 安装。维护者流程见 [开发签名预览发布](Documentation/Signed-preview-release.md)
 - [构建与交付说明](Documentation/Build-and-preview.md)
 - [架构与数据边界](Documentation/Architecture.md)
 - [工具准备与安装边界](Documentation/Tool-preparation.md)

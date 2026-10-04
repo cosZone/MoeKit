@@ -73,7 +73,7 @@ enum GettingStartedGoal: String, CaseIterable, Identifiable {
     var privacy: String {
         switch self {
         case .projects: String(localized: "Reading starts only after you choose a folder. Discovery is bounded and read-only. Project paths, names and pins are saved locally; project files are not changed.")
-        case .processes: String(localized: "A snapshot is read only when you choose Start scan or Refresh: current-user executable names and paths, working directories, and TCP listening endpoints. Command arguments and environment variables are not read. No process signals are sent.")
+        case .processes: String(localized: "A snapshot is read only when you choose Start scan or Refresh: current-user executable names and paths, working directories, and TCP listening endpoints. Arguments and environment variables are not read. Scanning sends no signals; stopping requires a separate confirmation.")
         case .demo: String(localized: "Demo uses built-in examples. Entering Demo does not scan folders or processes, import reports, or replace your saved projects. Processes & Ports has no Demo scan.")
         }
     }

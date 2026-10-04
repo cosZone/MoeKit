@@ -33,6 +33,7 @@ actor NativeProcessInventoryProvider: ProcessInventoryProviding {
         let name: String
         let parentPID: Int32?
         let processGroupID: Int32?
+        let credentials: ProcessCredentials
     }
 
     func scan(options: ProcessScanOptions) async throws -> ProcessSnapshot {
@@ -112,7 +113,7 @@ actor NativeProcessInventoryProvider: ProcessInventoryProviding {
                 // PID alone is not identity. Recheck the UID, start time and
                 // executable path after all per-process metadata has been read.
                 guard let after = try observation(pid: pid, currentUID: currentUID, deadline: deadline),
-                      before.identity == after.identity else {
+                      before.identity == after.identity, before.credentials == after.credentials else {
                     changedCount += 1
                     isPartial = true
                     continue
@@ -125,7 +126,8 @@ actor NativeProcessInventoryProvider: ProcessInventoryProviding {
                     processGroupID: before.processGroupID,
                     workingDirectory: workingDirectory,
                     listeningPorts: ports,
-                    metadataIssues: metadataIssues
+                    metadataIssues: metadataIssues,
+                    credentials: before.credentials
                 ))
             }
         } catch BudgetExpired.expired {
@@ -148,8 +150,34 @@ actor NativeProcessInventoryProvider: ProcessInventoryProviding {
             currentUID: currentUID,
             observerPID: observerPID,
             issues: issues,
-            isPartial: isPartial
+            isPartial: isPartial,
+            currentGID: getegid()
         )
+    }
+
+    /// Reads only explicitly selected numeric PIDs; identity matching is left to
+    /// the confirmation executor. Unrelated unreadable processes cannot prevent
+    /// a valid target check, and no global scan is mistaken for atomic coverage.
+    func inspectSelected(_ pids: [Int32]) throws -> ProcessSnapshot {
+        guard (1...16).contains(pids.count), Set(pids).count == pids.count else { throw NativeProcessInventoryError.invalidOptions }
+        let uid = geteuid()
+        let deadline = ProcessInfo.processInfo.systemUptime + 5
+        var records: [ProcessInventoryRecord] = []
+        for pid in pids {
+            try checkBudget(deadline)
+            guard let before = try observation(pid: pid, currentUID: uid, deadline: deadline) else { throw ProcessTerminationError.unavailable }
+            let cwd = try workingDirectory(pid: pid, deadline: deadline)
+            var issues: [String] = []
+            let ports = try listeningPorts(pid: pid, maximumDescriptors: 256, deadline: deadline, issues: &issues)
+            guard let after = try observation(pid: pid, currentUID: uid, deadline: deadline), before.identity == after.identity, before.credentials == after.credentials else {
+                throw ProcessTerminationError.changed
+            }
+            records.append(ProcessInventoryRecord(identity: before.identity, name: before.name,
+                parentPID: before.parentPID, processGroupID: before.processGroupID,
+                workingDirectory: cwd, listeningPorts: ports, metadataIssues: issues, credentials: before.credentials))
+        }
+        return ProcessSnapshot(records: records, currentUID: uid, observerPID: getpid(),
+            isPartial: records.contains { !$0.metadataIssues.isEmpty || $0.workingDirectory == nil || $0.listeningPorts == nil }, currentGID: getegid())
     }
 
     private func checkBudget(_ deadline: TimeInterval) throws {
@@ -159,6 +187,7 @@ actor NativeProcessInventoryProvider: ProcessInventoryProviding {
 
     private func observation(pid: pid_t, currentUID: uid_t, deadline: TimeInterval) throws -> Observation? {
         try checkBudget(deadline)
+        let tokenBefore = NativeProcessToken.read(pid: pid)
         var info = proc_bsdinfo()
         let size = Int32(MemoryLayout<proc_bsdinfo>.size)
         let bytesRead = proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, size)
@@ -170,6 +199,12 @@ actor NativeProcessInventoryProvider: ProcessInventoryProviding {
         let name = withUnsafeBytes(of: &info.pbi_name, NativeProcessInventoryParsing.decodeCString)
             ?? withUnsafeBytes(of: &info.pbi_comm, NativeProcessInventoryParsing.decodeCString)
             ?? ""
+        let tokenAfter = NativeProcessToken.read(pid: pid)
+        let version = tokenBefore.flatMap { before -> UInt32? in
+            guard let after = tokenAfter, before.val.7 == after.val.7,
+                  before.val.1 == currentUID, after.val.1 == currentUID else { return nil }
+            return before.val.7
+        }
         let validStart = info.pbi_start_tvsec > 0 && info.pbi_start_tvusec < 1_000_000
         return Observation(
             identity: ProcessIdentity(
@@ -177,11 +212,13 @@ actor NativeProcessInventoryProvider: ProcessInventoryProviding {
                 startSeconds: validStart ? info.pbi_start_tvsec : nil,
                 startMicroseconds: validStart ? info.pbi_start_tvusec : nil,
                 uid: info.pbi_uid,
-                executablePath: path
+                executablePath: path,
+                executionVersion: version
             ),
             name: name,
             parentPID: Int32(exactly: info.pbi_ppid),
-            processGroupID: Int32(exactly: info.pbi_pgid)
+            processGroupID: Int32(exactly: info.pbi_pgid),
+            credentials: NativeProcessCredentials.read(info)
         )
     }
 

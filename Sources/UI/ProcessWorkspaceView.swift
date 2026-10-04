@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// An explicit, read-only snapshot. Entering this workspace never starts a scan.
+/// Explicit snapshots and separately confirmed exact-target termination.
+/// Entering this workspace never starts a scan or mutation.
 struct ProcessWorkspaceView: View {
     @Environment(WorkspaceStore.self) private var store
 
@@ -23,6 +24,21 @@ struct ProcessWorkspaceView: View {
             } else {
                 VStack(spacing: 0) {
                     snapshotHeader
+                    if inventory.termination.isExecuting {
+                        Label("A confirmed stop is settling. Submitted signals cannot be undone.", systemImage: "hourglass")
+                            .font(.caption).padding(8)
+                    }
+                    if !inventory.termination.results.isEmpty {
+                        DisclosureGroup("Last real stop result") {
+                            ScrollView {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    ForEach(inventory.termination.results) { result in
+                                        Text("PID \(result.record.identity.pid): \(result.message)")
+                                    }
+                                }.frame(maxWidth: .infinity, alignment: .leading)
+                            }.frame(maxHeight: 120)
+                        }.font(.caption).padding(.horizontal, 16)
+                    }
                     Divider()
                     if let error = inventory.errorMessage {
                         Label(error, systemImage: "exclamationmark.triangle")
@@ -39,7 +55,7 @@ struct ProcessWorkspaceView: View {
                     }
                     StatusBar(
                         leading: String(localized: "\(inventory.rows.count) processes · \(inventory.selection.count) selected"),
-                        trailing: String(localized: "Read-only · no process signals are sent")
+                        trailing: String(localized: "Exact targets · stopping requires confirmation")
                     )
                 }
             }
@@ -48,7 +64,7 @@ struct ProcessWorkspaceView: View {
             get: { store.isDemoEnabled ? nil : inventory.plan },
             set: { inventory.plan = $0 }
         )) { plan in
-            ProcessStopPlanView(plan: plan)
+            ProcessStopPlanView(plan: plan, termination: inventory.termination)
         }
         .onChange(of: inventory.rows.map(\.id)) { _, visibleIDs in
             inventory.selection.formIntersection(Set(visibleIDs))
@@ -150,7 +166,7 @@ struct ProcessWorkspaceView: View {
             }.width(min: 120, ideal: 145, max: 200)
         }
         .tableStyle(.inset(alternatesRowBackgrounds: true))
-        .disabled(inventory.isScanning)
+        .disabled(inventory.isScanning || inventory.termination.isBusy)
         .overlay {
             if inventory.rows.isEmpty {
                 ContentUnavailableView {
@@ -209,7 +225,7 @@ struct ProcessWorkspaceView: View {
                     inventory.reviewSelection()
                 }
                     .disabled(store.isDemoEnabled || inventory.isScanning || inventory.selection.isEmpty)
-                    .help("Inspect exact targets and risks. Stopping processes is unavailable.")
+                    .help("Inspect exact targets and risks, then prepare a fresh stop confirmation.")
             }.padding(.horizontal, 16).frame(height: 38).background(MoeStyle.secondarySurface)
             if let record = selectedRecord {
                 ScrollView {
@@ -238,7 +254,7 @@ struct ProcessWorkspaceView: View {
                     Text(inventory.selection.isEmpty ? "Select a process" : "Multiple processes selected").fontWeight(.medium)
                     Text(inventory.selection.isEmpty
                          ? "Select a row to inspect identity, listening ports, project evidence, and protection reasons."
-                         : "Review the plan to inspect every selected identity and its risks. No stop action is available.")
+                         : "Review every selected identity and its risks. Protected processes cannot be stopped here.")
                         .foregroundStyle(.secondary)
                 }.font(.caption).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).padding(16)
             }
@@ -262,6 +278,7 @@ private struct ProcessRecordDetails: View {
             ProcessDetailRow(title: "PID", value: String(identity.pid))
             ProcessDetailRow(title: "Started", value: identity.startedAt?.formatted(date: .abbreviated, time: .complete) ?? ProcessPresentation.unknown)
             ProcessDetailRow(title: "Start identity (s / µs)", value: ProcessPresentation.startIdentity(identity))
+            ProcessDetailRow(title: "Execution version", value: identity.executionVersion.map { String($0) } ?? ProcessPresentation.unknown)
             ProcessDetailRow(title: "UID", value: identity.uid.map { String($0) } ?? ProcessPresentation.unknown)
             ProcessDetailRow(title: "Executable path", value: identity.executablePath ?? ProcessPresentation.unknown)
             ProcessDetailRow(title: "Parent PID", value: record.parentPID.map { String($0) } ?? ProcessPresentation.unknown)
@@ -279,26 +296,27 @@ private struct ProcessDetailRow: View {
     var body: some View {
         GridRow(alignment: .top) {
             Text(title).foregroundStyle(.secondary)
-            Text(value).frame(maxWidth: .infinity, alignment: .leading)
+            Text(ProcessDisplayText.escape(value)).frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }
 
-private struct ProcessStopPlanView: View {
+struct ProcessStopPlanView: View {
     @Environment(\.dismiss) private var dismiss
     let plan: StopPlan
+    let termination: ProcessTerminationStore
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 9) {
                 Label("Review stop plan", systemImage: "checklist").font(.title2).fontWeight(.semibold)
-                Text("Inspection only. Process stopping, graceful termination, and force termination are unavailable. No signals will be sent.")
+                Text("Review exact targets. Preparing a confirmation rechecks current identity and metadata. Protected targets must be removed before stopping.")
                     .foregroundStyle(.secondary)
                 LabeledContent("Snapshot", value: plan.snapshotDate.formatted(date: .abbreviated, time: .complete))
                     .font(.caption)
                 LabeledContent("Snapshot ID", value: plan.snapshotID.uuidString).font(.caption).textSelection(.enabled)
                 Text("\(plan.targets.count) exact targets · \(plan.protectedTargetCount) protected").font(.caption).fontWeight(.medium)
-                Text("Protected rows remain in this inspection so you can understand why they need individual review. Selecting a row does not authorize stopping it.")
+                Text("Browsers, applications, shared services, system processes and MoeKit ancestors are protected. Headless browser ownership cannot yet be proved from this metadata. Selecting a row does not authorize stopping it.")
                     .font(.caption).foregroundStyle(.secondary)
             }.padding(20)
             Divider()
@@ -338,12 +356,77 @@ private struct ProcessStopPlanView: View {
                 }.padding(20).frame(maxWidth: .infinity, alignment: .leading)
             }
             Divider()
-            HStack {
-                Label("Execution unavailable", systemImage: "lock").foregroundStyle(.secondary)
-                Spacer()
-                Button("Close") { dismiss() }.keyboardShortcut(.cancelAction)
-            }.padding(20)
-        }.frame(minWidth: 620, idealWidth: 700, minHeight: 480, idealHeight: 620)
+            VStack(alignment: .leading, spacing: 12) {
+                if let error = termination.errorMessage {
+                    Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
+                }
+                if !termination.results.isEmpty {
+                    Text("Last real stop result").fontWeight(.medium)
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 8) {
+                            ForEach(termination.results) { result in
+                                Text("PID \(result.record.identity.pid): \(result.message)").font(.caption).textSelection(.enabled)
+                            }
+                        }.frame(maxWidth: .infinity, alignment: .leading)
+                    }.frame(maxHeight: 150)
+                }
+                if let review = termination.review {
+                    Text(review.mode == .graceful ? "Confirm graceful stop (SIGTERM)" : "Confirm force stop (SIGKILL)")
+                        .fontWeight(.semibold)
+                        .installerCaptureIdentity("process.mode", text: review.mode.rawValue)
+                    Text("\(review.records.count) exact targets: \(review.records.map { String($0.identity.pid) }.joined(separator: ", "))")
+                        .font(.caption).textSelection(.enabled)
+                        .installerCaptureIdentity("process.targets", text: review.records.map { String($0.identity.pid) }.joined(separator: ", "))
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 6) {
+                            ForEach(review.records) { record in
+                                Text("PID \(record.identity.pid): \(ProcessDisplayText.escape(record.identity.executablePath ?? ProcessPresentation.unknown))")
+                                    .font(.caption).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .installerCaptureIdentity("process.identity.\(record.identity.pid)", text: ProcessDisplayText.escape(record.identity.executablePath ?? ProcessPresentation.unknown))
+                            }
+                        }
+                    }.frame(maxHeight: 80)
+                    let consequences = review.mode == .graceful
+                        ? String(localized: "These processes may stop immediately and lose unsaved work. A process may also stop its own children in response. MoeKit sends no group or descendant signals. This confirmation expires after 60 seconds.")
+                        : String(localized: "Force stop prevents cleanup and may lose or corrupt unsaved work. Only the listed still-running identities receive SIGKILL. This confirmation expires after 60 seconds.")
+                    Text(consequences).font(.caption).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .installerCaptureIdentity("process.consequences", text: consequences)
+                    Toggle("I checked each listed target and accept these consequences", isOn: Binding(
+                        get: { termination.acknowledgedReviewID == review.id },
+                        set: { termination.acknowledge(reviewID: review.id, value: $0) }
+                    )).installerCaptureIdentity("process.acknowledgement", text: String(localized: "I checked each listed target and accept these consequences"))
+                    HStack {
+                        Button("Cancel confirmation") { termination.cancelReview() }
+                            .installerCaptureIdentity("process.cancel", text: String(localized: "Cancel confirmation"))
+                        Spacer()
+                        Button(review.mode == .graceful ? "Stop these processes" : "Force stop these processes", role: .destructive) {
+                            termination.confirm(reviewID: review.id)
+                        }.disabled(termination.acknowledgedReviewID != review.id)
+                            .installerCaptureIdentity("process.confirm", text: review.mode == .graceful ? String(localized: "Stop these processes") : String(localized: "Force stop these processes"))
+                    }
+                } else {
+                    HStack {
+                        if termination.isBusy { ProgressView().controlSize(.small); Text("Checking targets and observing results…") }
+                        else if !termination.forceCandidates.isEmpty {
+                            Button("Review force stop…") {
+                                termination.prepare(termination.forceCandidates, mode: .force)
+                            }
+                        } else {
+                            Button("Prepare graceful stop…") {
+                                termination.prepare(plan.targets.map(\.record), mode: .graceful)
+                            }.disabled(plan.protectedTargetCount > 0 || plan.targets.isEmpty || plan.targets.count != plan.selectedIdentities.count)
+                        }
+                        Spacer()
+                        Button("Close") { termination.cancelReview(); dismiss() }
+                            .keyboardShortcut(.cancelAction).disabled(termination.isBusy)
+                    }
+                }
+            }.font(.callout).padding(20).layoutPriority(1)
+        }.frame(minWidth: 620, idealWidth: 740, minHeight: 480, idealHeight: 720)
+            .interactiveDismissDisabled(termination.isBusy)
+            .onDisappear { termination.cancelReview() }
     }
 }
 

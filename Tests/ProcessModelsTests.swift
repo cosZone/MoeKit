@@ -382,7 +382,7 @@ struct ProcessStopPlanTests {
         #expect(target.id == row.identity)
         #expect(target.record == row)
         #expect(target.name == row.name)
-        #expect(plan.warnings.contains(String(localized: "Preview only. Stopping and force stopping are not implemented.")))
+        #expect(plan.warnings.contains(String(localized: "Review is not permission to stop. A fresh identity check and explicit confirmation are required.")))
         #expect(ProcessStopPlanner.invalidations(for: plan, snapshot: snapshot, selection: [row.identity], now: ProcessModelFixture.now).isEmpty)
         #expect(!plan.canExecute)
     }

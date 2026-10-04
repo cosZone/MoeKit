@@ -4,7 +4,7 @@
 
 `MoeKitApp` 创建共享的 `WorkspaceStore`。SwiftUI `NavigationSplitView` 承载 Projects / Tools / Tasks，项目使用 `Table` 和 inspector，任务详情停靠于底部。AppKit 仅用于原生文件选择器与 Finder 定位。导航与操作图标使用 SF Symbols；应用图标和品牌图像来自 `Resources/Brand`。
 
-`ToolModule` / `ToolModuleDescriptor` / `ToolModuleRegistry` 描述内置集成、稳定 ID、可搜索的模块数据和能力可用性；当前 UI 在 Tools 中选择 Mole 或 Processes & Ports。新增内置模块不改变顶层导航。Mole 仅接入精确官方版本、单目录、逐次确认的分析；进程停止能力仍不可用；Processes & Ports 仅提供用户主动触发的原生只读快照。它不是动态插件宿主，不加载任意二进制或脚本。
+`ToolModule` / `ToolModuleDescriptor` / `ToolModuleRegistry` 描述内置集成、稳定 ID、可搜索的模块数据和能力可用性；当前 UI 在 Tools 中选择 Mole 或 Processes & Ports。新增内置模块不改变顶层导航。Mole 仅接入精确官方版本、单目录、逐次确认的分析；Processes & Ports 提供主动快照与逐次独立确认的精确身份停止。它不是动态插件宿主，不加载任意二进制或脚本。
 
 ## Projects：读取与保存
 
@@ -57,7 +57,7 @@ Swift Testing 测试覆盖扫描边界、取消、异常元数据、模块注册
 
 ## Processes & Ports
 
-独立的 actor 通过 Darwin/libproc 读取当前有效用户的有限进程快照；主线程 coordinator 处理取消、重复请求、选择失效和 Demo 边界。关联只来自规范化 cwd 与项目路径的包含关系，不推断会话所有权。停止计划仅供检查，不包含信号执行入口。详见 [范围与隐私](Processes-and-ports.md)。
+独立的 actor 通过 Darwin/libproc 读取当前有效用户的有限进程快照；主线程 coordinator 处理取消、重复请求、选择失效和 Demo 边界。关联只来自规范化 cwd 与项目路径的包含关系，不推断会话所有权。检查计划自身不能执行；独立 executor 以一次性确认和内核 audit token 发送精确 SIGTERM，仍存活的同一身份才可另行确认 SIGKILL；保护浏览器/应用/共享服务/系统/自身及祖先，不向组或自动扩展的子进程发信号。详见 [范围与隐私](Processes-and-ports.md)。
 
 ## Git status 准备
 

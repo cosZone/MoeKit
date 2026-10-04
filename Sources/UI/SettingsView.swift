@@ -34,15 +34,15 @@ struct SettingsView: View {
             }
             Section("App icons") {
                 Toggle("Show Dock icon", isOn: $visibility.showDockIcon)
-                    .installerCaptureRegion("icons.dock", text: String(localized: "Show Dock icon"))
+                    .installerCaptureIdentity("icons.dock", text: String(localized: "Show Dock icon"))
                 Toggle("Show menu bar icon", isOn: $visibility.showMenuBarIcon)
-                    .installerCaptureRegion("icons.menu", text: String(localized: "Show menu bar icon"))
+                    .installerCaptureIdentity("icons.menu", text: String(localized: "Show menu bar icon"))
                 Text("Closing windows keeps MoeKit open. Some operations cancel when their view closes. Use Quit MoeKit to exit.")
                     .font(.caption).foregroundStyle(.secondary)
                 if visibility.hasNoPersistentIcon {
                     Label("Both icons are hidden. Open MoeKit from Finder or Spotlight to return to the workspace and settings.", systemImage: "info.circle")
                         .font(.caption)
-                        .installerCaptureRegion("icons.recovery", text: String(localized: "Both icons are hidden. Open MoeKit from Finder or Spotlight to return to the workspace and settings."))
+                        .installerCaptureIdentity("icons.recovery", text: String(localized: "Both icons are hidden. Open MoeKit from Finder or Spotlight to return to the workspace and settings."))
                 }
             }
             Section("Updates") {

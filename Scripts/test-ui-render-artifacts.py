@@ -62,7 +62,7 @@ class RenderArtifactTests(unittest.TestCase):
                     if scenario.startswith("updates-"):
                         with (root / text).open("a") as stream:
                             stream.write(f"Update action title: {'检查更新…' if language == 'zh-Hans' else 'Check for updates…'}\n")
-                            stream.write(f"Visible required controls: {3 if 'hidden-icons' in scenario else 6}\nEvidence source: public SwiftUI bounds anchors on displayed views\n")
+                            stream.write(f"Visible required controls: {3 if 'hidden-icons' in scenario else (7 if any(state in scenario for state in ('available', 'development')) else 6)}\nEvidence source: public SwiftUI bounds anchors on displayed views\n")
                             stream.write("Network requests: 0\nScope: owned release/settings views with isolated preferences and synthetic responses.\n")
                     if scenario.startswith("process-stop-"):
                         with (root / text).open("a") as stream:

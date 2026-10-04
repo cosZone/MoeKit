@@ -57,8 +57,9 @@ final class ReleaseCheckViewTests: XCTestCase {
                     window.setContentSize(size)
                 }
                 XCTAssertEqual(hosting.bounds.size, size)
-                let required = scenario == "hidden-icons" ? ["icons.dock", "icons.menu", "icons.recovery"]
+                var required = scenario == "hidden-icons" ? ["icons.dock", "icons.menu", "icons.recovery"]
                     : ["updates.channel", "updates.result", "updates.check", "updates.installation", "updates.releases", "updates.privacy"]
+                if ["available", "development"].contains(scenario) { required.append("updates.download") }
                 for id in required {
                     let region = try XCTUnwrap(capture.regions.first { $0.id == id })
                     XCTAssertGreaterThan(region.bounds.width, 0)

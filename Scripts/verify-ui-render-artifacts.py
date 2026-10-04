@@ -165,7 +165,7 @@ def verify(directory: Path, language: str) -> int:
             required.update({
                 f"Update action title: {'检查更新…' if language == 'zh-Hans' else 'Check for updates…'}",
                 "Network requests: 0",
-                f"Visible required controls: {3 if 'hidden-icons' in name else 6}",
+                f"Visible required controls: {3 if 'hidden-icons' in name else (7 if any(state in name for state in ('available', 'development')) else 6)}",
                 "Evidence source: public SwiftUI bounds anchors on displayed views",
                 "Scope: owned release/settings views with isolated preferences and synthetic responses.",
             })

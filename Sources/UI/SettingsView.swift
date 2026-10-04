@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(WorkspaceStore.self) private var store
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         TabView {
@@ -27,6 +28,13 @@ struct SettingsView: View {
                         Text("A native home for your personal CLI toolbox").foregroundStyle(.secondary)
                     }
                 }
+            }
+            Section("Getting started") {
+                Button("Open getting started") {
+                    if store.showGettingStarted() { openWindow(id: "getting-started") }
+                }.disabled(!store.canNavigateFromGettingStarted)
+                Text("Choose a first step and learn what this preview can read and do.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
             Section("Preview") {
                 Toggle("Use demo data", isOn: $store.isDemoEnabled).disabled(store.isScanning)

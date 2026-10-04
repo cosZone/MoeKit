@@ -12,6 +12,7 @@ Swift 6 · SwiftUI / AppKit · macOS 15+ · Tuist 4.148.3 · SPM
 - **Processes & Ports**：原生密集表格、身份与关联证据、部分读取提示、项目相关进程入口，以及不可执行的精确选择停止计划预览；不读取命令参数/环境变量，不自动扫描或发送进程信号
 - **Tasks**：本次会话的发现任务、取消、状态与底部结果详情；可展开 Diagnostics
 - 独立 Demo 开关与明确示例标识；正常启动无虚构项目、运行结果或磁盘测量
+- 可跳过、可重开的上手引导：项目整理、进程查看或示例体验；先说明范围，再由用户主动选择文件夹或开始扫描
 - 原生 NavigationSplitView、Table、工具栏与 SF Symbols；自定义应用图标
 
 尚未实现：CLI 进程执行、停止/强制停止、清理、卸载、维护、实时系统指标、提权、第三方插件加载及持久任务历史。导入报告不运行 Mole，报告数值不等于可回收空间。
@@ -44,6 +45,7 @@ open DerivedData/Build/Products/Debug/MoeKit.app
 - [构建与交付说明](Documentation/Build-and-preview.md)
 - [架构与数据边界](Documentation/Architecture.md)
 - [进程与端口的范围、隐私与验证边界](Documentation/Processes-and-ports.md)
+- [上手引导与验证边界](Documentation/Getting-started.md)
 - [原生验收清单](Documentation/Verification.md)
 
 ## 文档网站

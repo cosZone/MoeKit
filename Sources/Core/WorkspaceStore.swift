@@ -10,6 +10,7 @@ final class WorkspaceStore {
     var selectedCapability: MoleCapability = .space
     var selectedToolID = MoleModule.id
     let processes = ProcessInventoryStore()
+    let gettingStarted: GettingStartedState
     var projectSearch = "" { didSet { reconcileProjectSelection() } }
     var taskSearch = "" { didSet { reconcileTaskSelection() } }
     var toolSearch = ""
@@ -51,14 +52,48 @@ final class WorkspaceStore {
     @ObservationIgnored private var catalogIsWritable = true
     @ObservationIgnored private var scanTask: Task<Void, Never>?
 
-    init(isDemoEnabled: Bool = ProcessInfo.processInfo.arguments.contains("--demo"), persistence: CatalogPersistence = .init()) {
+    init(isDemoEnabled: Bool = ProcessInfo.processInfo.arguments.contains("--demo"), persistence: CatalogPersistence = .init(),
+         gettingStarted: GettingStartedState = .init()) {
         self.isDemoEnabled = isDemoEnabled
         self.persistence = persistence
+        self.gettingStarted = gettingStarted
         processes.onEvent = { [weak self] event in self?.recordProcessEvent(event) }
         do { projects = try persistence.load() }
         catch {
             catalogIsWritable = false
             errorMessage = String(localized: "The project catalog could not be read. Existing data was not replaced.")
+        }
+    }
+
+    var canNavigateFromGettingStarted: Bool {
+        !isScanning && !isImporting && !processes.isScanning && pendingDiscovery == nil
+            && cleanupReviewProjectID == nil && processes.plan == nil && errorMessage == nil
+    }
+
+    func showAutomaticGettingStarted() -> Bool {
+        guard canNavigateFromGettingStarted else { return false }
+        return gettingStarted.presentAutomatically(hasSavedProjects: !projects.isEmpty,
+            hasCatalogError: !catalogIsWritable, isDemo: isDemoEnabled)
+    }
+
+    func showGettingStarted() -> Bool {
+        guard canNavigateFromGettingStarted else { return false }
+        return gettingStarted.present()
+    }
+
+    /// Navigation only; scanners and NSOpenPanel remain behind explicit actions.
+    func openGettingStartedGoal(_ goal: GettingStartedGoal) {
+        guard canNavigateFromGettingStarted else { return }
+        let wantsDemo = goal == .demo
+        if isDemoEnabled != wantsDemo { isDemoEnabled = wantsDemo }
+        switch goal {
+        case .projects, .demo:
+            clearProjectFilters()
+            section = .projects
+        case .processes:
+            processes.clearFilters()
+            selectedToolID = ProcessModule.id
+            section = .tools
         }
     }
 
@@ -99,7 +134,7 @@ final class WorkspaceStore {
     var hasProjectFilters: Bool { projectFilter != .all || !projectSearch.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     var hasTaskFilters: Bool { taskFilter != .all || !taskSearch.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     var canSearchWorkspace: Bool {
-        guard pendingDiscovery == nil, cleanupReviewProjectID == nil, processes.plan == nil else { return false }
+        guard !gettingStarted.isPresented, pendingDiscovery == nil, cleanupReviewProjectID == nil, processes.plan == nil else { return false }
         return section != .tools || (selectedToolID == ProcessModule.id ? !isDemoEnabled : selectedCapability == .space)
     }
     var workspaceSearchPrompt: String {

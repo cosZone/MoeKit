@@ -42,14 +42,47 @@ final class UISnapshotTests: XCTestCase {
     }
 
     @MainActor
-    private func captureVariants(named scenario: String, configure: (WorkspaceStore) -> Void) throws {
+    func testGettingStartedWelcomeRenders() throws {
+        try captureVariants(named: "getting-started-welcome", rendersGuide: true, isDemoEnabled: false) { store in
+            XCTAssertTrue(store.showAutomaticGettingStarted())
+        }
+    }
+
+    @MainActor
+    func testGettingStartedDestinationsRender() throws {
+        for goal in GettingStartedGoal.allCases {
+            try captureVariants(named: "getting-started-\(goal.rawValue)", rendersGuide: true, isDemoEnabled: false) { store in
+                XCTAssertTrue(store.showGettingStarted())
+                store.gettingStarted.selectedGoal = goal
+            }
+        }
+    }
+
+    @MainActor
+    func testFirstUseWorkspacesRender() throws {
+        for scenario in ["projects", "processes", "tasks", "mole-space"] {
+            try captureVariants(named: "first-use-\(scenario)", isDemoEnabled: false) { store in
+                switch scenario {
+                case "processes": store.openGettingStartedGoal(.processes)
+                case "tasks": store.section = .tasks
+                case "mole-space": store.section = .tools; store.selectedToolID = MoleModule.id
+                default: store.section = .projects
+                }
+            }
+        }
+    }
+
+    @MainActor
+    private func captureVariants(named scenario: String, rendersGuide: Bool = false, isDemoEnabled: Bool = true, configure: (WorkspaceStore) -> Void) throws {
         let language = try XCTUnwrap(Bundle.main.preferredLocalizations.first)
         XCTAssertTrue(["en", "zh-Hans"].contains(language), "Render language must be explicitly supported")
         XCTAssertEqual(WorkspaceSection.projects.title, language == "zh-Hans" ? "项目" : "Projects")
         XCTAssertEqual(TaskStatus.partial.title, language == "zh-Hans" ? "部分结果" : "Partial result")
         // CI separately checks that the process locale agrees with its requested
         // language. Setting only the SwiftUI locale would leave model strings mixed.
-        let sizes = [NSSize(width: 960, height: 620), NSSize(width: 1280, height: 800)]
+        let sizes = rendersGuide
+            ? [NSSize(width: 520, height: 480), NSSize(width: 620, height: 580)]
+            : [NSSize(width: 960, height: 620), NSSize(width: 1280, height: 800)]
         let appearances: [(String, NSAppearance.Name, ColorScheme)] = [
             ("light", .aqua, .light), ("dark", .darkAqua, .dark),
         ]
@@ -58,7 +91,7 @@ final class UISnapshotTests: XCTestCase {
                 try autoreleasepool {
                     let name = "\(scenario)-\(language)-\(name)-\(Int(size.width))x\(Int(size.height))"
                     try capture(named: name, size: size, appearanceName: appearanceName,
-                                colorScheme: colorScheme, configure: configure)
+                                colorScheme: colorScheme, rendersGuide: rendersGuide, isDemoEnabled: isDemoEnabled, configure: configure)
                 }
             }
         }
@@ -66,21 +99,22 @@ final class UISnapshotTests: XCTestCase {
 
     @MainActor
     private func capture(named name: String, size: NSSize, appearanceName: NSAppearance.Name,
-                         colorScheme: ColorScheme, configure: (WorkspaceStore) -> Void) throws {
+                         colorScheme: ColorScheme, rendersGuide: Bool, isDemoEnabled: Bool, configure: (WorkspaceStore) -> Void) throws {
         // Even Demo's store initializer loads its catalog. Point it exclusively at
         // a fresh, empty test directory, never the runner's Application Support.
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("MoeKit-ui-render-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
-        let store = WorkspaceStore(isDemoEnabled: true, persistence: CatalogPersistence(directory: directory))
+        let store = WorkspaceStore(isDemoEnabled: isDemoEnabled, persistence: CatalogPersistence(directory: directory))
         configure(store)
         XCTAssertTrue(store.projects.isEmpty)
         XCTAssertTrue(store.tasks.isEmpty)
 
         _ = NSApplication.shared
         let appearance = try XCTUnwrap(NSAppearance(named: appearanceName))
-        let root = WorkspaceView()
+        let content = rendersGuide ? AnyView(GettingStartedView(close: {})) : AnyView(WorkspaceView())
+        let root = content
             .environment(store)
             .environment(\.colorScheme, colorScheme)
             .environment(\.locale, Locale.current)
@@ -134,7 +168,7 @@ final class UISnapshotTests: XCTestCase {
         XCTAssertFalse(store.processes.isScanning)
         XCTAssertNil(store.processes.snapshot)
         XCTAssertTrue(try FileManager.default.contentsOfDirectory(atPath: directory.path).isEmpty,
-                      "Rendering synthetic Demo data must not persist a catalog")
+                      "Rendering synthetic views must not persist a catalog")
 
         let metadata = XCTAttachment(string: """
         \(name)
@@ -149,7 +183,8 @@ final class UISnapshotTests: XCTestCase {
         Hosting bounds: \(hosting.bounds)
         Window content layout: \(window.contentLayoutRect)
         macOS: \(ProcessInfo.processInfo.operatingSystemVersionString)
-        Scope: app-owned WorkspaceView subtree, synthetic Demo fixtures, empty temporary catalog.
+        Scope: app-owned view subtree, built-in Demo fixtures or empty first-use state, empty temporary catalog.
+        Guide presentation: \(rendersGuide); Demo enabled: \(isDemoEnabled).
         No screen/window-server capture. Window chrome and toolbar are outside this content render.
         These are review artifacts, not approved baselines or manual visual/accessibility acceptance.
         Fixture timestamps are relative; do not use these images as deterministic pixel baselines.

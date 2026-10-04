@@ -158,6 +158,9 @@ struct ProcessWorkspaceView: View {
                 } description: {
                     Text(emptyStateDescription)
                 } actions: {
+                    if inventory.snapshot == nil && !inventory.isScanning {
+                        GettingStartedButton()
+                    }
                     if inventory.hasActiveFilters && !inventory.isScanning {
                         Button("Clear filters") { inventory.clearFilters() }
                     }
@@ -192,7 +195,7 @@ struct ProcessWorkspaceView: View {
         switch inventory.lastScanStatus {
         case .cancelled: return String(localized: "The scan was cancelled. No processes were changed. Start a new scan when you’re ready.")
         case .failed: return String(localized: "The scan did not produce a snapshot. Start a new scan to retry; no processes were changed.")
-        default: return String(localized: "Start a bounded, read-only scan when you’re ready. Nothing is scanned automatically.")
+        default: return String(localized: "Choose Start scan in the toolbar to read current-user executable names and paths, working directories and TCP listening endpoints. No command arguments, environment variables or process signals. Nothing is scanned automatically.")
         }
     }
 

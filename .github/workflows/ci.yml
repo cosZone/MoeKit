@@ -50,7 +50,7 @@ jobs:
                 CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=)
           xcodebuild "${args[@]}" build-for-testing
           xcodebuild "${args[@]}" test-without-building -testLanguage en -testRegion US -resultBundlePath TestResults.xcresult
-      - name: Render Projects and Tasks in Simplified Chinese
+      - name: Render workspaces and first-use guidance in Simplified Chinese
         run: |
           set -euo pipefail
           xcodebuild -workspace MoeKit.xcworkspace -scheme MoeKit -configuration Debug \
@@ -59,6 +59,9 @@ jobs:
             test-without-building -testLanguage zh-Hans -testRegion CN \
             -only-testing:MoeKitTests/UISnapshotTests/testDemoProjectsRenders \
             -only-testing:MoeKitTests/UISnapshotTests/testDemoTasksRenders \
+            -only-testing:MoeKitTests/UISnapshotTests/testGettingStartedWelcomeRenders \
+            -only-testing:MoeKitTests/UISnapshotTests/testGettingStartedDestinationsRender \
+            -only-testing:MoeKitTests/UISnapshotTests/testFirstUseWorkspacesRender \
             -resultBundlePath ChineseRenderResults.xcresult
       - name: Check SwiftUI bundle and smoke-launch explicit demo
         run: |

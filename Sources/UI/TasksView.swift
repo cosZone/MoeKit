@@ -40,6 +40,10 @@ struct TasksView: View {
                             Text(store.displayedTasks.isEmpty ? "Discovery and process scans appear here with their actual results." : "Try a different search or task filter.")
                         } actions: {
                             if store.hasTaskFilters { Button("Clear filters") { store.clearTaskFilters() } }
+                            else if store.displayedTasks.isEmpty {
+                                Button("Go to Projects") { store.openGettingStartedGoal(.projects) }
+                                Button("Go to Processes & Ports") { store.openGettingStartedGoal(.processes) }
+                            }
                         }
                     }
                 }

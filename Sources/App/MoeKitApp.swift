@@ -1,8 +1,11 @@
+import AppKit
 import SwiftUI
 
 @main
 @MainActor
 struct MoeKitApp: App {
+    @NSApplicationDelegateAdaptor(MoeKitAppDelegate.self) private var appDelegate
+    @Environment(\.openSettings) private var openSettings
     @State private var store = WorkspaceStore(gettingStarted: GettingStartedState(defaults: .standard))
     @Environment(\.openWindow) private var openWindow
 
@@ -11,6 +14,16 @@ struct MoeKitApp: App {
             WorkspaceView()
                 .environment(store)
                 .frame(minWidth: 960, minHeight: 620)
+                .onAppear {
+                    appDelegate.entryPoints.install(
+                        openWorkspace: { openWindow(id: "workspace", value: "main") },
+                        openSettings: { openSettings() },
+                        checkUpdates: {
+                            openWindow(id: "updates")
+                            appDelegate.updates.check()
+                        }
+                    )
+                }
                 .task {
                     if store.showAutomaticGettingStarted() { openWindow(id: "getting-started") }
                 }
@@ -21,6 +34,7 @@ struct MoeKitApp: App {
             WorkspaceCommands()
             CommandGroup(replacing: .appInfo) {
                 Button("About MoeKit") { openWindow(id: "about") }
+                Button("Check for updates…") { appDelegate.entryPoints.showUpdates() }
             }
             CommandGroup(replacing: .help) {
                 Button("Getting started…") {
@@ -28,6 +42,8 @@ struct MoeKitApp: App {
                 }.disabled(!store.canNavigateFromGettingStarted)
             }
             CommandGroup(after: .newItem) {
+                Button("Open MoeKit") { appDelegate.entryPoints.showWorkspace() }
+                    .keyboardShortcut("0", modifiers: [.command])
                 Button("Add project…") { store.chooseProject(scanChildren: false) }
                     .keyboardShortcut("o", modifiers: [.command])
                     .disabled(store.isDemoEnabled || store.isScanning || store.gettingStarted.isPresented)
@@ -35,7 +51,19 @@ struct MoeKitApp: App {
                     .disabled(store.isDemoEnabled || store.isScanning || store.gettingStarted.isPresented)
             }
         }
-        Settings { SettingsView().environment(store) }
+        Settings {
+            SettingsView(checkForUpdates: { appDelegate.entryPoints.showUpdates() })
+                .environment(store)
+                .environment(appDelegate.entryPoints.preferences)
+        }
+
+        Window("MoeKit updates", id: "updates") {
+            ReleaseCheckView(updates: appDelegate.updates)
+        }
+        .windowResizability(.contentSize)
+        .defaultPosition(.center)
+        .restorationBehavior(.disabled)
+        .defaultLaunchBehavior(.suppressed)
 
         Window("Getting started", id: "getting-started") {
             GettingStartedWindowView().environment(store)

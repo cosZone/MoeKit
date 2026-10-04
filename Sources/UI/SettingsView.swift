@@ -1,7 +1,9 @@
 import SwiftUI
 
 struct SettingsView: View {
+    var checkForUpdates: () -> Void = {}
     @Environment(WorkspaceStore.self) private var store
+    @Environment(AppVisibilityPreferences.self) private var visibility
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
@@ -19,6 +21,7 @@ struct SettingsView: View {
     @ViewBuilder
     private var generalSettings: some View {
         @Bindable var store = store
+        @Bindable var visibility = visibility
         Form {
             Section {
                 HStack(spacing: 14) {
@@ -28,6 +31,21 @@ struct SettingsView: View {
                         Text("A native home for your personal CLI toolbox").foregroundStyle(.secondary)
                     }
                 }
+            }
+            Section("App icons") {
+                Toggle("Show Dock icon", isOn: $visibility.showDockIcon)
+                Toggle("Show menu bar icon", isOn: $visibility.showMenuBarIcon)
+                Text("Closing a window keeps MoeKit and current tasks running. Use Quit MoeKit to exit.")
+                    .font(.caption).foregroundStyle(.secondary)
+                if visibility.hasNoPersistentIcon {
+                    Label("Both icons are hidden. Open MoeKit from Finder or Spotlight to return to the workspace and settings.", systemImage: "info.circle")
+                        .font(.caption)
+                }
+            }
+            Section("Updates") {
+                Button("Check for updates…", action: checkForUpdates)
+                Text("Review newer releases and download them from GitHub. Automatic installation is not enabled.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
             Section("Getting started") {
                 Button("Open getting started") {

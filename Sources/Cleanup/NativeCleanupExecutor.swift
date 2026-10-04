@@ -185,7 +185,10 @@ actor NativeCleanupExecutor: CleanupExecuting {
             // Once the URL-based OS sink starts, a missing source is not success.
             // Before it starts, keep a captured tree intact and expose recovery.
             let verifiedCapture = receipt.state == .staged || receipt.state == .trashIntent
-            let intact = !trashStarted && captured && verifiedCapture && retainedTreeIsIntact(receipt, payload: payload, operation: operation, journal: journal)
+            var intact = false
+            if !trashStarted, captured, verifiedCapture {
+                intact = retainedTreeIsIntact(receipt, payload: payload, operation: operation, journal: journal)
+            }
             let state: CleanupReceiptState = intact ? .retained : .uncertain
             let retained = recordFailure(receipt.advancing(state, payloadURL: payload), journal: journal, operation: operation)
             return .init(id: id, originalURL: target.originalURL, receipt: retained,
@@ -278,7 +281,10 @@ actor NativeCleanupExecutor: CleanupExecuting {
             return outcome(receipt, message: String(localized: "Restored to its original location without replacing any existing file."), success: true)
         } catch {
             let verifiedCapture = receipt.state == .restoreStaged || receipt.state == .restoreIntent
-            let intact = !restored && captured && verifiedCapture && retainedTreeIsIntact(receipt, payload: stageURL, operation: operation, journal: journal)
+            var intact = false
+            if !restored, captured, verifiedCapture {
+                intact = retainedTreeIsIntact(receipt, payload: stageURL, operation: operation, journal: journal)
+            }
             receipt = receipt.advancing(intact ? .retained : .uncertain,
                 payloadURL: restored ? receipt.target.originalURL : (captured ? stageURL : plan.display.sourceURL))
             receipt = recordFailure(receipt, journal: journal, operation: operation)
@@ -319,7 +325,10 @@ actor NativeCleanupExecutor: CleanupExecuting {
             return outcome(receipt, message: String(localized: "Permanently removed the confirmed cache entries. Restore is no longer available. Open files, hard links and APFS snapshots may delay or reduce physical space reclaimed."), success: true)
         } catch {
             let verifiedCapture = receipt.state == .deleteStaged || receipt.state == .deleteIntent
-            let intact = !deletionStarted && captured && verifiedCapture && retainedTreeIsIntact(receipt, payload: stageURL, operation: operation, journal: journal)
+            var intact = false
+            if !deletionStarted, captured, verifiedCapture {
+                intact = retainedTreeIsIntact(receipt, payload: stageURL, operation: operation, journal: journal)
+            }
             receipt = receipt.advancing(intact ? .retained : .uncertain, payloadURL: captured ? stageURL : plan.display.sourceURL)
             receipt = recordFailure(receipt, journal: journal, operation: operation)
             return outcome(receipt, message: deletionStarted

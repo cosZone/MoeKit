@@ -6330,6 +6330,126 @@
           }
         }
       }
+    },
+    "MoeKit currently accepts only the original Mole V1.57.0 release analyzer. Homebrew, source builds and other versions are unsupported.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MoeKit 目前仅接受 Mole V1.57.0 官方发布的原始分析器。暂不支持 Homebrew、自行编译或其他版本。"
+          }
+        }
+      }
+    },
+    "SHA-256: %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SHA-256：%@"
+          }
+        }
+      }
+    },
+    "A browser download may have a macOS quarantine marker. MoeKit refuses quarantined files; neither this command nor MoeKit removes that marker or bypasses Gatekeeper. Do not retry a blocked file through another download route to evade a security warning.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "浏览器下载的文件可能带有 macOS 隔离标记，MoeKit 会拒绝这类文件。此命令和 MoeKit 都不会移除隔离标记或绕过 Gatekeeper。遇到安全警告时，请勿改用另一种下载方式来规避拦截。"
+          }
+        }
+      }
+    },
+    "In Mole → Space → Analyze with Mole…, choose analyze-go at the path printed by Terminal. If already installed by Mole’s official script, its usual path is ~/.config/mole/bin/analyze-go. MoeKit still verifies the exact bytes before each run.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在 Mole → 空间 → 使用 Mole 分析… 中，选择终端输出路径下的 analyze-go。如果此前已用 Mole 官方脚本安装，常见路径是 ~/.config/mole/bin/analyze-go。每次运行前，MoeKit 仍会核对文件的精确内容。"
+          }
+        }
+      }
+    },
+    "Get the supported analyzer": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "获取受支持的分析器"
+          }
+        }
+      }
+    },
+    "Expected size: %lld bytes": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "预期大小：%lld 字节"
+          }
+        }
+      }
+    },
+    "Review the release, then optionally copy and run the download command yourself in Terminal. It creates a new private folder in your home directory, downloads one analyzer, checks its size and SHA-256, and only then makes it executable. It does not run Mole. A failed download or check leaves the new folder for you to review.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "先查看发布说明，再按需复制下载命令，自行在终端中运行。命令会在你的主目录中新建一个私有文件夹，下载分析器并核对大小和 SHA-256，通过后才添加执行权限。它不会运行 Mole。下载或校验失败时，新文件夹会保留，供你检查。"
+          }
+        }
+      }
+    },
+    "Copying only changes the clipboard. The download command accesses GitHub and writes the new folder only when you run it yourself.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复制仅更新剪贴板。只有你自行运行下载命令时，才会访问 GitHub 并写入新文件夹。"
+          }
+        }
+      }
+    },
+    "View the exact analyzer download": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看此分析器的官方下载"
+          }
+        }
+      }
+    },
+    "Review download command": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看下载命令"
+          }
+        }
+      }
+    },
+    "Asset for this app: %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "适用于此应用的文件：%@"
+          }
+        }
+      }
+    },
+    "Copy download command": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复制下载命令"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

@@ -3,11 +3,35 @@ import SwiftUI
 import XCTest
 @testable import MoeKit
 
-/// Owned-view evidence only. No tool is installed, probed, executed or discovered.
+/// Owned-view and parse-only evidence. No candidate tool is installed, probed or run.
 final class ToolPreparationViewTests: XCTestCase {
+    /// -n parses only: no expansion, downloads, permissions or analyzer execution.
+    func testManualDownloadCommandSyntax() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("MoeKit-command-syntax-" + UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        for release in [MoleAnalyzerRelease.arm64, .x86_64] {
+            let file = directory.appendingPathComponent(release.architecture + ".txt")
+            try Data(release.manualDownloadCommand.utf8).write(to: file)
+            for shell in ["/bin/bash", "/bin/zsh"] {
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: shell)
+                process.arguments = shell == "/bin/bash" ? ["--noprofile", "--norc", "-n", file.path] : ["-f", "-n", file.path]
+                process.environment = ["HOME": directory.path, "PATH": "/usr/bin:/bin", "LC_ALL": "C"]
+                process.currentDirectoryURL = directory
+                process.standardOutput = FileHandle.nullDevice
+                let error = Pipe()
+                process.standardError = error
+                try process.run()
+                process.waitUntilExit()
+                XCTAssertEqual(process.terminationStatus, 0, String(decoding: error.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self))
+            }
+        }
+    }
+
     @MainActor
     func testToolPreparationRenders() async throws {
-        for scenario in ["unchecked", "observed", "demo"] {
+        for scenario in ["unchecked", "observed", "demo", "mole-guidance", "git-guidance", "mole-command"] {
             let preparation = ToolPreparationStore(inspector: RenderToolInspector())
             if scenario == "demo" { preparation.setDemoEnabled(true) }
             if scenario == "observed" {
@@ -26,9 +50,25 @@ final class ToolPreparationViewTests: XCTestCase {
                     let name = "tool-preparation-\(scenario)-\(language)-\(dark ? "dark" : "light")-\(Int(size.width))x\(Int(size.height))"
                     _ = NSApplication.shared
                     let appearance = try XCTUnwrap(NSAppearance(named: dark ? .darkAqua : .aqua))
-                    let root = ToolPreparationView(preparation: preparation,
-                        homeDirectory: URL(fileURLWithPath: "/Users/private-fixture-account"),
-                        showsLocations: scenario == "demo")
+                    let content: AnyView
+                    if scenario == "mole-command" {
+                        content = AnyView(ScrollView {
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("Review download command").font(.headline)
+                                ToolDownloadCommandView(command: PreparedTool.mole.installCommand)
+                            }.padding(24)
+                        })
+                    } else if scenario.hasSuffix("-guidance") {
+                        content = AnyView(ScrollView {
+                            ToolInstallationGuidanceView(tool: scenario == "mole-guidance" ? .mole : .git).padding(24)
+                        })
+                    } else {
+                        content = AnyView(ToolPreparationView(preparation: preparation,
+                            homeDirectory: URL(fileURLWithPath: "/Users/private-fixture-account"),
+                            showsLocations: scenario == "demo"))
+                    }
+                    XCTAssertEqual(String(localized: "Copy download command"), language == "zh-Hans" ? "复制下载命令" : "Copy download command")
+                    let root = content
                         .environment(\.colorScheme, dark ? .dark : .light)
                         .environment(\.locale, Locale.current)
                         .frame(width: size.width, height: size.height)
@@ -61,6 +101,7 @@ final class ToolPreparationViewTests: XCTestCase {
                     Bundle language: \(language)
                     Projects title: \(WorkspaceSection.projects.title)
                     Partial-result title: \(TaskStatus.partial.title)
+                    Download copy title: \(String(localized: "Copy download command"))
                     Tool candidate title: \(ToolCandidateState.foundUnverified(symbolicLink: true).title)
                     Scope: owned tool-preparation view, synthetic paths and observations only.
                     Scenario: \(scenario). No real tool inspection, installation or execution.

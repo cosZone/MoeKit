@@ -52,7 +52,7 @@ struct GettingStartedView: View {
                             .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(nsColor: .separatorColor).opacity(0.5)))
                             .accessibilityElement(children: .combine)
                         }
-                        Text("Mole Space can import reports or analyze a folder with the supported official V1.57.0 analyzer after confirmation. Native cache cleanup requires exact selection and confirmation. Other tools show their available actions.")
+                        Text("Mole Space supports reports and confirmed analysis with the official V1.57.0 analyzer. Native cache cleanup and stopping exact unprotected processes each require separate confirmation. Uninstall remains unavailable.")
                             .font(.caption).foregroundStyle(.secondary)
                     }
                 }.frame(maxWidth: .infinity, alignment: .leading).padding(24)

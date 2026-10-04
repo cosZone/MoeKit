@@ -23,6 +23,8 @@
 
 ## 安装指引
 
+以下精确分析器下载指引属于 preview.6 之后的源码改动，尚未包含在 preview.6 安装包中。
+
 Mole 的「工具准备」现在直接对应实际分析适配器的受支持文件，不再默认推荐 `brew install mole`。仅接受 [V1.57.0 官方发布](https://github.com/tw93/Mole/releases/tag/V1.57.0) 的原始分析器；Homebrew、自行构建和其他版本暂不兼容。界面根据当前应用架构选择文件，和执行器共用版本、大小、SHA-256 常量；在 Rosetta 下运行的 Intel 应用会显示 amd64 文件。
 
 | 应用架构 | 官方文件 | 字节数 | SHA-256 |

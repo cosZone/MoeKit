@@ -164,7 +164,11 @@ final class CleanupViewTests: XCTestCase {
         for child in view.subviews { resetScrollOrigins(child) }
     }
     @MainActor private func settle(_ store: CleanupStore) async {
-        for _ in 0..<2000 { if !store.isBusy { return }; await Task.yield() }
+        let deadline = Date().addingTimeInterval(5)
+        while Date() < deadline {
+            if !store.isBusy { return }
+            try? await Task.sleep(for: .milliseconds(5))
+        }
         XCTFail("Synthetic cleanup store did not settle")
     }
 }

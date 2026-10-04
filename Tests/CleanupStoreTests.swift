@@ -251,7 +251,11 @@ struct CleanupStoreTests {
         return try #require(store.plan)
     }
     private func settle(_ store: CleanupStore) async {
-        for _ in 0..<10000 { if !store.isBusy { return }; await Task.yield() }
+        let deadline = Date().addingTimeInterval(5)
+        while Date() < deadline {
+            if !store.isBusy { return }
+            try? await Task.sleep(for: .milliseconds(5))
+        }
         Issue.record("Cleanup fixture state did not settle")
     }
 }
@@ -369,10 +373,10 @@ actor CleanupStoreFixture: CleanupExecuting {
     func releasePreparation() { preparationWaiter?.resume(); preparationWaiter = nil }
     func releaseMutation() { mutationWaiter?.resume(); mutationWaiter = nil }
     func releaseRecoveryMutation() { recoveryMutationWaiter?.resume(); recoveryMutationWaiter = nil }
-    func waitForInspection() async { for _ in 0..<10000 { if inspectionWaiter != nil { return }; await Task.yield() }; Issue.record("Inspection did not enter") }
-    func waitForPreparation() async { for _ in 0..<10000 { if preparationWaiter != nil { return }; await Task.yield() }; Issue.record("Preparation did not enter") }
-    func waitForMutation() async { for _ in 0..<10000 { if mutationWaiter != nil { return }; await Task.yield() }; Issue.record("Mutation did not enter") }
-    func waitForRecoveryMutation() async { for _ in 0..<10000 { if recoveryMutationWaiter != nil { return }; await Task.yield() }; Issue.record("Recovery mutation did not enter") }
+    func waitForInspection() async { let deadline = Date().addingTimeInterval(5); while Date() < deadline { if inspectionWaiter != nil { return }; try? await Task.sleep(for: .milliseconds(5)) }; Issue.record("Inspection did not enter") }
+    func waitForPreparation() async { let deadline = Date().addingTimeInterval(5); while Date() < deadline { if preparationWaiter != nil { return }; try? await Task.sleep(for: .milliseconds(5)) }; Issue.record("Preparation did not enter") }
+    func waitForMutation() async { let deadline = Date().addingTimeInterval(5); while Date() < deadline { if mutationWaiter != nil { return }; try? await Task.sleep(for: .milliseconds(5)) }; Issue.record("Mutation did not enter") }
+    func waitForRecoveryMutation() async { let deadline = Date().addingTimeInterval(5); while Date() < deadline { if recoveryMutationWaiter != nil { return }; try? await Task.sleep(for: .milliseconds(5)) }; Issue.record("Recovery mutation did not enter") }
     private func makeReceipt(target: CleanupTarget, state: CleanupReceiptState) -> CleanupReceipt {
         let id = UUID()
         return CleanupReceipt(id: id, sequence: 3, target: target, originalParent: Self.identity,

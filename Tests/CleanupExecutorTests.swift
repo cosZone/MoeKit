@@ -179,6 +179,19 @@ struct CleanupExecutorTests {
         try f.marker.write(to: f.base.appendingPathComponent(".git"), options: .withoutOverwriting)
         await #expect(throws: (any Error).self) { try await executor.inspect(root: f.caches, context: f.context) }
     }
+    @Test("Tagged caches below bare Git repositories remain protected")
+    func bareGitAncestor() async throws {
+        let f = try CacheFixture(), a = try f.folder("cache"), executor = f.executor()
+        try CleanupFiles.cacheSignature.write(to: a.appendingPathComponent("CACHEDIR.TAG"), options: .withoutOverwriting)
+        try Data("ref: refs/heads/main\n".utf8).write(to: f.base.appendingPathComponent("HEAD"), options: .withoutOverwriting)
+        for name in ["objects", "refs"] {
+            try FileManager.default.createDirectory(at: f.base.appendingPathComponent(name), withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+        }
+        await #expect(throws: (any Error).self) { try await executor.inspect(root: f.caches, context: f.context) }
+        #expect(try Data(contentsOf: a.appendingPathComponent("owned.bin")) == f.marker)
+        #expect(!FileManager.default.fileExists(atPath: f.recovery.path))
+    }
+
     @Test("System and authentication cache names remain protected", arguments: ["com.apple.sample", "bitwarden", "credential-cache", "MoeKit"])
     func sensitiveCacheNames(_ name: String) async throws {
         let f = try CacheFixture(), executor = f.executor()

@@ -33,9 +33,23 @@ enum CleanupFiles {
         }
         try validateNamespace(root, environment: environment)
         try root.rejectGitAncestors()
+        try rejectBareGitAncestors(root)
         try validateObject(root.identity, expectedDevice: root.identity.device, kind: .directory)
         if environment.enforceProductionPolicy { try InstallerFileAccess.validateVolume(root.fd, url: root.url) }
         try InstallerFileAccess.rejectCloudAttributes(root.fd)
+    }
+    private static func rejectBareGitAncestors(_ root: InstallerDirectoryAnchor) throws {
+        var current: InstallerDirectoryAnchor? = root
+        while let node = current {
+            var present = 0
+            for name in ["HEAD", "objects", "refs"] {
+                var metadata = stat()
+                if fstatat(node.fd, name, &metadata, AT_SYMLINK_NOFOLLOW) == 0 { present += 1 }
+                else if errno != ENOENT { throw CleanupFailure.changed }
+            }
+            guard present != 3 else { throw CleanupFailure.refused(String(localized: "Git metadata or a protected credential/configuration name was found inside this candidate.")) }
+            try node.validate(); current = node.parent
+        }
     }
     static func names(_ directory: InstallerDirectoryAnchor, limit: Int = maximumEntries, honorCancellation: Bool = true) throws -> [String] {
         try directory.validate()
@@ -136,6 +150,7 @@ enum CleanupFiles {
     static func manifest(_ directory: InstallerDirectoryAnchor, environment: CleanupEnvironment, honorCancellation: Bool = true,
                          maximumEntries: Int = CleanupFiles.maximumEntries, deadline: Date = Date().addingTimeInterval(30)) throws -> CleanupManifest {
         var entries: [CleanupEntry] = [], bytes: Int64 = 0
+        var pathAndLinkBytes = 0
         func walk(_ node: InstallerDirectoryAnchor, path: String, depth: Int) throws {
             if honorCancellation { try Task.checkCancellation() }
             guard depth <= 64, Date() < deadline, entries.count < maximumEntries else { throw CleanupFailure.limit }
@@ -149,7 +164,7 @@ enum CleanupFiles {
             // credential file merely because a parent says it is a cache.
             let sensitive = [".git", ".hg", ".svn", ".ssh", ".gnupg", ".aws", ".kube", ".env", "id_rsa", "id_ed25519"]
             guard !childNames.contains(where: { sensitive.contains($0.lowercased()) }),
-                  !Set(["HEAD", "objects", "refs"]).isSubset(of: Set(childNames)) else {
+                  !Set(["head", "objects", "refs"]).isSubset(of: Set(childNames.map { $0.lowercased() })) else {
                 throw CleanupFailure.refused(String(localized: "Git metadata or a protected credential/configuration name was found inside this candidate."))
             }
             entries.append(.init(relativePath: path, kind: .directory, identity: before, linkDestination: nil))
@@ -157,6 +172,8 @@ enum CleanupFiles {
                 if honorCancellation { try Task.checkCancellation() }
                 guard Date() < deadline, entries.count < maximumEntries else { throw CleanupFailure.limit }
                 let childPath = path.isEmpty ? name : path + "/" + name
+                pathAndLinkBytes += childPath.utf8.count
+                guard pathAndLinkBytes <= 4 * 1024 * 1024 else { throw CleanupFailure.limit }
                 guard childPath.utf8.count <= 4096 else { throw CleanupFailure.limit }
                 let identity = try InstallerFileAccess.snapshotAt(node.fd, name)
                 switch identity.mode & UInt32(S_IFMT) {
@@ -184,6 +201,8 @@ enum CleanupFiles {
                     }
                     guard count >= 0, count < buffer.count,
                           identity == (try InstallerFileAccess.snapshotAt(node.fd, name)) else { throw CleanupFailure.changed }
+                    pathAndLinkBytes += count
+                    guard pathAndLinkBytes <= 4 * 1024 * 1024 else { throw CleanupFailure.limit }
                     entries.append(.init(relativePath: childPath, kind: .symbolicLink, identity: identity, linkDestination: Data(buffer.prefix(count))))
                 default:
                     throw CleanupFailure.refused(String(localized: "A socket, device, pipe, or unsupported entry is present. Close the owning app and inspect again."))

@@ -93,6 +93,11 @@ actor NativeCleanupExecutor: CleanupExecuting {
             targets.append(.init(originalURL: candidate.url, evidence: evidence, manifest: actual))
         }
         guard targets.reduce(0, { $0 + $1.manifest.itemCount }) <= CleanupFiles.maximumEntries else { throw CleanupFailure.limit }
+        _ = try targets.reduce(Int64(0)) { total, target in
+            let result = total.addingReportingOverflow(target.manifest.logicalBytes)
+            guard !result.overflow else { throw CleanupFailure.limit }
+            return result.partialValue
+        }
         let now = Date()
         let display = CleanupPlan(id: UUID(), inspectionID: inspectionID, rootURL: inspection.display.rootURL,
             targets: targets, context: context, recoveryRoot: environment.recovery, preparedAt: now, expiresAt: now.addingTimeInterval(120))

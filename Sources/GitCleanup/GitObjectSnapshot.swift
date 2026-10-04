@@ -22,7 +22,12 @@ final class GitObjectSnapshot {
         guard objects.directories.keys.allSatisfy({ $0.isEmpty || $0 == "pack" || $0 == "info" || ($0.count == 2 && $0.utf8.allSatisfy(Self.hex)) }),
               objects.files.keys.allSatisfy(Self.allowedObject) else { throw GitCleanupFailure.unsupported }
         fingerprint = objects.fingerprint
-        let temp = (temporaryRoot ?? FileManager.default.temporaryDirectory).resolvingSymlinksInPath()
+        // Canonicalize only the app-owned temporary parent. Foundation may retain
+        // macOS system aliases such as /var; the strict no-follow anchor must see
+        // the physical path. Live repository paths never use this exception.
+        let temp = try GitCleanupInspectionStage.check("temporary directory canonicalization") {
+            try MoleAnalysisFiles.canonicalURL(temporaryRoot ?? FileManager.default.temporaryDirectory)
+        }
         let tempAnchor = try GitCleanupInspectionStage.check("temporary directory anchor") { try InstallerDirectoryAnchor.open(temp) }
         try GitCleanupInspectionStage.check("temporary ancestry") { try tempAnchor.validateTrustedMutationAncestry() }
         let name = "MoeKit-Git-" + UUID().uuidString

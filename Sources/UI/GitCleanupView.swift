@@ -63,7 +63,8 @@ struct GitCleanupView: View {
                         Text("This is a fresh bounded check, not an atomic filesystem snapshot or proof that no other program can write. Do not edit or run Git until the operation finishes.").font(.caption).foregroundStyle(.secondary)
                         TextField("Type the exact branch name to confirm", text: $confirmation)
                         Button(plan.request.action.title, role: .destructive) {
-                            guard !workspace.isDemoEnabled, stoppedWork, confirmation == plan.request.branch else { return }
+                            guard !workspace.isDemoEnabled, matchesCurrentSelection(plan), stoppedWork,
+                                  confirmation == plan.request.branch else { return }
                             state.confirm(planID: plan.id); stoppedWork = false; confirmation = ""
                         }.disabled(state.isBusy || !stoppedWork || confirmation != plan.request.branch || workspace.isDemoEnabled)
                     }

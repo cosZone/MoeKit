@@ -622,6 +622,23 @@ struct GitCleanupExecutorTests {
         try fixture.assertSentinel()
     }
 
+    @Test("Only the app-owned temporary parent is canonicalized before strict anchored opening")
+    func canonicalSnapshotParent() throws {
+        let fixture = try GitCleanupNativeFixture()
+        defer { fixture.remove() }
+        let temporary = fixture.root.appendingPathComponent("private-temp")
+        let alias = fixture.root.appendingPathComponent("private-temp-alias")
+        try FileManager.default.createDirectory(at: temporary, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+        try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: temporary)
+        // The shared live-path anchor remains strict, including for this alias.
+        #expect(throws: (any Error).self) { _ = try InstallerDirectoryAnchor.open(alias) }
+        let snapshot = try GitObjectSnapshot(common: InstallerDirectoryAnchor.open(fixture.common), temporaryRoot: alias)
+        defer { snapshot.remove() }
+        #expect(snapshot.directory.deletingLastPathComponent() == temporary)
+        #expect(!snapshot.version.isEmpty)
+        try fixture.assertNoRecovery()
+    }
+
     @Test("An ACL-writable temporary parent cannot host executable Git snapshots")
     func unsafeSnapshotParent() throws {
         let fixture = try GitCleanupNativeFixture()

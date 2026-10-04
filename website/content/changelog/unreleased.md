@@ -9,13 +9,18 @@ status: unreleased
 
 [0.1.0-preview.8](/changelog/0.1.0-preview.8) 已交付逐次确认的精确进程停止，以及原生多缓存废纸篓、原路径恢复和依据操作记录另行确认的缓存永久删除，提供已核实的 DMG 与 ZIP。进程停止不扩展到浏览器／共享服务或无头会话归属；缓存位置与标记不能代替使用者确认，永久删除不可恢复且不保证物理空间立即回收。安装限制、精确源码、构建及下载验证见该版本记录。
 
-## 已合入源码，尚未发布
+## preview.9：已合入源码，正在准备发布
 
-菜单栏入口、Dock／菜单栏图标设置与手动检查 GitHub 新版本已随 [PR #44](https://github.com/cosZone/MoeKit/pull/44) 合入当前源码，尚未包含在 preview.8 安装包。检查更新由用户主动触发，下载后仍需手动安装；不等同于 Sparkle 自动更新。实现与限制见 [更新与应用入口](https://github.com/cosZone/MoeKit/blob/41547901a3fde532314939af58d7506b74a7dd0e/Documentation/Updates-and-app-icons.md)。
+[0.1.0-preview.9](/changelog/0.1.0-preview.9) 已有独立 Markdown 说明，状态仍为未发布。当前下载继续使用已核实的 preview.8；只有 preview.9 的精确源码 CI、签名发布及公开下载核对完成后，才会更新交付记录。
+
+- [PR #43](https://github.com/cosZone/MoeKit/pull/43) 合入逐次确认的 Git 整理：退役严格核实的干净 linked worktree、另行确认移除已合并且未检出的 loose 本地分支，并提供会话内另行确认的原路径恢复。数据保留在主仓库恢复目录，不释放空间，也不提供 Git 永久删除；通用实时 Git status 仍未启用
+- [PR #44](https://github.com/cosZone/MoeKit/pull/44) 合入原生菜单栏入口、独立 Dock／菜单栏图标设置与同时隐藏时的重开恢复，以及主动检查 GitHub 新版本。下载后仍需手动安装，尚未启用 Sparkle 自动更新
+
+以上能力均不包含在 preview.8 安装包。支持子集、工具来源、恢复与原生验收限制见 preview.9 说明和其中链接的设计记录；本页不把源码合入或测试通过当作已发布。
 
 ## 后续工作
 
-广域 Mole 清理、卸载、维护、项目删除、任意进程停止和真实 Git status 仍未启用。实验性 Git status／Git 清理、菜单栏与 Dock 改进、手动更新入口不包含在 preview.8 安装包，Sparkle 自动更新仍未启用。后续应用改动只有在对应版本实际发布并核实后，才会标记为已交付。
+广域 Mole 清理、卸载、维护、任意项目删除、任意进程停止、AI 专用无头浏览器归属识别和通用实时 Git status 仍未启用。Sparkle 自动安装仍需经审查的依赖、专用公开更新 key、受控 HTTPS feed 和签名发布配置。后续应用改动只有在对应版本实际发布并核实后，才会标记为已交付。
 
 中文测试自有视图、完整优化 Release 测试与定向内存检查已加入 CI。合成视图和自动检查的范围见对应版本记录，不代表完整窗口交互、键盘、VoiceOver 或真实 Mac 权限覆盖已验收。
 

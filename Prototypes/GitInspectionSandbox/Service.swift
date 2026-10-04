@@ -4,6 +4,26 @@ import Darwin
 // Every path passed to this experimental process is a unique synthetic fixture.
 // Never import this probe into the production app; it intentionally tries writes.
 final class ProbeService: NSObject, GitSandboxProbeProtocol {
+    func probeDescriptor(directory: FileHandle, selectedPath: String, outsidePath: String,
+                         reply: @escaping (Data) -> Void) {
+        let fd = directory.fileDescriptor
+        let readFD = openat(fd, "sentinel", O_RDONLY | O_NONBLOCK | O_CLOEXEC)
+        let readAllowed = readFD >= 0
+        if readFD >= 0 { close(readFD) }
+        let writeFD = openat(fd, "write-probe", O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0o600)
+        let writeDenied = writeFD < 0
+        if writeFD >= 0 { close(writeFD) }
+        let escapeFD = openat(fd, "escape/sentinel", O_RDONLY | O_NONBLOCK | O_CLOEXEC)
+        let escapeDenied = escapeFD < 0
+        if escapeFD >= 0 { close(escapeFD) }
+        let outside = URL(fileURLWithPath: outsidePath, isDirectory: true)
+        let values = ["resolvedSelectedPath": true, "selectedReadAllowed": readAllowed,
+                      "selectedWriteDenied": writeDenied, "symlinkEscapeReadDenied": escapeDenied,
+                      "outsideReadDenied": !canRead(outside.appendingPathComponent("sentinel")),
+                      "outsideWriteDenied": !canWrite(outside.appendingPathComponent("write-probe"))]
+        reply((try? JSONSerialization.data(withJSONObject: values, options: [.sortedKeys])) ?? Data())
+    }
+
     func probe(bookmark: Data, selectedPath: String, outsidePath: String,
                reply: @escaping (Data) -> Void) {
         var values: [String: Any] = [:]
@@ -11,7 +31,7 @@ final class ProbeService: NSObject, GitSandboxProbeProtocol {
             var stale = false
             let url = try URL(resolvingBookmarkData: bookmark, options: [], bookmarkDataIsStale: &stale)
             defer { url.stopAccessingSecurityScopedResource() }
-            values["resolvedSelectedPath"] = url.path == selectedPath && !stale
+            values["resolvedSelectedPath"] = url.standardizedFileURL == URL(fileURLWithPath: selectedPath, isDirectory: true).standardizedFileURL
             values["selectedReadAllowed"] = canRead(url.appendingPathComponent("sentinel"))
             values["selectedWriteDenied"] = !canWrite(url.appendingPathComponent("write-probe"))
             let outside = URL(fileURLWithPath: outsidePath, isDirectory: true)

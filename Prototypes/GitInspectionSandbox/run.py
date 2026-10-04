@@ -53,7 +53,7 @@ with tempfile.TemporaryDirectory(prefix="MoeKitGitSandboxBuild-") as build_strin
     # accidentally make an outside-scope fixture accessible.
     with tempfile.TemporaryDirectory(prefix="MoeKitGitSandboxFixtures-", dir=Path.home()) as fixture_string:
         fixture = Path(fixture_string)
-        for mode in ("implicit", "downgraded"):
+        for mode in ("implicit", "downgraded", "descriptor"):
             selected, outside = fixture / mode / "selected", fixture / mode / "outside"
             selected.mkdir(parents=True)
             outside.mkdir()

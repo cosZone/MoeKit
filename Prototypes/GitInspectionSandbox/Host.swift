@@ -7,7 +7,7 @@ import Darwin
         guard arguments.count == 4 else { exit(64) }
         let selected = URL(fileURLWithPath: arguments[1], isDirectory: true)
         let mode = arguments[3]
-        let bookmark: Data
+        var bookmark = Data()
         switch mode {
         case "implicit":
             bookmark = try selected.bookmarkData(options: [])
@@ -19,6 +19,7 @@ import Darwin
             guard !stale else { exit(65) }
             _ = resolved.startAccessingSecurityScopedResource()
             bookmark = try resolved.bookmarkData(options: [])
+        case "descriptor": break
         default: exit(64)
         }
         let connection = NSXPCConnection(serviceName: "com.yusixian.MoeKit.GitSandboxProbe.Service")
@@ -29,10 +30,19 @@ import Darwin
         guard let service = connection.remoteObjectProxyWithErrorHandler({ error in
             fputs("XPC error: \(error.localizedDescription)\n", stderr); exit(72)
         }) as? GitSandboxProbeProtocol else { exit(73) }
-        service.probe(bookmark: bookmark, selectedPath: selected.path, outsidePath: arguments[2]) { data in
+        let reply: (Data) -> Void = { data in
             FileHandle.standardOutput.write(data)
             FileHandle.standardOutput.write(Data([10]))
             exit(0)
+        }
+        if mode == "descriptor" {
+            let fd = open(selected.path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
+            guard fd >= 0 else { exit(76) }
+            let handle = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
+            service.probeDescriptor(directory: handle, selectedPath: selected.path,
+                                    outsidePath: arguments[2], reply: reply)
+        } else {
+            service.probe(bookmark: bookmark, selectedPath: selected.path, outsidePath: arguments[2], reply: reply)
         }
         DispatchQueue.global().asyncAfter(deadline: .now() + 25) { exit(74) }
         dispatchMain()

@@ -4,4 +4,6 @@ import Foundation
 @objc protocol GitSandboxProbeProtocol {
     func probe(bookmark: Data, selectedPath: String, outsidePath: String,
                reply: @escaping (Data) -> Void)
+    func probeDescriptor(directory: FileHandle, selectedPath: String, outsidePath: String,
+                         reply: @escaping (Data) -> Void)
 }

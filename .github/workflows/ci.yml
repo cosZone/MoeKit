@@ -66,6 +66,7 @@ jobs:
             -only-testing:MoeKitTests/UISnapshotTests/testGettingStartedWelcomeRenders \
             -only-testing:MoeKitTests/UISnapshotTests/testGettingStartedDestinationsRender \
             -only-testing:MoeKitTests/UISnapshotTests/testFirstUseWorkspacesRender \
+            -only-testing:MoeKitTests/UISnapshotTests/testSettingsModeGuidanceRenders \
             -resultBundlePath ChineseRenderResults.xcresult
       - name: Check SwiftUI bundle and smoke-launch explicit demo
         run: |
@@ -184,7 +185,11 @@ jobs:
             test_args+=(-only-testing:MoeKitTests/CatalogPersistenceTests
                         -only-testing:MoeKitTests/WorkspacePersistenceTests
                         -only-testing:MoeKitTests/CatalogRecoveryLifetimeTests
-                        -only-testing:MoeKitTests/CatalogWriteCoordinatorTests)
+                        -only-testing:MoeKitTests/CatalogWriteCoordinatorTests
+                        -only-testing:MoeKitTests/AnchoredDirectoryTests
+                        -only-testing:MoeKitTests/RepositoryScannerTests
+                        -only-testing:MoeKitTests/BoundedRegularFileReaderTests
+                        -only-testing:MoeKitTests/WorkspaceOperationPrivacyTests)
           fi
           xcodebuild -project MoeKit.xcodeproj -alltargets -configuration Release \
             ENABLE_TESTABILITY=YES CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= \
@@ -209,7 +214,9 @@ jobs:
           summary = json.loads(Path("ReleaseTestSummary.json").read_text())
           inventory = Path("ReleaseTestInventory.json").read_text()
           json.loads(inventory)
-          required = ("CatalogPersistenceTests", "WorkspacePersistenceTests", "CatalogRecoveryLifetimeTests", "CatalogWriteCoordinatorTests")
+          required = ("CatalogPersistenceTests", "WorkspacePersistenceTests", "CatalogRecoveryLifetimeTests",
+                      "AnchoredDirectoryTests", "RepositoryScannerTests", "BoundedRegularFileReaderTests",
+                      "CatalogWriteCoordinatorTests", "WorkspaceOperationPrivacyTests")
           if summary.get("passedTests", 0) < 27 or summary.get("failedTests") != 0 or summary.get("skippedTests") != 0:
               raise SystemExit(f"Optimized catalog tests must execute and pass without skips: {summary}")
           if any(suite not in inventory for suite in required):

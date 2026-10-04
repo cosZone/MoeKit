@@ -4231,6 +4231,56 @@
         }
       }
     },
+    "The selected folders could not be read. Choose accessible folders and try again. No files were changed.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法读取所选文件夹。请选择可访问的文件夹后重试。未更改任何文件。"
+          }
+        }
+      }
+    },
+    "Changes could not be saved. They are temporary; check available disk space and folder access, then try again.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法保存更改，目前仅临时保留。请检查可用磁盘空间和文件夹访问权限后重试。"
+          }
+        }
+      }
+    },
+    "The selected file is not a supported Mole JSON report. Export a new analyze --json report and try again.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所选文件不是受支持的 Mole JSON 报告。请重新导出 analyze --json 报告后重试。"
+          }
+        }
+      }
+    },
+    "The report could not be read. Check access to the selected file and try again.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法读取报告。请检查所选文件的访问权限后重试。"
+          }
+        }
+      }
+    },
+    "Demo mode uses example projects and results. Changing modes cancels current discovery and report imports. It never starts a process or changes project files.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Demo 模式使用示例项目和结果。切换模式会取消当前的项目发现和报告导入，不会启动进程或更改项目文件。"
+          }
+        }
+      }
+    },
     "Another MoeKit window is saving the catalog. Changes are temporary; try saving again.": {
       "localizations": {
         "zh-Hans": {

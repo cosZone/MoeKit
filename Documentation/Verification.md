@@ -103,3 +103,11 @@
 - Debug、优化 Release、优化 Release + Address Sanitizer 均执行首次保存/既有目录、`/tmp` 与 `/private/tmp` 别名、锁忙碌、提交冲突、锁持有者失败及重载后重试的 8 种确定性场景，核对原始字节与永久锁 inode
 - `CatalogWriteCoordinatorTests` 覆盖不安全锁、替换锁/目录、短写入与 EINTR、失败 rename 清理、私有新建权限和同进程重入；保留既有损坏、未知字段、16 MiB、读失败及恢复生命周期用例
 - 本地 Linux 的 Python/源码检查不能代替上述 macOS 原生执行；按精确提交查看 Native CI 结果。这些测试不证明任意外部编辑器、网络文件系统或断电下的事务保证
+
+## Demo 错误与异步所有权回归
+
+- `WorkspaceOperationPrivacyTests` 只使用唯一临时目录、合成报告及可控 continuation，覆盖快速往返 Demo、旧任务迟到成功/失败、旧进度回调、取消后立即重入、旧 defer 不清空新任务、既有报告/时间保留，以及真实模式 catalog 恢复提示
+- 新套件进入完整 Debug、优化 Release 和定向 AddressSanitizer 的执行清单；须核对精确 SHA 的 CI 结果，不能把源码检查当作 Swift 测试通过
+- `testSettingsModeGuidanceRenders` 为 520×600 的真实/Demo Settings 在英/简中、浅/深色下各生成 4 张 app-owned PNG；现有引导和空工作区渲染继续保留。脚本只校验完整性和语言，图片仍需查看
+- [ ] 真实 macOS 中在报告导入期间打开 Settings，切换 Demo 后不出现旧文件名或旧错误弹窗；再切回真实模式并新导入，旧任务不能结束新导入
+- [ ] 取消原生文件选择器不改变报告；文件选择器跨模式后不使用旧选择；键盘和 VoiceOver 仍可操作 Demo 开关

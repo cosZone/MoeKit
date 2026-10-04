@@ -101,6 +101,32 @@ struct WorkspacePersistenceTests {
         #expect(try CatalogPersistence(directory: root).load() == [first, other])
     }
 
+    @Test("Busy catalog guidance survives real-mode recovery and clears after a successful retry")
+    func busyWriterRecovery() throws {
+        let root = fixtureRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let project = ProjectRecord(name: "Example", path: root.appendingPathComponent("synthetic-project").path, kind: .folder)
+        try CatalogPersistence(directory: root).save([project])
+        let file = root.appendingPathComponent("projects.json")
+        let original = try Data(contentsOf: file)
+        let store = WorkspaceStore(isDemoEnabled: false, persistence: CatalogPersistence(directory: root))
+        try CatalogWriteCoordinator.withExclusiveAccess(at: root) { _ in
+            store.togglePin(project.id)
+            #expect(store.errorMessage == CatalogPersistence.CatalogError.writerBusy.errorDescription)
+            #expect(store.projects.first?.isPinned == true)
+            #expect(try Data(contentsOf: file) == original)
+        }
+        store.isDemoEnabled = true
+        #expect(store.errorMessage == nil)
+        store.isDemoEnabled = false
+        #expect(store.errorMessage == CatalogPersistence.CatalogError.writerBusy.errorDescription)
+        importProject(into: store, path: project.path)
+        #expect(store.errorMessage == nil)
+        #expect(try CatalogPersistence(directory: root).load().first?.isPinned == true)
+        store.isDemoEnabled = true; store.isDemoEnabled = false
+        #expect(store.errorMessage == nil)
+    }
+
     private func fixtureRoot() -> URL {
         FileManager.default.temporaryDirectory.appendingPathComponent("MoeKit-workspace-persistence-\(UUID().uuidString)")
     }

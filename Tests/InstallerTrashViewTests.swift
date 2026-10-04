@@ -19,7 +19,7 @@ final class InstallerTrashViewTests: XCTestCase {
                 try FileManager.default.createDirectory(at: owned, withIntermediateDirectories: false)
                 defer { try? FileManager.default.removeItem(at: owned) }
                 let executor = RenderInstallerExecutor(downloads: downloads, selected: selected, incomplete: scenario == "incomplete-recovery")
-                let store = scenario == "disabled" ? InstallerTrashStore() : InstallerTrashStore(executor: executor, downloadsURL: downloads)
+                let store = scenario == "disabled" ? InstallerTrashStore(executor: nil) : InstallerTrashStore(executor: executor, downloadsURL: downloads)
                 let workspace = WorkspaceStore(isDemoEnabled: false, persistence: CatalogPersistence(directory: owned), installerTrash: store)
                 if scenario == "trash-confirmation" {
                     let data = try JSONSerialization.data(withJSONObject: ["path": downloads.path, "overview": false, "scan_status": "complete", "total_size": 4096,

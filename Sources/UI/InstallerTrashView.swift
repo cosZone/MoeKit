@@ -12,7 +12,7 @@ struct InstallerTrashView: View {
                 identifiedLabel("Downloaded disk image", systemImage: "opticaldisc", id: "installer.heading").font(.headline)
                 Text("Select one .dmg row from the current live analysis of your local Downloads folder. The report is only a selection hint; MoeKit independently checks the file before offering a confirmation.")
                 if !store.isEnabled {
-                    Label("Native Trash and restore are disabled in this build pending reviewed macOS fixture tests.", systemImage: "lock")
+                    Label("Native Trash and restore are disabled for this context.", systemImage: "lock")
                         .foregroundStyle(.secondary)
                 } else if store.isDemoEnabled {
                     Text("Demo and imported reports cannot authorize native file operations.").foregroundStyle(.secondary)

@@ -14,7 +14,7 @@ struct MoleAnalysisView: View {
                 Spacer()
                 Button("Close") { analysis.cancel(); dismiss() }.keyboardShortcut(.cancelAction)
             }
-            Text("Run the verified official Mole V1.57.0 analyzer on one folder after reviewing the scope. Cleanup remains unavailable.")
+            Text("Run the verified official Mole V1.57.0 analyzer on one folder after reviewing the scope. A Downloads .dmg can be separately reviewed for native Trash; Mole cleanup commands remain unavailable.")
                 .foregroundStyle(.secondary)
             HStack(alignment: .top, spacing: 18) {
                 selection(title: "Installed analyzer", value: analysis.executable?.path, action: chooseAnalyzer)

@@ -1,6 +1,6 @@
 # Confirmed downloaded disk-image Trash and recovery
 
-Implementation boundary under review (2026-10-04). This is an original native macOS adapter beside Mole analysis, not a Mole cleanup command. Activation requires independent review and exact-commit native fixture tests. It never runs clean/purge/uninstall, follows report paths as authority, or handles projects/worktrees.
+Reviewed implementation boundary (2026-10-04). This is an original native macOS adapter beside Mole analysis, not a Mole cleanup command. The store installs the reviewed native adapter without starting any work; explicit selection, review and confirmation remain mandatory. Activation changes require independent review and final exact-commit native fixture tests. It never runs clean/purge/uninstall, follows report paths as authority, or handles projects/worktrees.
 
 ## First supported operation
 
@@ -45,3 +45,7 @@ The exact `452a39f` fixture run passed 396 Swift tests in Debug and optimized Re
 ### Source-bound idle CI evidence
 
 The standalone job reports either actual current full-provider positive evidence, or an explicitly different unsupported-environment result. The latter requires the actual current provider to return the exact attached-image refusal before any other unavailable result, a complete stable nonempty native inventory around fresh duplicate-positive and complete current-user handle-negative checks, verified owned-fixture cleanup, and the unchanged production-provider bytes and original compiler/host contract. It then verifies the retained exact GitHub ZIP from the genuine positive `bffd923` run (run 37206181809, job 111447725620, artifact 11304509105). Generic errors, timeouts, partial/changing inventories, altered provider/compiler contracts or missing historical proof still fail. The output explicitly says current `noUseObserved` was not established; it cannot authorize any app operation or exempt an attached image. All current mutation/recovery tests remain required. A future provider or OS-image-classifier change needs new actual positive proof and cannot borrow this baseline.
+
+### Default activation and integration checks
+
+The default store now injects `NativeInstallerTrashExecutor(nativeExecutionEnabled: true)`; the raw executor default remains disabled. Initialization does not inspect processes or recovery records, create journals/locks, or move files. Tests exercise inert initialization and the actual live-Mole result → store selection → fresh plan → initially ineffective un-attested confirmation → attestation → native Trash → receipt → fresh confirmed restore path on an owned hosted-runner fixture. Occupancy remains separately validated by the full-provider gate; that integration fixture does not claim to prove all native use observations itself. Source capability documentation is unreleased and does not change preview.6 deliverables. Final activation-head CI must be checked separately from the green e5c625a predecessor; keyboard, VoiceOver and full-window manual interaction remain unverified.

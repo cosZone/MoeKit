@@ -93,7 +93,7 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
     }
 
     func moveToTrash(planID: UUID, scope: InstallerTrashScope) async throws -> InstallerTrashOutcome {
-        guard nativeExecutionEnabled else { throw InstallerTrashFailure.unavailable(String(localized: "File moves are unavailable in this build while native recovery verification is pending.")) }
+        guard nativeExecutionEnabled else { throw InstallerTrashFailure.unavailable(String(localized: "File moves are disabled for this operation context.")) }
         guard !isMutating else { throw InstallerTrashFailure.busy }
         guard let plan = prepared, plan.display.id == planID, plan.display.scope == scope, Date() < plan.display.expiresAt else { throw InstallerTrashFailure.expired }
         prepared = nil; preparedRestore = nil; isMutating = true
@@ -229,7 +229,7 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
         return display
     }
     func restore(planID: UUID, context: InstallerRecoveryContext) async throws -> InstallerTrashOutcome {
-        guard nativeExecutionEnabled else { throw InstallerTrashFailure.unavailable(String(localized: "File moves are unavailable in this build while native recovery verification is pending.")) }
+        guard nativeExecutionEnabled else { throw InstallerTrashFailure.unavailable(String(localized: "File moves are disabled for this operation context.")) }
         guard !isMutating else { throw InstallerTrashFailure.busy }
         guard let plan = preparedRestore, plan.display.id == planID, plan.display.context == context, Date() < plan.display.expiresAt else { throw InstallerTrashFailure.expired }
         preparedRestore = nil; prepared = nil; isMutating = true

@@ -4871,12 +4871,12 @@
         }
       }
     },
-    "Run the verified official Mole V1.57.0 analyzer on one folder after reviewing the scope. Cleanup remains unavailable.": {
+    "Run the verified official Mole V1.57.0 analyzer on one folder after reviewing the scope. A Downloads .dmg can be separately reviewed for native Trash; Mole cleanup commands remain unavailable.": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "核对范围后，使用已验证的 Mole V1.57.0 官方分析器分析一个文件夹。清理功能仍不可用。"
+            "value": "复查范围后，可用已验证的官方 Mole V1.57.0 分析器分析单个文件夹。“下载”中的 .dmg 可另行复查原生废纸篓操作；Mole 清理命令仍不可用。"
           }
         }
       }
@@ -5431,12 +5431,12 @@
         }
       }
     },
-    "File moves are unavailable in this build while native recovery verification is pending.": {
+    "File moves are disabled for this operation context.": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "原生恢复验证尚未完成，此构建暂不支持移动文件。"
+            "value": "当前操作场景未启用文件移动。"
           }
         }
       }
@@ -5571,12 +5571,12 @@
         }
       }
     },
-    "Native Trash and restore are disabled in this build pending reviewed macOS fixture tests.": {
+    "Native Trash and restore are disabled for this context.": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "此构建已禁用原生废纸篓与恢复操作，需待 macOS 隔离测试及审查完成。"
+            "value": "当前场景未启用原生废纸篓和恢复操作。"
           }
         }
       }

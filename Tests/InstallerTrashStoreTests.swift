@@ -8,12 +8,35 @@ struct InstallerTrashStoreTests {
     private let downloads = URL(fileURLWithPath: "/Synthetic/Downloads", isDirectory: true)
     private var selected: String { downloads.appendingPathComponent("Installer.dmg").path }
 
-    @Test("Production default has no native mutation sink")
+    @Test("Production default exposes review but initialization authorizes and starts nothing")
     func defaultGate() {
         let store = InstallerTrashStore()
-        #expect(!store.isEnabled)
-        #expect(!store.canPrepare)
-        #expect(!store.canReadRecovery)
+        #expect(store.isEnabled && store.canReadRecovery)
+        #expect(!store.canPrepare && !store.isBusy && !store.hasReadRecovery)
+        #expect(store.selectedPath == nil && store.plan == nil && store.restorePlan == nil)
+        #expect(store.receipts.isEmpty && store.eligibleEntries.isEmpty && store.lastOutcome == nil)
+        store.prepare(); store.confirm(planID: UUID()); store.confirmRestore(planID: UUID())
+        #expect(!store.isBusy && store.plan == nil && store.restorePlan == nil && store.lastOutcome == nil)
+        let disabled = InstallerTrashStore(executor: nil)
+        #expect(!disabled.isEnabled && !disabled.canPrepare && !disabled.canReadRecovery)
+    }
+
+    @Test("Enabled native initialization performs no evidence read, Trash call or journal write")
+    func nativeInitializationIsInert() async throws {
+        let owned = FileManager.default.temporaryDirectory.appendingPathComponent("MoeKit-inert-native-\(UUID())", isDirectory: true)
+        try FileManager.default.createDirectory(at: owned, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+        let evidence = InertNativeEvidence(), sink = InertNativeSink()
+        let environment = InstallerTrashEnvironment(downloads: owned.appendingPathComponent("Downloads"),
+            recoveryRoot: owned.appendingPathComponent("MoeKit/InstallerRecovery"), trash: owned.appendingPathComponent("Trash"),
+            enforceLocalVolume: true, enforceTrustedAncestry: true)
+        let native = NativeInstallerTrashExecutor(environment: environment, evidence: evidence, sink: sink, nativeExecutionEnabled: true)
+        let store = InstallerTrashStore(executor: native, downloadsURL: environment.downloads)
+        for _ in 0..<10 { await Task.yield() }
+        #expect(store.isEnabled && !store.isBusy && !store.hasReadRecovery)
+        #expect(await evidence.calls == 0)
+        #expect(sink.calls == 0)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: owned.path).isEmpty)
+        // The uniquely owned empty fixture is retained; no cleanup can conceal writes.
     }
 
     @Test("Only an explicit regular-file hint directly listed by current Downloads analysis can prepare")
@@ -486,4 +509,21 @@ private struct StoreLiveAnalysisFixture: MoleAnalysisExecuting {
                          release: .native, preparedAt: Date(), privateSessionParent: URL(fileURLWithPath: "/Synthetic/Cache"))
     }
     func run(_ plan: MoleAnalysisPlan) async throws -> MoleAnalysisResult { result }
+}
+
+private actor InertNativeEvidence: InstallerUseEvidenceProviding {
+    private(set) var calls = 0
+    func evidence(for target: InstallerUseTarget) async -> InstallerUseEvidence {
+        calls += 1
+        return .unavailable(reason: "Unexpected initialization scan")
+    }
+}
+private final class InertNativeSink: InstallerTrashSink, @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+    var calls: Int { lock.lock(); defer { lock.unlock() }; return count }
+    func trash(_ url: URL) throws -> URL {
+        lock.lock(); count += 1; lock.unlock()
+        throw InstallerTrashFailure.unsupported
+    }
 }

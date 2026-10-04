@@ -29,6 +29,8 @@ for kind in args.kinds:
         assert record['detail']['observedUseControl'] == 'true'
     if kind == 'native-trash':
         assert record['detail']['duplicateNamesPreserved'] == 'true'
+    if kind == 'live-mole':
+        assert record['detail']['storeConfirmation'] == 'true'
     if kind == 'mounted-image':
         assert record['detail']['observedRefusal'] == 'true'
         assert record['detail']['crossDeviceRefusal'] == 'true'

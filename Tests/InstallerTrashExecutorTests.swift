@@ -507,7 +507,7 @@ struct InstallerLiveMoleFlowTests {
     }
     @Test("Official Mole live result supplies the exact native fixture selection",
           .enabled(if: ProcessInfo.processInfo.environment["MOEKIT_INSTALLER_TRASH_FIXTURE"] == "1"))
-    func liveMoleToTrashAndRestore() async throws {
+    @MainActor func liveMoleToTrashAndRestore() async throws {
         let env = ProcessInfo.processInfo.environment
         try #require(env["GITHUB_ACTIONS"] == "true" && env["RUNNER_ENVIRONMENT"] == "github-hosted")
         let resource = try #require(Bundle(for: InstallerLiveMoleBundle.self).url(forResource: "MoleAnalyzerFixturePath", withExtension: "txt"))
@@ -520,32 +520,51 @@ struct InstallerLiveMoleFlowTests {
         let selected = try #require(live.report.entries.first(where: { $0.path == f.source.path && !$0.isDirectory && $0.coverage == .known }))
         let measuredBytes = try #require(selected.measuredBytes)
         try #require(measuredBytes == Int64(f.marker.count))
-        let scope = InstallerTrashScope(generation: UUID(), liveAnalysisID: UUID(), liveDirectory: live.directory,
-            liveEntryPaths: Set(live.report.entries.map(\.path)), protectedPaths: [], catalogIsKnown: true)
         let sink = FixtureOnlyNativeTrashSink(marker: f.marker, allowedParent: f.recovery)
         let productionVolumeEnvironment = InstallerTrashEnvironment(downloads: f.downloads, recoveryRoot: f.recovery,
             trash: f.trash, enforceLocalVolume: true, enforceTrustedAncestry: true)
         let executor = NativeInstallerTrashExecutor(environment: productionVolumeEnvironment,
             evidence: InstallerFixtureEvidence(result: .noUseObserved), sink: sink, nativeExecutionEnabled: true)
-        let plan: InstallerTrashPlan
-        do {
-            plan = try await executor.prepare(selection: URL(fileURLWithPath: selected.path), scope: scope)
-        } catch {
+        let store = InstallerTrashStore(executor: executor, downloadsURL: f.downloads)
+        #expect(!store.isBusy && !store.hasReadRecovery && store.plan == nil)
+        store.updateContext(liveAnalysisID: UUID(), result: live, isDemoEnabled: false, protectedPaths: [], catalogIsKnown: true)
+        store.select(path: selected.path); store.prepare()
+        try await settle(store)
+        guard let plan = store.plan else {
             let directory = try volumeDescription(f.downloads)
             let file = try volumeDescription(f.source)
-            throw InstallerUseReadError.unavailable("Production planner refused owned fixture: \(error). Directory volume: \(directory). File volume: \(file)")
+            throw InstallerUseReadError.unavailable("Production store refused owned fixture: \(store.errorMessage ?? "unknown"). Directory volume: \(directory). File volume: \(file)")
         }
-        let moved = try await executor.moveToTrash(planID: plan.id, scope: scope)
-        try #require(moved.movedToTrash)
-        let context = f.context
-        let restore = try await executor.prepareRestore(receiptID: plan.id, context: context)
-        let restored = try await executor.restore(planID: restore.id, context: context)
-        try #require(restored.receipt?.state == .restored)
+        #expect(!store.canConfirm(planID: plan.id))
+        store.confirm(planID: plan.id)
+        #expect(!store.isBusy && !FileManager.default.fileExists(atPath: f.recovery.path))
+        #expect(try Data(contentsOf: f.source) == f.marker)
+        store.attestInstallationFinished(true, planID: plan.id)
+        store.confirm(planID: plan.id)
+        try await settle(store)
+        try #require(store.lastOutcome?.movedToTrash == true)
+        #expect(store.liveAnalysisID == nil && store.selectedPath == nil)
+        let receipt = try #require(store.receipts.first(where: { $0.id == plan.id }))
+        try #require(receipt.state == .trashed)
+        store.prepareRestore(receiptID: receipt.id)
+        try await settle(store)
+        let restore = try #require(store.restorePlan)
+        #expect(!FileManager.default.fileExists(atPath: f.source.path))
+        store.confirmRestore(planID: restore.id)
+        try await settle(store)
+        try #require(store.lastOutcome?.receipt?.state == .restored)
         try #require(try Data(contentsOf: f.source) == f.marker)
         try f.checkSentinel()
         try InstallerNativeFixtureEvidence.record(kind: "live-mole", detail: [
             "result": "verified-live-selection-trash-and-restore", "sourceDevice": String(plan.file.device),
-            "sourceInode": String(plan.file.inode), "release": live.release.version])
+            "sourceInode": String(plan.file.inode), "release": live.release.version, "storeConfirmation": "true"])
+    }
+    @MainActor private func settle(_ store: InstallerTrashStore) async throws {
+        for _ in 0..<3_000 {
+            if !store.isBusy { return }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        throw InstallerTrashFailure.busy
     }
     private func volumeDescription(_ url: URL) throws -> String {
         let values = try url.resourceValues(forKeys: [.volumeIsLocalKey, .volumeIsInternalKey, .volumeIsRemovableKey, .volumeIsEjectableKey, .isUbiquitousItemKey])

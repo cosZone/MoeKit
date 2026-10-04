@@ -37,9 +37,9 @@ final class InstallerTrashStore {
     @ObservationIgnored private var discardTask: Task<Void, Never>?
     @ObservationIgnored private var activeRequest: UUID?
 
-    /// No production mutation sink is installed until exact-commit native
-    /// fixture acceptance and review. Tests inject an isolated fake executor.
-    init(executor: (any InstallerTrashExecuting)? = nil, downloadsURL: URL? = nil,
+    /// Construction is inert: no scan, recovery read, staging or file move.
+    /// Every native operation still needs its independent plan and confirmation.
+    init(executor: (any InstallerTrashExecuting)? = NativeInstallerTrashExecutor(nativeExecutionEnabled: true), downloadsURL: URL? = nil,
          now: @escaping @Sendable () -> Date = { Date() },
          revealLocation: @escaping @MainActor (URL) -> Void = { NSWorkspace.shared.activateFileViewerSelecting([$0]) }) {
         self.executor = executor

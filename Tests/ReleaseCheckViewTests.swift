@@ -50,7 +50,10 @@ final class ReleaseCheckViewTests: XCTestCase {
                 window.isReleasedWhenClosed = false
                 window.appearance = appearance
                 window.contentView = hosting
-                defer { window.contentView = nil; window.close() }
+                defer { window.orderOut(nil); window.contentView = nil; window.close() }
+                // Anchor onChange delivery follows visibility; this is an owned
+                // fixture window, never a screenshot of the runner desktop.
+                window.orderFront(nil)
                 for _ in 0..<5 {
                     hosting.layoutSubtreeIfNeeded()
                     try await Task.sleep(for: .milliseconds(50))
@@ -60,12 +63,11 @@ final class ReleaseCheckViewTests: XCTestCase {
                 var required = scenario == "hidden-icons" ? ["icons.dock", "icons.menu", "icons.recovery"]
                     : ["updates.channel", "updates.result", "updates.check", "updates.installation", "updates.releases", "updates.privacy"]
                 if ["available", "development"].contains(scenario) { required.append("updates.download") }
-                for id in required {
-                    let region = try XCTUnwrap(capture.regions.first { $0.id == id })
-                    XCTAssertGreaterThan(region.bounds.width, 0)
-                    XCTAssertGreaterThan(region.bounds.height, 0)
-                    XCTAssertTrue(CGRect(origin: .zero, size: size).insetBy(dx: -1, dy: -1).contains(region.bounds), "Required control is outside the viewport: \(id): \(region.bounds)")
+                let viewport = CGRect(origin: .zero, size: size).insetBy(dx: -1, dy: -1)
+                let visible = required.filter { id in
+                    capture.regions.contains { $0.id == id && $0.bounds.width > 0 && $0.bounds.height > 0 && viewport.contains($0.bounds) }
                 }
+                let geometry = capture.regions.map { "\($0.id): \($0.bounds)" }.joined(separator: "\n")
                 let bitmap = try XCTUnwrap(hosting.bitmapImageRepForCachingDisplay(in: hosting.bounds))
                 appearance.performAsCurrentDrawingAppearance { hosting.cacheDisplay(in: hosting.bounds, to: bitmap) }
                 let png = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
@@ -80,12 +82,19 @@ final class ReleaseCheckViewTests: XCTestCase {
                 Partial-result title: \(TaskStatus.partial.title)
                 Update action title: \(String(localized: "Check for updates…"))
                 Network requests: 0
-                Visible required controls: \(required.count)
+                Visible required controls: \(visible.count)
                 Evidence source: public SwiftUI bounds anchors on displayed views
                 Scope: owned release/settings views with isolated preferences and synthetic responses.
+                Scenario: \(scenario)
+                Required controls: \(required.joined(separator: ", "))
+                Collected geometry:
+                \(geometry)
                 No live update, installation, screen capture or accessibility acceptance claimed.
                 """)
                 scope.name = name + "-scope.txt"; scope.lifetime = .keepAlways; add(scope)
+                // Keep the diagnostic pixels and all collected regions even if
+                // layout fails, while still failing the same required controls.
+                XCTAssertEqual(Set(visible), Set(required), "Missing/clipped controls in \(scenario): \(Set(required).subtracting(visible)); collected: \(geometry)")
             }
         }
     }

@@ -145,7 +145,7 @@ public actor RepositoryScanner {
         for root in roots {
             try Task.checkCancellation()
             do {
-                let scope = try makeScope(root, budget: descriptorBudget)
+                let scope = try makeScope(root, budget: descriptorBudget, reusing: scopes.map(\.anchor))
                 if !scopes.contains(where: { $0.root.path == scope.root.path }) { scopes.append(scope) }
             } catch let error as AnchoredDirectory.AccessError where error == .descriptorLimit {
                 issues.append(ScanIssue(url: root, kind: .resourceLimit,
@@ -362,12 +362,13 @@ public actor RepositoryScanner {
         let issue: ScanIssue
     }
 
-    private func makeScope(_ input: URL, budget: AnchoredDirectory.Budget = .init()) throws -> Scope {
+    private func makeScope(_ input: URL, budget: AnchoredDirectory.Budget = .init(),
+                           reusing roots: [AnchoredDirectory] = []) throws -> Scope {
         guard input.isFileURL, input.host == nil || input.host == "" || input.host == "localhost" else {
             throw RepositoryScannerError.invalidRoot("Choose a local folder to scan.")
         }
         do {
-            return Scope(anchor: try AnchoredDirectory.selected(input, budget: budget))
+            return Scope(anchor: try AnchoredDirectory.selected(input, budget: budget, reusing: roots))
         } catch is CancellationError {
             throw CancellationError()
         } catch let error as AnchoredDirectory.AccessError where error == .descriptorLimit {

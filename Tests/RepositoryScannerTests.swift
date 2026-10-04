@@ -769,6 +769,19 @@ struct RepositoryScannerTests {
         await #expect(throws: CancellationError.self) { try await task.value }
     }
 
+    @Test("Thirty-two ordinary sibling roots reuse ancestors and remain fully searchable")
+    func allThirtyTwoRoots() async throws {
+        let fixture = try ScannerFixture()
+        defer { fixture.remove() }
+        var roots: [URL] = []
+        for number in 0..<32 { roots.append(try fixture.repository("projects/project-\(number)")) }
+        let result = try await RepositoryScanner().scan(roots: roots)
+        #expect(result.items.count == 32)
+        #expect(result.visitedDirectories == 32)
+        #expect(result.issues.isEmpty)
+        #expect(!result.wasLimited)
+    }
+
     @Test("Descriptor exhaustion is an explicit partial resource-limit result")
     func descriptorLimitIsPartial() async throws {
         let fixture = try ScannerFixture()
@@ -777,7 +790,7 @@ struct RepositoryScannerTests {
         // without allocating an unbounded number of filesystem entries.
         let prefix = Array(repeating: "nested", count: 12).joined(separator: "/")
         var roots: [URL] = []
-        for number in 0..<32 { roots.append(try fixture.folder("\(prefix)/selected-\(number)")) }
+        for number in 0..<32 { roots.append(try fixture.folder("selected-\(number)/\(prefix)")) }
         let result = try await RepositoryScanner().scan(roots: roots)
         #expect(result.wasLimited)
         #expect(result.issues.contains { $0.kind == .resourceLimit })

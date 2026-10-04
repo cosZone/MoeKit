@@ -50,7 +50,7 @@ final class AnchoredDirectory {
     /// Only the explicitly selected input is canonicalized. Its final component
     /// must be a directory, not a symlink; aliases in its ancestors (e.g. /var) are
     /// supported. The before/open identity comparison rejects a changed selection.
-    static func selected(_ input: URL, budget: Budget = Budget()) throws -> AnchoredDirectory {
+    static func selected(_ input: URL, budget: Budget = Budget(), reusing roots: [AnchoredDirectory] = []) throws -> AnchoredDirectory {
         try Task.checkCancellation()
         var selectedStatus = stat()
         // URL directory representations may end in a slash; lstat on a trailing
@@ -66,18 +66,36 @@ final class AnchoredDirectory {
             guard let path = String(validatingCString: resolved) else { throw AccessError.invalidComponent }
             return URL(fileURLWithPath: path, isDirectory: true)
         }
-        try budget.acquire()
-        let descriptor = Darwin.open("/", O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)
-        guard descriptor >= 0 else { budget.release(); throw posixError() }
-        var directory: AnchoredDirectory
-        do {
-            directory = try AnchoredDirectory(descriptor: descriptor, url: URL(fileURLWithPath: "/"), parent: nil, name: nil, budget: budget)
-        } catch {
-            Darwin.close(descriptor)
-            budget.release()
-            throw error
+        // Reuse only existing root-establishment chains, not discovered children.
+        // Their lifetime is owned by the scan's roots, so Budget has no retain cycle.
+        var shared: AnchoredDirectory?
+        for root in roots {
+            var candidate: AnchoredDirectory? = root
+            while let current = candidate {
+                if canonical.pathComponents.starts(with: current.url.pathComponents),
+                   shared == nil || current.url.pathComponents.count > shared!.url.pathComponents.count {
+                    shared = current
+                }
+                candidate = current.parent
+            }
         }
-        for component in canonical.pathComponents where component != "/" {
+        var directory: AnchoredDirectory
+        if let shared {
+            try shared.validateIdentity() // Never reopen a changed cached ancestor.
+            directory = shared
+        } else {
+            try budget.acquire()
+            let descriptor = Darwin.open("/", O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)
+            guard descriptor >= 0 else { budget.release(); throw posixError() }
+            do {
+                directory = try AnchoredDirectory(descriptor: descriptor, url: URL(fileURLWithPath: "/"), parent: nil, name: nil, budget: budget)
+            } catch {
+                Darwin.close(descriptor)
+                budget.release()
+                throw error
+            }
+        }
+        for component in canonical.pathComponents.dropFirst(directory.url.pathComponents.count) {
             directory = try directory.openDirectory(component)
         }
         guard sameIdentity(selectedStatus, directory.identity) else { throw AccessError.changed }
@@ -160,7 +178,7 @@ final class AnchoredDirectory {
 
     final class Entries {
         private let directory: AnchoredDirectory
-        private let stream: OpaquePointer
+        private let stream: UnsafeMutablePointer<DIR>
 
         init(directory: AnchoredDirectory) throws {
             try directory.validateIdentity()

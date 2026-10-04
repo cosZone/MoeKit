@@ -43,6 +43,23 @@ struct AnchoredDirectoryTests {
         }
     }
 
+    @Test("Root establishment never reopens a replaced shared ancestor")
+    func replacedSharedAncestor() throws {
+        let fixture = try AnchorFixture()
+        defer { fixture.remove() }
+        let firstURL = try fixture.directory("parent/first")
+        _ = try fixture.directory("parent/second")
+        _ = try fixture.directory("replacement/second")
+        let budget = AnchoredDirectory.Budget()
+        let first = try AnchoredDirectory.selected(firstURL, budget: budget)
+        let parent = fixture.root.appendingPathComponent("parent")
+        try FileManager.default.moveItem(at: parent, to: fixture.root.appendingPathComponent("old"))
+        try FileManager.default.moveItem(at: fixture.root.appendingPathComponent("replacement"), to: parent)
+        #expect(throws: AnchoredDirectory.AccessError.changed) {
+            try AnchoredDirectory.selected(parent.appendingPathComponent("second"), budget: budget, reusing: [first])
+        }
+    }
+
     @Test("Pinned enumeration rejects a root renamed and replaced during the scan")
     func replacedEnumerationRoot() throws {
         let fixture = try AnchorFixture()

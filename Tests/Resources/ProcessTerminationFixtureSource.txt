@@ -7,9 +7,17 @@ static volatile sig_atomic_t reexec_requested = 0;
 static void request_reexec(int signal_number) { (void)signal_number; reexec_requested = 1; }
 int main(int argc, char **argv) {
     if (argc != 3) return 2;
+    // Process launch inherits the calling thread's signal mask. An inherited
+    // blocked SIGALRM must not defeat the fixture's independent lifetime bound.
+    sigset_t lifetime_signals;
+    sigemptyset(&lifetime_signals);
+    sigaddset(&lifetime_signals, SIGALRM);
+    sigaddset(&lifetime_signals, SIGTERM);
+    sigaddset(&lifetime_signals, SIGUSR1);
+    if (sigprocmask(SIG_UNBLOCK, &lifetime_signals, NULL) != 0) return 8;
     signal(SIGALRM, SIG_DFL);
     alarm(30); // bounded fixture lifetime, including failed test setup/cleanup
-    if (strcmp(argv[1], "ignore-term") == 0) signal(SIGTERM, SIG_IGN);
+    signal(SIGTERM, strcmp(argv[1], "ignore-term") == 0 ? SIG_IGN : SIG_DFL);
     signal(SIGUSR1, request_reexec);
     sigset_t blocked, previous;
     sigemptyset(&blocked);

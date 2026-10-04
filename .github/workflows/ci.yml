@@ -100,8 +100,10 @@ jobs:
                           "This archive gate must not sign with a certificate.")
           release.require(app_settings.get("DEPLOYMENT_LOCATION") == "YES" and
                           app_settings.get("MOLE_SUPERVISOR_SOURCE_DIR") ==
+                          str(Path(app_settings["UNINSTALLED_PRODUCTS_DIR"]) / app_settings["PLATFORM_NAME"]) and
+                          app_settings.get("GIT_INSPECTOR_SOURCE_DIR") ==
                           str(Path(app_settings["UNINSTALLED_PRODUCTS_DIR"]) / app_settings["PLATFORM_NAME"]),
-                          "The archive must declare the exact physical helper input.")
+                          "The archive must declare the exact physical helper inputs.")
           app = Path("build/MoeKit.xcarchive/Products/Applications/MoeKit.app")
           release.require(set(app.parent.iterdir()) == {app} and
                           set(app.parent.parent.iterdir()) == {app.parent},
@@ -135,6 +137,7 @@ jobs:
       DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
       TEST_RUNNER_MOEKIT_INSTALLER_MOUNT_FIXTURE: '1'
       TEST_RUNNER_MOEKIT_INSTALLER_TRASH_FIXTURE: '1'
+      TEST_RUNNER_MOEKIT_GIT_NATIVE_FIXTURE: '1'
       TEST_RUNNER_MOEKIT_CACHE_NATIVE_FIXTURE: '1'
       TEST_RUNNER_GITHUB_ACTIONS: 'true'
       TEST_RUNNER_RUNNER_ENVIRONMENT: github-hosted
@@ -157,6 +160,7 @@ jobs:
           python3 Scripts/test-preview-release.py
           python3 Scripts/test-ui-render-artifacts.py
           python3 Scripts/test-mole-supervisor.py
+          python3 Scripts/test-git-object-inspector.py
           python3 Scripts/test-installer-fixture-evidence.py
           python3 Scripts/test-cache-fixture-evidence.py
           python3 Scripts/test-cache-render-artifacts.py
@@ -306,6 +310,7 @@ jobs:
       DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
       TEST_RUNNER_MOEKIT_INSTALLER_MOUNT_FIXTURE: '1'
       TEST_RUNNER_MOEKIT_INSTALLER_TRASH_FIXTURE: '1'
+      TEST_RUNNER_MOEKIT_GIT_NATIVE_FIXTURE: '1'
       TEST_RUNNER_MOEKIT_CACHE_NATIVE_FIXTURE: '1'
       TEST_RUNNER_GITHUB_ACTIONS: 'true'
       TEST_RUNNER_RUNNER_ENVIRONMENT: github-hosted
@@ -360,6 +365,11 @@ jobs:
                         -only-testing:MoeKitTests/InstallerTrashExecutorTests
                         -only-testing:MoeKitTests/InstallerUseEvidenceTests
                         -only-testing:MoeKitTests/InstallerTrashStoreTests
+                        -only-testing:MoeKitTests/GitPlainIndexTests
+                        -only-testing:MoeKitTests/GitCleanupInspectionTests
+                        -only-testing:MoeKitTests/GitCleanupAuthorityTests
+                        -only-testing:MoeKitTests/GitCleanupStoreTests
+                        -only-testing:MoeKitTests/GitCleanupExecutorTests
                         -only-testing:MoeKitTests/CleanupExecutorTests
                         -only-testing:MoeKitTests/CleanupStoreTests
                         -only-testing:MoeKitTests/ReleaseVersionTests
@@ -405,6 +415,7 @@ jobs:
                       "ToolPreparationTests", "ToolPreparationStoreTests",
                       "MoleAnalysisModelsTests", "MoleAnalysisFilesTests", "MoleAnalysisStoreTests",
                       "InstallerFileAccessTests", "InstallerTrashExecutorTests", "InstallerUseEvidenceTests", "InstallerTrashStoreTests",
+                      "GitPlainIndexTests", "GitCleanupInspectionTests", "GitCleanupAuthorityTests", "GitCleanupStoreTests", "GitCleanupExecutorTests",
                       "CleanupExecutorTests", "CleanupStoreTests", "ProcessTerminationTests", "ProcessTerminationStoreTests", "NativeProcessTerminationTests",
                       "ReleaseVersionTests", "ReleaseCheckStoreTests", "ReleaseTransportTests", "AppEntryPointTests")
           if summary.get("passedTests", 0) < 27 or summary.get("failedTests") != 0 or summary.get("skippedTests") != 0:

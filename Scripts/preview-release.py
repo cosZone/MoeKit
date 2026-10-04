@@ -31,7 +31,12 @@ REPOSITORY = "cosZone/MoeKit"
 BUNDLE_ID = "com.yusixian.MoeKit"
 HELPER_PATH = "Contents/MacOS/MoleAnalysisSupervisor"
 HELPER_ID = BUNDLE_ID + ".MoleAnalysisSupervisor"
-EXECUTABLE_PATHS = frozenset({"Contents/MacOS/MoeKit", HELPER_PATH})
+GIT_HELPER_PATH = "Contents/MacOS/GitObjectInspector"
+GIT_HELPER_ID = BUNDLE_ID + ".GitObjectInspector"
+# Exact reviewed original helpers only. Never broaden this from bundle discovery.
+HELPERS = ((HELPER_PATH, HELPER_ID), (GIT_HELPER_PATH, GIT_HELPER_ID))
+VERIFIED_CODE_PATHS = [relative for relative, _ in HELPERS] + ["."]
+EXECUTABLE_PATHS = frozenset({"Contents/MacOS/MoeKit", *(relative for relative, _ in HELPERS)})
 ARCHITECTURES = ("arm64", "x86_64")
 SECRET_NAMES = ("SIGNING_CERTIFICATE_P12", "SIGNING_CERTIFICATE_PASSWORD", "DEVELOPMENT_TEAM")
 VERSION_RE = re.compile(r"(0|[1-9][0-9]{0,3})\.(0|[1-9][0-9]{0,3})\.(0|[1-9][0-9]{0,3})-preview\.(0|[1-9][0-9]{0,5})\Z")
@@ -266,7 +271,7 @@ def verify_provenance(info: dict, context: dict[str, str]) -> None:
 
 
 def verify_bundle_entry(relative: str, *, directory: bool, mode: int, magic: bytes) -> None:
-    """The release contains exactly the app and one reviewed original helper.
+    """The release contains exactly the app and two reviewed original helpers.
 
     Apply the same layout policy before signing and before unpacking ZIP input.
     Paths here have already been checked for traversal and canonical spelling.
@@ -311,7 +316,7 @@ def verify_app(app: Path, context: dict[str, str], *, provenance: bool = True) -
                 magic = stream.read(4)
             files.add(relative)
         verify_bundle_entry(relative, directory=stat.S_ISDIR(mode), mode=mode, magic=magic)
-    require(EXECUTABLE_PATHS <= files, "The app and reviewed supervisor executables are required.")
+    require(EXECUTABLE_PATHS <= files, "The app and reviewed helper executables are required.")
     info = plistlib.loads((app / "Contents/Info.plist").read_bytes())
     if provenance:
         verify_provenance(info, context)
@@ -324,7 +329,7 @@ def verify_app(app: Path, context: dict[str, str], *, provenance: bool = True) -
 
 def code_objects(app: Path) -> tuple[tuple[Path, str], ...]:
     # Fixed inside-out order. Never discover signable code by glob or --deep.
-    return ((app / HELPER_PATH, HELPER_ID), (app, BUNDLE_ID))
+    return tuple((app / relative, identifier) for relative, identifier in HELPERS) + ((app, BUNDLE_ID),)
 
 
 def sign_code_objects(app: Path, identity: str, keychain: Path | None = None) -> None:
@@ -337,7 +342,7 @@ def sign_code_objects(app: Path, identity: str, keychain: Path | None = None) ->
 
 
 def verify_code_objects(app: Path) -> None:
-    """Strictly verify both objects and inspect every architecture, even off-host."""
+    """Strictly verify all three objects and inspect every architecture, even off-host."""
     for path, identifier in code_objects(app):
         run("/usr/bin/codesign", "--verify", "--strict", "--all-architectures",
             '-R=identifier "' + identifier + '"', str(path), operation="codesign-verify")
@@ -439,7 +444,7 @@ def inspect_zip(path: Path, context: dict[str, str]) -> str:
                             digest.update(chunk)
                     files[relative] = digest.hexdigest()
                 verify_bundle_entry(relative, directory=item.is_dir(), mode=item.external_attr >> 16, magic=magic)
-        require(EXECUTABLE_PATHS <= files.keys(), "ZIP must contain the app and reviewed supervisor executables.")
+        require(EXECUTABLE_PATHS <= files.keys(), "ZIP must contain the app and reviewed helper executables.")
         verify_provenance(plistlib.loads(archive.read("MoeKit.app/Contents/Info.plist")), context)
         return content_digest(files)
 
@@ -451,8 +456,9 @@ def metadata(context: dict[str, str]) -> dict:
             "source_url": f"https://github.com/{REPOSITORY}/commit/{context['source_sha']}",
             "run_url": f"https://github.com/{REPOSITORY}/actions/runs/{context['run_id']}",
             "bundle_id": BUNDLE_ID, "configuration": "Release", "architectures": list(ARCHITECTURES),
-            "embedded_code": {HELPER_PATH: {"identifier": HELPER_ID, "architectures": list(ARCHITECTURES),
-                                            "origin": "original MoeKit source; no bundled Mole analyzer"}},
+            "embedded_code": {relative: {"identifier": identifier, "architectures": list(ARCHITECTURES),
+                                          "origin": "original MoeKit source; no bundled third-party CLI"}
+                              for relative, identifier in HELPERS},
             "minimum_macos": "15.0", "xcode": "16.4", "tuist": "4.148.3",
             "tests": "Release-configuration unit tests passed on the runner architecture with ENABLE_TESTABILITY=YES; archive built separately from the same source.",
             "native_ui_verified": False, "notarized": False, "updater": False}
@@ -464,7 +470,7 @@ def check_metadata(info: dict, context: dict[str, str], *, signed: bool) -> None
     if signed:
         require(info.get("signing") == "Apple Development" and info.get("signature_verified") is True and
                 info.get("expected_team_verified") is True and info.get("entitlements") == {} and
-                info.get("code_objects_verified") == [HELPER_PATH, "."] and info.get("hardened_runtime") is True,
+                info.get("code_objects_verified") == VERIFIED_CODE_PATHS.copy() and info.get("hardened_runtime") is True,
                 "Artifact is not a verified development-signed preview.")
         require(info.get("package_verification") == {
             "dmg_integrity": True, "dmg_read_only": True,
@@ -683,7 +689,7 @@ def sign() -> None:
         info = metadata(context)
         info.update(signing="Apple Development", signature_verified=True, expected_team_verified=True,
                     entitlements={}, hardened_runtime=True, secure_timestamp=False,
-                    code_objects_verified=[HELPER_PATH, "."],
+                    code_objects_verified=VERIFIED_CODE_PATHS.copy(),
                     gatekeeper="Unnotarized development preview; macOS may block it. Not Developer ID distribution.",
                     app_content_sha256=app_digest, release_notes_sha256=notes_hash,
                     artifacts={name: sha256(destination / name) for name in (dmg_name, zip_name)},

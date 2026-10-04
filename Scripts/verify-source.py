@@ -83,7 +83,7 @@ for path in sources:
                     r"(?<![.\w])system\s*\(", r"\b(?:Darwin|Glibc)\.system\s*\(",
                     r'"/bin/(?:sh|bash|zsh)"', r"\bAuthorizationExecuteWithPrivileges\b",
                     r"\b(?:kill|killpg|raise|proc_signal|proc_signal_with_audittoken)\s*\("):
-        allowed_adapter = (path.relative_to(ROOT).as_posix() in {"Sources/Mole/MoleAnalysisExecutor.swift", "Sources/Installer/InstallerUseEvidence.swift"}
+        allowed_adapter = (path.relative_to(ROOT).as_posix() in {"Sources/Mole/MoleAnalysisExecutor.swift", "Sources/Installer/InstallerUseEvidence.swift", "Sources/GitCleanup/GitObjectSnapshot.swift"}
                            and pattern == r"\b(?:Process|NSTask|NSAppleScript)\s*\("
                            and not re.search(r"\b(?:NSTask|NSAppleScript)\s*\(", text))
         allowed_signal = (path.relative_to(ROOT).as_posix() == "Sources/Services/NativeProcessTerminationSystem.swift"

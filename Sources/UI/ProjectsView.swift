@@ -101,7 +101,7 @@ struct ProjectsView: View {
             if let selected = store.selectedProjectID, !visibleIDs.contains(selected) { store.selectedProjectID = nil }
         }
         .sheet(item: Binding(get: { store.cleanupReviewProject }, set: { store.cleanupReviewProjectID = $0?.id })) { project in
-            if !store.isDemoEnabled { ProjectCleanupReview(project: project) }
+            if !store.isDemoEnabled { GitCleanupView(project: project) }
         }
         .inspector(isPresented: $store.isInspectorPresented) { ProjectInspector().inspectorColumnWidth(min: 260, ideal: 280, max: 340) }
     }
@@ -127,7 +127,7 @@ struct ProjectsView: View {
                     store.selectedToolID = ProcessModule.id
                     store.section = .tools
                 }.disabled(store.isDemoEnabled || store.selectedProject?.kind == .group)
-                Button("Cleanup safety", systemImage: "shield.lefthalf.filled") { store.presentCleanupReview() }
+                Button("Git cleanup…", systemImage: "shield.lefthalf.filled") { store.presentCleanupReview() }
                     .disabled(store.isDemoEnabled || store.selectedProject?.kind == .group)
                 Divider()
                 Button("Open tools", systemImage: "briefcase") {

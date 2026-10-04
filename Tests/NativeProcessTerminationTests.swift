@@ -7,7 +7,7 @@ private final class ProcessFixtureBundle: NSObject {}
 
 @Suite("Native identity-bound process signals", .serialized)
 struct NativeProcessTerminationTests {
-    @Test("Owned fixtures: stale generation, same-path exec, TERM, confirmed KILL, and an untouched neighbor")
+    @Test("Owned fixtures: stale generation, same-path exec, TERM, confirmed KILL, and an untouched neighbor", .timeLimit(.minutes(2)))
     func ownedFixtureLifecycle() async throws {
         let storage = try OwnedStopFixtureDirectory()
         let root = storage.root
@@ -18,17 +18,26 @@ struct NativeProcessTerminationTests {
         let compiler = Process()
         compiler.executableURL = URL(fileURLWithPath: "/usr/bin/clang")
         compiler.arguments = ["-x", "c", "-Wall", "-Wextra", "-Werror", source.path, "-o", executable.path]
+        compiler.standardInput = FileHandle.nullDevice
+        fixtureStage("compiler launch")
         try compiler.run()
-        compiler.waitUntilExit()
-        #expect(compiler.terminationStatus == 0)
+        let compilerIdentity = OwnedCompilerIdentity.capture(compiler, storage: storage)
+        defer { compilerIdentity?.cleanUp() }
+        fixtureStage("compiler completion wait")
+        try await waitForExit(compiler, seconds: 30, stage: "compiler completion")
+        try #require(compiler.terminationReason == .exit && compiler.terminationStatus == 0)
+        fixtureStage("compiler completed; sentinel launch")
         let sentinel = try await OwnedStopFixture.launch(executable, storage: storage, mode: "wait")
         defer { sentinel.cleanUp() }
+        fixtureStage("sentinel ready; target launch")
         let target = try await OwnedStopFixture.launch(executable, storage: storage, mode: "ignore-term")
         defer { target.cleanUp() }
+        fixtureStage("target ready; initial native inspection")
         let inventory = NativeProcessInventoryProvider()
         let snapshot = try await inventory.inspectSelected([target.pid])
         let original = try #require(snapshot.records.first)
         let version = try #require(original.identity.executionVersion)
+        fixtureStage("stale-generation signal refusal")
         var stale = try #require(target.verifiedToken())
         stale.val.7 &+= 1
         let staleCode = proc_signal_with_audittoken(&stale, SIGTERM)
@@ -38,6 +47,7 @@ struct NativeProcessTerminationTests {
 
         // Deliberately re-exec the exact fixture path in the same PID. Birth time
         // and executable path alone must not authorize the replacement execution.
+        fixtureStage("same-path re-exec")
         var beforeExec = try #require(target.verifiedToken())
         #expect(proc_signal_with_audittoken(&beforeExec, SIGUSR1) == 0)
         var newVersion: UInt32?
@@ -50,35 +60,50 @@ struct NativeProcessTerminationTests {
         _ = try #require(target.verifiedToken())
         let staleExecCode = proc_signal_with_audittoken(&beforeExec, SIGTERM)
         #expect(staleExecCode == ESRCH)
+        fixtureStage("stale-execution review refusal")
         let executor = ProcessTerminationExecutor()
         await #expect(throws: ProcessTerminationError.self) {
             try await executor.prepare(records: [original], mode: .graceful)
         }
+        fixtureStage("fresh target inspection and graceful review")
         let fresh = try #require(try await inventory.inspectSelected([target.pid]).records.first)
         let graceful = try await executor.prepare(records: [fresh], mode: .graceful)
         #expect(target.process.isRunning)
+        fixtureStage("graceful signal and bounded observation")
         let firstResults = try await executor.execute(reviewID: graceful.id)
         #expect(firstResults.first?.signalSubmitted == true)
         #expect(firstResults.first?.presence == .running)
         #expect(sentinel.process.isRunning)
+        fixtureStage("force review and signal")
         let force = try await executor.prepare(records: [fresh], mode: .force)
         #expect(target.process.isRunning) // review alone never signals
         let forceResults = try await executor.execute(reviewID: force.id)
         #expect(forceResults.first?.signalSubmitted == true)
-        try await waitForExit(target.process)
+        fixtureStage("forced target completion wait")
+        try await waitForExit(target.process, stage: "forced target completion")
         #expect(sentinel.process.isRunning)
         #expect(target.process.terminationReason == .uncaughtSignal)
         #expect(target.process.terminationStatus == SIGKILL)
 
+        fixtureStage("cooperative target launch")
         let cooperative = try await OwnedStopFixture.launch(executable, storage: storage, mode: "wait")
         defer { cooperative.cleanUp() }
         let cooperativeRecord = try #require(try await inventory.inspectSelected([cooperative.pid]).records.first)
         let term = try await executor.prepare(records: [cooperativeRecord], mode: .graceful)
+        fixtureStage("cooperative signal and bounded observation")
         let termResults = try await executor.execute(reviewID: term.id)
         #expect(termResults.first?.signalSubmitted == true)
-        try await waitForExit(cooperative.process)
+        try await waitForExit(cooperative.process, stage: "cooperative target completion")
         #expect(cooperative.process.terminationStatus == SIGTERM)
         #expect(sentinel.process.isRunning)
+        let neighborSurvived = sentinel.process.isRunning && sentinel.verifiedToken() != nil
+        fixtureStage("explicit cleanup after neighbor survival proof")
+        cooperative.cleanUp()
+        target.cleanUp()
+        sentinel.cleanUp()
+        try #require(!cooperative.process.isRunning && !target.process.isRunning && !sentinel.process.isRunning,
+            "Every owned helper must settle before affirmative native evidence is written")
+        fixtureStage("all owned helpers settled; write affirmative native evidence")
         try recordEvidence([
             "stale_generation_refused": staleCode == ESRCH,
             "same_path_exec_refused": staleExecCode == ESRCH && newVersion != nil && newVersion != version,
@@ -86,8 +111,9 @@ struct NativeProcessTerminationTests {
             "term_observed": !cooperative.process.isRunning && cooperative.process.terminationStatus == SIGTERM,
             "kill_submitted": forceResults.first?.signalSubmitted == true,
             "kill_observed": !target.process.isRunning && target.process.terminationStatus == SIGKILL,
-            "unselected_neighbor_survived": sentinel.process.isRunning && sentinel.verifiedToken() != nil
+            "unselected_neighbor_survived": neighborSurvived
         ])
+        fixtureStage("lifecycle body completed")
     }
 
     private func recordEvidence(_ checks: [String: Bool]) throws {
@@ -115,12 +141,18 @@ struct NativeProcessTerminationTests {
         }
     }
 
-    private func waitForExit(_ process: Process) async throws {
-        for _ in 0..<200 {
-            if !process.isRunning { process.waitUntilExit(); return }
+    private func waitForExit(_ process: Process, seconds: TimeInterval = 2, stage: String) async throws {
+        let deadline = ProcessInfo.processInfo.systemUptime + seconds
+        while process.isRunning {
+            try Task.checkCancellation()
+            guard ProcessInfo.processInfo.systemUptime < deadline else {
+                Issue.record("Owned process exceeded its deadline at: \(stage)")
+                throw ProcessTerminationError.unavailable
+            }
             try await Task.sleep(for: .milliseconds(10))
         }
-        Issue.record("Owned fixture did not exit after its confirmed signal")
+        // The task is no longer running, so its termination properties are readable.
+        // Do not enter waitUntilExit's unbounded current-run-loop polling here.
     }
 }
 
@@ -139,20 +171,23 @@ private struct OwnedStopFixture {
         process.executableURL = executable
         process.currentDirectoryURL = storage.root
         process.arguments = [mode, ready.path]
+        fixtureStage("owned helper launch")
         try process.run()
+        fixtureStage("owned helper launched; capture birth")
         var birth = proc_bsdinfo()
         let size = Int32(MemoryLayout<proc_bsdinfo>.size)
         guard proc_pidinfo(process.processIdentifier, PROC_PIDTBSDINFO, 0, &birth, size) == size else {
             // No birth identity means no safe cleanup signal. The helper has a
             // fixed 30-second self-expiry; wait boundedly for that owned child.
             for _ in 0..<320 {
-                if !process.isRunning { process.waitUntilExit(); break }
+                if !process.isRunning { break }
                 try await Task.sleep(for: .milliseconds(100))
             }
             throw ProcessTerminationError.unavailable
         }
         let fixture = Self(process: process, executable: executable, storage: storage,
             seconds: birth.pbi_start_tvsec, microseconds: birth.pbi_start_tvusec)
+        fixtureStage("owned helper readiness wait")
         do {
             for _ in 0..<200 {
                 if FileManager.default.fileExists(atPath: ready.path) { return fixture }
@@ -180,13 +215,17 @@ private struct OwnedStopFixture {
     }
 
     func cleanUp() {
+        fixtureStage("owned helper cleanup entered")
+        defer { fixtureStage("owned helper cleanup returned") }
+        guard process.isRunning else { return }
         guard var token = verifiedToken() else { return } // ambiguity: retain, self-expiry applies
+        fixtureStage("owned helper cleanup exact signal")
         guard proc_signal_with_audittoken(&token, SIGKILL) == 0 else { return }
-        for _ in 0..<300 {
-            if !process.isRunning { process.waitUntilExit(); return }
-            usleep(10_000)
-        }
-        Issue.record("Owned helper cleanup did not settle before the bounded wait")
+        let deadline = ProcessInfo.processInfo.systemUptime + 3
+        while process.isRunning && ProcessInfo.processInfo.systemUptime < deadline { usleep(10_000) }
+        if process.isRunning { Issue.record("Owned helper cleanup did not settle before its deadline") }
+        // Re-entering waitUntilExit after the task has stopped adds unbounded
+        // current-run-loop polling to an otherwise bounded cleanup path.
     }
 }
 
@@ -243,5 +282,58 @@ private final class OwnedStopFixtureDirectory {
         var bytes = [UInt8](repeating: 0, count: marker.utf8.count)
         return bytes.withUnsafeMutableBytes { read(file, $0.baseAddress, $0.count) } == bytes.count
             && String(bytes: bytes, encoding: .utf8) == marker
+    }
+}
+
+/// Fixed diagnostic strings only: no user process paths, arguments or environment.
+private func fixtureStage(_ stage: String) {
+    let line = Array("[owned-process-fixture] \(stage)\n".utf8)
+    _ = line.withUnsafeBytes { write(STDERR_FILENO, $0.baseAddress, $0.count) }
+}
+
+/// The compiler is an explicitly launched test child, not a user-selected target.
+/// Refuse cleanup if it has re-executed or changed identity since capture. Never
+/// fall back to numeric-PID/name/group signaling or touch any compiler descendant.
+private struct OwnedCompilerIdentity {
+    let process: Process
+    let storage: OwnedStopFixtureDirectory
+    let seconds: UInt64
+    let microseconds: UInt64
+    let version: UInt32
+    let executable: String
+
+    static func capture(_ process: Process, storage: OwnedStopFixtureDirectory) -> Self? {
+        guard storage.isIntact, process.isRunning,
+              var token = NativeProcessToken.read(pid: process.processIdentifier) else { return nil }
+        var info = proc_bsdinfo()
+        let size = Int32(MemoryLayout<proc_bsdinfo>.size)
+        guard proc_pidinfo(process.processIdentifier, PROC_PIDTBSDINFO, 0, &info, size) == size,
+              info.pbi_ppid == UInt32(getpid()),
+              NativeProcessCredentials.read(info).isOrdinary(uid: geteuid(), gid: getegid()) else { return nil }
+        var bytes = [UInt8](repeating: 0, count: NativeProcessInventoryParsing.executablePathCapacity)
+        let read = bytes.withUnsafeMutableBytes { proc_pidpath_audittoken(&token, $0.baseAddress, UInt32($0.count)) }
+        guard read > 0, let executable = bytes.withUnsafeBytes(NativeProcessInventoryParsing.decodeCString),
+              NativeProcessToken.read(pid: process.processIdentifier)?.val.7 == token.val.7 else { return nil }
+        return Self(process: process, storage: storage, seconds: info.pbi_start_tvsec,
+            microseconds: info.pbi_start_tvusec, version: token.val.7, executable: executable)
+    }
+
+    func cleanUp() {
+        guard process.isRunning else { return }
+        fixtureStage("compiler deadline cleanup")
+        guard storage.isIntact, let current = Self.capture(process, storage: storage),
+              current.seconds == seconds, current.microseconds == microseconds,
+              current.version == version, current.executable == executable,
+              var token = NativeProcessToken.read(pid: process.processIdentifier), token.val.7 == version else {
+            Issue.record("Compiler identity changed or became unavailable; no cleanup signal submitted")
+            return
+        }
+        guard proc_signal_with_audittoken(&token, SIGKILL) == 0 else {
+            Issue.record("Exact owned compiler cleanup signal failed")
+            return
+        }
+        let deadline = ProcessInfo.processInfo.systemUptime + 3
+        while process.isRunning && ProcessInfo.processInfo.systemUptime < deadline { usleep(10_000) }
+        if process.isRunning { Issue.record("Owned compiler cleanup did not settle before its deadline") }
     }
 }

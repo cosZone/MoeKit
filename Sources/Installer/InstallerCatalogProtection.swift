@@ -32,6 +32,9 @@ struct InstallerCatalogSnapshot: Equatable {
         if exists != 0, errno == ENOENT { return Self(bytes: nil) }
         guard exists == 0 else { throw InstallerTrashFailure.protected }
         let file = try InstallerFileDescriptor(parent: app, name: CatalogWriteCoordinator.catalogName)
+        // Keep the owner alive through every borrowed-fd read/snapshot, including
+        // optimized inlining at the new Git cleanup call sites.
+        defer { withExtendedLifetime(file) {} }
         let before = try InstallerFileAccess.snapshot(file.fd)
         guard before.mode & UInt32(S_IFMT) == UInt32(S_IFREG), before.uid == geteuid(), before.links == 1, before.mode & 0o022 == 0,
               before.bytes >= 0, before.bytes <= CatalogPersistence.maximumBytes else { throw InstallerTrashFailure.protected }

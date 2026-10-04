@@ -269,7 +269,8 @@ struct InstallerUseEvidenceTests {
             }
             if ProcessInfo.processInfo.systemUptime + 0.2 < deadline { try await Task.sleep(for: .milliseconds(200)) }
         }
-        Issue.record("Real current-user file-use coverage never completed within 25 seconds; source activation remains blocked. Last cause: \(latest)")
+        let imageCounts = await InstallerUseCIFixtureGate.imageCountDiagnostics()
+        Issue.record("Real current-user file-use coverage never completed within 25 seconds; source activation remains blocked. Last cause: \(latest). \(imageCounts)")
     }
 
     @Test("CI-only owned DMG attachment verifies production refusal and safe fixture detach",
@@ -387,7 +388,7 @@ private struct InstallerOwnedUseFixture {
 
     init() throws {
         let token = UUID().uuidString
-        root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath().appendingPathComponent("MoeKit-installer-use-\(token)", isDirectory: true)
+        root = try InstallerUseCIFixtureGate.physicalTemporaryDirectory().appendingPathComponent("MoeKit-installer-use-\(token)", isDirectory: true)
         file = root.appendingPathComponent("owned.dmg")
         marker = Data("MoeKit owned descriptor fixture \(token)\n".utf8)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: false)
@@ -444,7 +445,7 @@ private final class InstallerMountFixtureCI {
         guard Self.isEnabled else { throw InstallerUseReadError.unavailable("Mount fixtures require explicit ephemeral CI opt-in.") }
         try InstallerUseCIFixtureGate.requireHostedRunner()
         let token = UUID().uuidString
-        root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath().appendingPathComponent("MoeKit-owned-dmg-\(token)", isDirectory: true)
+        root = try InstallerUseCIFixtureGate.physicalTemporaryDirectory().appendingPathComponent("MoeKit-owned-dmg-\(token)", isDirectory: true)
         content = root.appendingPathComponent("content", isDirectory: true)
         marker = content.appendingPathComponent("moekit-owned-fixture.txt")
         image = root.appendingPathComponent("owned.dmg")
@@ -459,30 +460,46 @@ private final class InstallerMountFixtureCI {
     }
 
     func createAndAttach() throws {
-        try verifyOwnedContent()
-        guard Set(try FileManager.default.contentsOfDirectory(atPath: root.path)) == ["content"] else {
-            throw InstallerUseReadError.unavailable("Unexpected fixture member before image creation; retain it.")
+        var stage = "pre-create ownership validation"
+        do {
+            try verifyOwnedContent()
+            guard Set(try FileManager.default.contentsOfDirectory(atPath: root.path)) == ["content"] else {
+                throw InstallerUseReadError.unavailable("Unexpected fixture member before image creation; retain it.")
+            }
+            stage = "open strict owned directory anchor before create"
+            let anchor = try InstallerDirectoryAnchor.open(root)
+            sourceAnchor = anchor
+            stage = "create owned image"
+            _ = try run(["create", "-srcfolder", content.path, "-volname", volume, "-format", "UDZO", image.path])
+            try anchor.validate()
+            stage = "retain owned image descriptor"
+            let retained = try InstallerFileDescriptor(parent: anchor, name: image.lastPathComponent)
+            stage = "capture original owned image snapshot"
+            let snapshot = try InstallerFileAccess.snapshot(retained.fd)
+            guard snapshot == (try InstallerFileAccess.snapshotAt(anchor.fd, image.lastPathComponent)) else {
+                throw InstallerUseReadError.unavailable("The owned source changed before its retention handle was established.")
+            }
+            sourceAnchor = anchor
+            retainedSource = retained
+            sourceSnapshot = snapshot
+            createdImageIdentity = .init(device: snapshot.device, inode: snapshot.inode)
+            stage = "pre-attach full source revalidation"
+            try verifyOwnedContent()
+            _ = try imageIdentity()
+            stage = "attach owned image read-only"
+            let response = try run(["attach", "-readonly", "-nobrowse", "-noautoopen", "-plist", image.path])
+            stage = "parse owned attach device"
+            guard let root = try PropertyListSerialization.propertyList(from: response, format: nil) as? [String: Any],
+                  let entities = root["system-entities"] as? [[String: Any]],
+                  let wholeDisk = entities.compactMap({ $0["dev-entry"] as? String }).first(where: Self.isWholeDisk) else {
+                throw InstallerUseReadError.unavailable("The owned fixture attach response was ambiguous; retain it.")
+            }
+            disk = wholeDisk
+            stage = "post-attach unchanged source snapshot"
+            _ = try imageIdentity()
+        } catch {
+            throw InstallerUseReadError.unavailable("Owned mount fixture failed at \(stage): \(error)")
         }
-        _ = try run(["create", "-srcfolder", content.path, "-volname", volume, "-format", "UDZO", image.path])
-        let anchor = try InstallerDirectoryAnchor.open(root)
-        let retained = try InstallerFileDescriptor(parent: anchor, name: image.lastPathComponent)
-        let snapshot = try InstallerFileAccess.snapshot(retained.fd)
-        guard snapshot == (try InstallerFileAccess.snapshotAt(anchor.fd, image.lastPathComponent)) else {
-            throw InstallerUseReadError.unavailable("The owned source changed before its retention handle was established.")
-        }
-        sourceAnchor = anchor
-        retainedSource = retained
-        sourceSnapshot = snapshot
-        createdImageIdentity = .init(device: snapshot.device, inode: snapshot.inode)
-        try verifyOwnedContent()
-        _ = try imageIdentity()
-        let response = try run(["attach", "-readonly", "-nobrowse", "-noautoopen", "-plist", image.path])
-        guard let root = try PropertyListSerialization.propertyList(from: response, format: nil) as? [String: Any],
-              let entities = root["system-entities"] as? [[String: Any]],
-              let wholeDisk = entities.compactMap({ $0["dev-entry"] as? String }).first(where: Self.isWholeDisk) else {
-            throw InstallerUseReadError.unavailable("The owned fixture attach response was ambiguous; retain it.")
-        }
-        disk = wholeDisk
     }
 
     func useTarget() throws -> InstallerUseTarget {
@@ -497,10 +514,17 @@ private final class InstallerMountFixtureCI {
         guard let sourceAnchor, let retainedSource, let sourceSnapshot else {
             throw InstallerUseReadError.unavailable("The owned source retention snapshot is missing.")
         }
-        try sourceAnchor.validate()
-        guard sourceSnapshot == (try InstallerFileAccess.snapshot(retainedSource.fd)),
-              sourceSnapshot == (try InstallerFileAccess.snapshotAt(sourceAnchor.fd, image.lastPathComponent)),
-              lstat(image.path, &info) == 0, (info.st_mode & S_IFMT) == S_IFREG,
+        do { try sourceAnchor.validate() }
+        catch { throw InstallerUseReadError.unavailable("The owned source directory anchor changed: \(error)") }
+        let held: InstallerFileSnapshot, path: InstallerFileSnapshot
+        do { held = try InstallerFileAccess.snapshot(retainedSource.fd) }
+        catch { throw InstallerUseReadError.unavailable("The held owned source snapshot could not be read: \(error)") }
+        do { path = try InstallerFileAccess.snapshotAt(sourceAnchor.fd, image.lastPathComponent) }
+        catch { throw InstallerUseReadError.unavailable("The owned source path snapshot could not be read: \(error)") }
+        guard sourceSnapshot == held, sourceSnapshot == path else {
+            throw InstallerUseReadError.unavailable("Owned source snapshot fields changed; held=\(Self.changedFields(sourceSnapshot, held)), path=\(Self.changedFields(sourceSnapshot, path)).")
+        }
+        guard lstat(image.path, &info) == 0, (info.st_mode & S_IFMT) == S_IFREG,
               info.st_nlink == 1, info.st_uid == geteuid(),
               let expected = createdImageIdentity,
               expected == (try InstallerUseNativeParsing.identity(at: image)) else {
@@ -619,6 +643,20 @@ private final class InstallerMountFixtureCI {
         }
     }
 
+    private static func changedFields(_ a: InstallerFileSnapshot, _ b: InstallerFileSnapshot) -> String {
+        var fields: [String] = []
+        if a.device != b.device { fields.append("device") }
+        if a.inode != b.inode { fields.append("inode") }
+        if a.mode != b.mode { fields.append("mode") }
+        if a.uid != b.uid || a.gid != b.gid { fields.append("ownership") }
+        if a.links != b.links { fields.append("linkCount") }
+        if a.flags != b.flags { fields.append("flags") }
+        if a.bytes != b.bytes { fields.append("size") }
+        if a.modifiedSeconds != b.modifiedSeconds || a.modifiedNanoseconds != b.modifiedNanoseconds { fields.append("mtime") }
+        if a.changedSeconds != b.changedSeconds || a.changedNanoseconds != b.changedNanoseconds { fields.append("ctime") }
+        return fields.isEmpty ? "none" : fields.joined(separator: ",")
+    }
+
     private static func isWholeDisk(_ value: String) -> Bool {
         value.hasPrefix("/dev/disk") && !value.dropFirst(9).isEmpty
             && value.dropFirst(9).allSatisfy({ $0.isASCII && $0.isNumber })
@@ -651,6 +689,39 @@ private final class InstallerMountFixtureCI {
 private enum InstallerUseCIFixtureGate {
     static func enabled(_ flag: String) -> Bool {
         ProcessInfo.processInfo.environment[flag] == "1"
+    }
+
+    /// Bounded diagnostic counts only. Never emit another image's source path,
+    /// mounted volume path, bookmark data or arbitrary string values.
+    static func imageCountDiagnostics() async -> String {
+        do {
+            let bytes = try await InstallerDiskImageInventory.shared.read(deadline: ProcessInfo.processInfo.systemUptime + 3)
+            guard let root = try PropertyListSerialization.propertyList(from: bytes, format: nil) as? [String: Any],
+                  let images = root["images"] as? [[String: Any]] else { return "Image inventory diagnostic: malformed root/images type" }
+            var fixtureNamed = 0, simulatorLocated = 0, pathMissing = 0
+            for record in images {
+                guard let path = record["image-path"] as? String else { pathMissing += 1; continue }
+                if URL(fileURLWithPath: path).pathComponents.contains(where: { component in
+                    let prefix = "MoeKit-owned-dmg-"
+                    return component.hasPrefix(prefix) && UUID(uuidString: String(component.dropFirst(prefix.count))) != nil
+                }) { fixtureNamed += 1 }
+                if path.hasPrefix("/Library/Developer/CoreSimulator/Images/")
+                    || path.hasPrefix("/Library/Developer/CoreSimulator/Profiles/Runtimes/") { simulatorLocated += 1 }
+            }
+            return "Image inventory counts: total=\(images.count), fixtureNamedSources=\(fixtureNamed), simulatorLocatedSources=\(simulatorLocated), missingSourcePath=\(pathMissing)"
+        } catch { return "Image inventory counts could not be read: \(error)" }
+    }
+
+    /// Foundation can present /private/var through its /var alias. Strict
+    /// no-follow directory anchors need the actual native physical path.
+    static func physicalTemporaryDirectory() throws -> URL {
+        var destination = [CChar](repeating: 0, count: Int(PATH_MAX))
+        let succeeded = FileManager.default.temporaryDirectory.path.withCString { source in
+            destination.withUnsafeMutableBufferPointer { realpath(source, $0.baseAddress) != nil }
+        }
+        guard succeeded else { throw InstallerUseReadError.unavailable("The owned fixture temporary base could not be physically resolved.") }
+        let path = destination.withUnsafeBufferPointer { String(cString: $0.baseAddress!) }
+        return URL(fileURLWithPath: path, isDirectory: true)
     }
 
     static func requireHostedRunner() throws {

@@ -5070,6 +5070,1266 @@
           }
         }
       }
+    },
+    "Choose one regular .dmg directly inside your local Downloads folder. Folders, .pkg files, links, cloud storage and external volumes are unsupported.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请选择本机“下载”文件夹直接包含的一个普通 .dmg 文件。不支持文件夹、.pkg 文件、链接、云存储或外置宗卷。"
+          }
+        }
+      }
+    },
+    "The selected file or a containing folder changed. Review a new plan; no replacement is authorized.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所选文件或其所在文件夹已发生变化。请重新查看操作方案；此确认不授权操作替换后的条目。"
+          }
+        }
+      }
+    },
+    "Project, worktree and Git metadata locations are protected. A readable project catalog is required.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "项目、工作树及 Git 元数据位置受到保护。操作需要可读取的项目目录记录。"
+          }
+        }
+      }
+    },
+    "This confirmation expired or was already used. Review a new plan.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此确认已过期或已使用。请重新查看操作方案。"
+          }
+        }
+      }
+    },
+    "Another MoeKit file operation is active. Nothing was replaced.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "另一项 MoeKit 文件操作正在进行。未替换任何内容。"
+          }
+        }
+      }
+    },
+    "Private recovery storage could not be validated. Existing files and permissions were left unchanged.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法验证私有恢复存储。现有文件及权限均未更改。"
+          }
+        }
+      }
+    },
+    "A durable recovery record could not be saved. Any captured file is retained; review recovery before trying again.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法持久保存恢复记录。已暂存的文件会被保留；再次尝试前请查看恢复记录。"
+          }
+        }
+      }
+    },
+    "The destination already exists. MoeKit will not replace it.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "目标位置已存在条目。MoeKit 不会将其替换。"
+          }
+        }
+      }
+    },
+    "This filesystem did not support the required same-device, no-overwrite move. There is no copy or deletion fallback.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此文件系统不支持所需的同设备、不覆盖移动。不会改用复制或删除操作。"
+          }
+        }
+      }
+    },
+    "The operation was cancelled. Review the receipt for the file's actual location.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "操作已取消。请查看操作凭据，确认文件的实际位置。"
+          }
+        }
+      }
+    },
+    "Eject all attached disk images manually, then check again. This version only supports a complete empty disk-image inventory; it cannot rule out use from another attached image.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请手动推出所有已连接的磁盘映像，然后重新检查。此版本仅支持完整且为空的磁盘映像清单，无法排除通过其他已连接映像使用该文件的情况。"
+          }
+        }
+      }
+    },
+    "Requires all disk images to be ejected and checks current-user open file descriptors and fileports. Memory mappings, system processes, and other users' use are not verified. This observation is not proof that the file is unused.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "要求先推出所有磁盘映像，并检查当前用户打开的文件描述符和 fileport 文件端口。不会验证内存映射、系统进程及其他用户的使用情况。此次观察不能证明文件未被使用。"
+          }
+        }
+      }
+    },
+    "The file-use observation request is invalid.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件使用情况观察请求无效。"
+          }
+        }
+      }
+    },
+    "The current-user process list is incomplete.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前用户的进程列表不完整。"
+          }
+        }
+      }
+    },
+    "An open-file descriptor could not be validated.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法验证一个打开的文件描述符。"
+          }
+        }
+      }
+    },
+    "A current-user process has this file open.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前用户的某个进程已打开此文件。"
+          }
+        }
+      }
+    },
+    "The retained observation handle changed.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保留用于观察的句柄已发生变化。"
+          }
+        }
+      }
+    },
+    "A current-user process retains a fileport for this file.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前用户的某个进程持有此文件的 fileport 文件端口。"
+          }
+        }
+      }
+    },
+    "Open-file handles changed during the observation. Check again.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "观察期间，打开的文件句柄发生了变化。请重新检查。"
+          }
+        }
+      }
+    },
+    "An open-file descriptor changed its file identity. Check again.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一个打开的文件描述符所指向的文件身份已变化。请重新检查。"
+          }
+        }
+      }
+    },
+    "A fileport changed its file identity. Check again.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一个 fileport 文件端口所指向的文件身份已变化。请重新检查。"
+          }
+        }
+      }
+    },
+    "A retained observation handle is no longer present.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保留用于观察的句柄已不存在。"
+          }
+        }
+      }
+    },
+    "A process changed identity during the observation. Check again.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "观察期间，某个进程的身份发生了变化。请重新检查。"
+          }
+        }
+      }
+    },
+    "The current-user process list changed. Check again.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前用户的进程列表已发生变化。请重新检查。"
+          }
+        }
+      }
+    },
+    "A process exited or changed identity. Check again.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "某个进程已退出或身份已变化。请重新检查。"
+          }
+        }
+      }
+    },
+    "The file-use observation was cancelled.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件使用情况观察已取消。"
+          }
+        }
+      }
+    },
+    "File-use evidence could not be completely read in the stated scope.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法完整读取所述范围内的文件使用证据。"
+          }
+        }
+      }
+    },
+    "A current-user process identity could not be verified.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法验证当前用户的某个进程身份。"
+          }
+        }
+      }
+    },
+    "The current-user process list is incomplete or exceeded its limit.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前用户的进程列表不完整或超出数量上限。"
+          }
+        }
+      }
+    },
+    "The open-file list is incomplete or exceeded its limit.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开文件的列表不完整或超出数量上限。"
+          }
+        }
+      }
+    },
+    "The file-use observation reached its time limit.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件使用情况观察已达到时间上限。"
+          }
+        }
+      }
+    },
+    "Current-user process %d could not be completely checked at %@ (system error %d). It may have exited, changed, exceeded a limit, or denied access.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法完整检查当前用户的进程 %d，检查阶段为 %@（系统错误 %d）。该进程可能已退出、发生变化、超出限制或拒绝访问。"
+          }
+        }
+      }
+    },
+    "Native file-use coverage was denied, truncated, or incomplete.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "原生文件使用情况检查被拒绝、遭到截断或未完整完成。"
+          }
+        }
+      }
+    },
+    "An open-file identity could not be read.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法读取一个已打开文件的身份。"
+          }
+        }
+      }
+    },
+    "The disk-image inventory is incomplete or unreadable. Eject disk images manually and check again; no file was moved.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "磁盘映像清单不完整或无法读取。请手动推出磁盘映像后重新检查；未移动任何文件。"
+          }
+        }
+      }
+    },
+    "The disk-image inventory is still pending. Check again after it finishes.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "磁盘映像清单仍在读取中。请在读取完成后重新检查。"
+          }
+        }
+      }
+    },
+    "The disk-image inventory reached its time limit; no file was moved.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "读取磁盘映像清单已达到时间上限；未移动任何文件。"
+          }
+        }
+      }
+    },
+    "The disk-image inventory failed, emitted diagnostics, or exceeded its output limit.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "读取磁盘映像清单失败、返回了诊断信息或超出输出上限。"
+          }
+        }
+      }
+    },
+    "The read-only disk-image inventory could not complete.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法完成磁盘映像清单的只读检查。"
+          }
+        }
+      }
+    },
+    "File moves are unavailable in this build while native recovery verification is pending.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "原生恢复验证尚未完成，此构建暂不支持移动文件。"
+          }
+        }
+      }
+    },
+    "File moved to Trash. This does not free disk space until Trash is emptied.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件已移到废纸篓。清倒废纸篓之前不会释放磁盘空间。"
+          }
+        }
+      }
+    },
+    "The Trash outcome could not be verified. Do not repeat the move; inspect recovery and Finder.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法验证移到废纸篓的结果。请勿重复移动；请查看恢复记录及访达。"
+          }
+        }
+      }
+    },
+    "This receipt has an uncertain or completed outcome. Inspect it in Finder; MoeKit will not retry automatically.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此凭据的结果不确定，或操作已经完成。请在访达中检查；MoeKit 不会自动重试。"
+          }
+        }
+      }
+    },
+    "File restored to its original Downloads path. No existing file was replaced.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件已恢复到“下载”文件夹中的原路径。未替换任何现有文件。"
+          }
+        }
+      }
+    },
+    "Restore stopped and the captured item was returned without replacing anything. Review recovery; a new restore is not automatic.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复已停止，暂存的条目已放回，未替换任何内容。请查看恢复记录；不会自动再次恢复。"
+          }
+        }
+      }
+    },
+    "Restore could not be verified. Existing destinations were not overwritten; inspect the retained recovery location.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法验证恢复结果。现有目标未被覆盖；请检查保留的恢复位置。"
+          }
+        }
+      }
+    },
+    "The move stopped before Trash. The captured item was returned without replacing anything.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移动在进入废纸篓前停止。暂存的条目已放回，未替换任何内容。"
+          }
+        }
+      }
+    },
+    "The captured item was returned, but its final recovery record could not be verified. Inspect the original and recovery locations; do not repeat the move.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暂存的条目已放回，但无法验证最终恢复记录。请检查原位置及恢复位置；请勿重复移动。"
+          }
+        }
+      }
+    },
+    "The move stopped before Trash. Recovery data was retained; inspect it before any new operation.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移动在进入废纸篓前停止。恢复数据已保留；执行新操作前请先检查。"
+          }
+        }
+      }
+    },
+    "The operation could not be verified. Read recovery records before trying again; no automatic retry will occur.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法验证操作结果。再次尝试前请读取恢复记录；不会自动重试。"
+          }
+        }
+      }
+    },
+    "This recovery record is incomplete or unreadable. Its contents were retained; no operation will be retried automatically.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此恢复记录不完整或无法读取。其内容已保留；不会自动重试任何操作。"
+          }
+        }
+      }
+    },
+    "Downloaded disk image": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下载的磁盘映像"
+          }
+        }
+      }
+    },
+    "Select one .dmg row from the current live analysis of your local Downloads folder. The report is only a selection hint; MoeKit independently checks the file before offering a confirmation.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请从本机“下载”文件夹当前的实时分析结果中选择一个 .dmg 条目。报告仅用于辅助选择；MoeKit 会独立检查文件，然后再提供确认方案。"
+          }
+        }
+      }
+    },
+    "Native Trash and restore are disabled in this build pending reviewed macOS fixture tests.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此构建已禁用原生废纸篓与恢复操作，需待 macOS 隔离测试及审查完成。"
+          }
+        }
+      }
+    },
+    "Demo and imported reports cannot authorize native file operations.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "示例模式和导入的报告不能授权原生文件操作。"
+          }
+        }
+      }
+    },
+    "A readable project catalog is required before a file operation can be prepared.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "准备文件操作前，需要可读取的项目目录记录。"
+          }
+        }
+      }
+    },
+    "This first version requires all disk images to be ejected. Eject them yourself before review; MoeKit never ejects images.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此功能首版要求先推出所有磁盘映像。请在查看方案前自行推出；MoeKit 从不代为推出映像。"
+          }
+        }
+      }
+    },
+    "Selected file": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所选文件"
+          }
+        }
+      }
+    },
+    "Review native Trash…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看原生废纸篓方案…"
+          }
+        }
+      }
+    },
+    "No eligible .dmg selected": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚未选择符合条件的 .dmg 文件"
+          }
+        }
+      }
+    },
+    "Waiting for the actual operation outcome…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在等待实际操作结果…"
+          }
+        }
+      }
+    },
+    "Checking the selected operation…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在检查所选操作…"
+          }
+        }
+      }
+    },
+    "Cancel stops before mutation when possible. If native Trash has started, MoeKit waits for its actual result and keeps the receipt.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消会尽可能在文件变更前停止操作。如果原生废纸篓操作已经开始，MoeKit 会等待其实际结果并保留操作凭据。"
+          }
+        }
+      }
+    },
+    "Latest actual operation outcome": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最近一次实际操作结果"
+          }
+        }
+      }
+    },
+    "Outcome original path": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此次操作的原路径"
+          }
+        }
+      }
+    },
+    "Outcome operation records": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此次操作的记录位置"
+          }
+        }
+      }
+    },
+    "Actual file-operation receipt from this session": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本次会话的真实文件操作凭据"
+          }
+        }
+      }
+    },
+    "Recovery receipts": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复凭据"
+          }
+        }
+      }
+    },
+    "Read recovery records": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "读取恢复记录"
+          }
+        }
+      }
+    },
+    "Read-only listing of MoeKit’s private records. No Trash scan or automatic restore occurs. Each original-path restore needs a new confirmation and never overwrites a destination.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "只读列出 MoeKit 的私有记录。不会扫描废纸篓或自动恢复。每次恢复到原路径都需要重新确认，且绝不覆盖目标位置已有的条目。"
+          }
+        }
+      }
+    },
+    "No validated recovery records found": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未找到通过验证的恢复记录"
+          }
+        }
+      }
+    },
+    "Recovery records have not been read": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚未读取恢复记录"
+          }
+        }
+      }
+    },
+    "Recovery record unavailable; outcome unknown": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复记录不可用；结果未知"
+          }
+        }
+      }
+    },
+    "Operation records": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "操作记录位置"
+          }
+        }
+      }
+    },
+    "No restore is authorized from incomplete or unreadable records. The operation directory and any retained payload are preserved.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不完整或无法读取的记录不能授权恢复。操作目录及其中保留的条目会保持原状。"
+          }
+        }
+      }
+    },
+    "Reveal validated recovery location": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在访达中显示已验证的恢复位置"
+          }
+        }
+      }
+    },
+    "Confirm native macOS Trash": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "确认移到 macOS 原生废纸篓"
+          }
+        }
+      }
+    },
+    "Exact original path": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "确切原路径"
+          }
+        }
+      }
+    },
+    "1 file · %@ (%lld bytes)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 个文件 · %@（%lld 字节）"
+          }
+        }
+      }
+    },
+    "MoeKit will move this disk image using native macOS Trash. This is not a Mole cleanup command. Moving to Trash does not free its storage; no Trash emptying is offered here.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MoeKit 将使用 macOS 原生废纸篓移动此磁盘映像，不会执行 Mole 清理命令。移到废纸篓不会释放其占用的空间；此处不提供清倒废纸篓功能。"
+          }
+        }
+      }
+    },
+    "Exact private staging path": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "确切私有暂存路径"
+          }
+        }
+      }
+    },
+    "Private journal directory": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "私有日志目录"
+          }
+        }
+      }
+    },
+    "First recovery record": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "首条恢复记录"
+          }
+        }
+      }
+    },
+    "The private MoeKit and InstallerRecovery parent directories and shared operations.lock and projects.json.lock files may also be created. The lock only coordinates cooperating MoeKit instances; it does not lock out other applications.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "操作还可能创建私有的 MoeKit 和 InstallerRecovery 父目录，以及共享的 operations.lock 和 projects.json.lock 文件。这些锁仅协调遵守协议的 MoeKit 实例，不能阻止其他应用访问。"
+          }
+        }
+      }
+    },
+    "After confirmation, MoeKit creates this private operation directory and numbered JSON recovery records inside it. These records persist and disclose the original path only in this private journal. Closing this plan does not create them.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "确认后，MoeKit 会创建此私有操作目录，并在其中写入带编号的 JSON 恢复记录。记录会持久保留，原路径仅记录在此私有日志中。关闭此方案不会创建这些内容。"
+          }
+        }
+      }
+    },
+    "No disk images may be attached. Eject disk images yourself before reviewing this operation; MoeKit will never eject them for you.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不得连接任何磁盘映像。查看此操作方案前，请自行推出所有磁盘映像；MoeKit 绝不会代为推出。"
+          }
+        }
+      }
+    },
+    "No open descriptor or fileport use observed in the checked current-user processes": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在已检查的当前用户进程中，未观察到通过打开的文件描述符或 fileport 文件端口使用此文件"
+          }
+        }
+      }
+    },
+    "Checks cover current-user vnode file descriptors and fileports, plus a complete, empty attached-disk-image inventory. Any attached image blocks this first version. Memory mappings, other users, system services and files opened after the check are not exhaustively observable. This is not proof that the image is globally unused.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查涵盖当前用户的 vnode 文件描述符和 fileport 文件端口，并要求完整的已连接磁盘映像清单为空。此功能首版遇到任何已连接映像都会阻止操作。无法穷尽观察内存映射、其他用户、系统服务及检查后才打开文件的情况。因此，这不能证明该映像在整个系统中均未被使用。"
+          }
+        }
+      }
+    },
+    "A same-user race can temporarily move a replacement before a mismatch is detected. The native Trash API uses a path. This operation is designed for ordinary cooperative local use, not malicious same-user interference.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同一用户权限下的并发操作，可能导致替换后的条目在发现不匹配前被短暂移动。原生废纸篓 API 使用路径操作。此功能适用于普通、协作式的本机使用场景，无法抵御同一用户权限下的恶意干扰。"
+          }
+        }
+      }
+    },
+    "I have finished installing and using this disk image": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "我已完成此磁盘映像的安装和使用"
+          }
+        }
+      }
+    },
+    "Confirmation expires at %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "确认有效期至 %@"
+          }
+        }
+      }
+    },
+    "Cancel plan": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消方案"
+          }
+        }
+      }
+    },
+    "Move this file to Trash": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将此文件移到废纸篓"
+          }
+        }
+      }
+    },
+    "Confirm original-path restore": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "确认恢复到原路径"
+          }
+        }
+      }
+    },
+    "Validated source": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已验证的来源"
+          }
+        }
+      }
+    },
+    "Exact restore destination": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "确切恢复目标"
+          }
+        }
+      }
+    },
+    "Private restore staging path": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "私有恢复暂存路径"
+          }
+        }
+      }
+    },
+    "Next recovery record": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下一条恢复记录"
+          }
+        }
+      }
+    },
+    "Restore holds the shared operations.lock and projects.json.lock, creating the catalog lock only if missing, and appends numbered JSON records in this operation directory before namespace changes.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复期间会持有共享的 operations.lock 和 projects.json.lock；仅在项目目录锁不存在时创建它，并在更改文件位置前向此操作目录追加带编号的 JSON 记录。"
+          }
+        }
+      }
+    },
+    "MoeKit will recheck identities and move this exact recorded file back to its original Downloads path. A collision refuses the operation; there is no overwrite or force option. Journal records persist. Finder Put Back may target private staging instead of the original path.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MoeKit 会重新检查身份，并将记录中的这个确切文件移回“下载”文件夹的原路径。若目标位置已有条目，操作将被拒绝；不提供覆盖或强制选项。日志记录会保留。访达的“放回原处”可能将文件放回私有暂存位置，而非原路径。"
+          }
+        }
+      }
+    },
+    "Restore is unavailable after Trash is emptied, required identities or volumes change, or the original destination is occupied.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清倒废纸篓、所需身份或宗卷发生变化，或原目标位置被占用后，将无法恢复。"
+          }
+        }
+      }
+    },
+    "Restore to original path": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复到原路径"
+          }
+        }
+      }
+    },
+    "Original path": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "原路径"
+          }
+        }
+      }
+    },
+    "Recorded Trash path": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "记录中的废纸篓路径"
+          }
+        }
+      }
+    },
+    "Receipt %@ · record %lld": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "凭据 %@ · 第 %lld 条记录"
+          }
+        }
+      }
+    },
+    "Review restore…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看恢复方案…"
+          }
+        }
+      }
+    },
+    "Private MoeKit parent directory": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "私有 MoeKit 父目录"
+          }
+        }
+      }
+    },
+    "Private recovery root": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "私有恢复根目录"
+          }
+        }
+      }
+    },
+    "Shared operation lock": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "共享操作锁"
+          }
+        }
+      }
+    },
+    "Shared project-catalog lock": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "共享项目目录锁"
+          }
+        }
+      }
+    },
+    "Full path, escaped: %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完整路径（已转义）：%@"
+          }
+        }
+      }
+    },
+    "Capture intent recorded; verify recovery location": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已记录暂存意图；请验证恢复位置"
+          }
+        }
+      }
+    },
+    "File retained in private staging": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件保留在私有暂存位置"
+          }
+        }
+      }
+    },
+    "Trash intent recorded; outcome needs verification": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已记录移到废纸篓的意图；结果待验证"
+          }
+        }
+      }
+    },
+    "Moved to macOS Trash": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已移到 macOS 废纸篓"
+          }
+        }
+      }
+    },
+    "Rollback intent recorded; outcome needs verification": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已记录回退意图；结果待验证"
+          }
+        }
+      }
+    },
+    "Returned to the original path": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已放回原路径"
+          }
+        }
+      }
+    },
+    "File retained for recovery": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件已保留以供恢复"
+          }
+        }
+      }
+    },
+    "Outcome uncertain; review recovery": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "结果不确定；请查看恢复记录"
+          }
+        }
+      }
+    },
+    "Restore capture intent recorded; review recovery": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已记录恢复暂存意图；请查看恢复记录"
+          }
+        }
+      }
+    },
+    "Restore payload retained in private staging": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "待恢复条目保留在私有暂存位置"
+          }
+        }
+      }
+    },
+    "Restore intent recorded; outcome needs verification": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已记录恢复意图；结果待验证"
+          }
+        }
+      }
+    },
+    "Restored to the original path": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已恢复到原路径"
+          }
+        }
+      }
+    },
+    "%@ · %@ · SHA-256 %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · %@ · SHA-256 %@"
+          }
+        }
+      }
+    },
+    "Live Mole result · filtered, non-atomic observation · sizes are not reclaimable space": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mole 实时结果 · 经过筛选的非原子观察 · 大小不等于可释放空间"
+          }
+        }
+      }
+    },
+    "Only a directly listed .dmg in the current live Downloads analysis can be selected for independent native Trash review. Imported and Demo entries cannot be used.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅可选择当前“下载”文件夹实时分析直接列出的 .dmg 文件，进行独立的原生废纸篓操作审查。导入报告和示例条目不能用于此操作。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

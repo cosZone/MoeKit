@@ -398,3 +398,44 @@ private struct FixtureOnlyNativeTrashSink: InstallerTrashSink {
         return try NativeInstallerTrashSink().trash(url)
     }
 }
+
+/// Full builds include this suite; the targeted ASan job deliberately tests the
+/// native guards separately without downloading/running the upstream analyzer.
+@Suite("Live Mole selection to native installer operation", .serialized)
+struct InstallerLiveMoleFlowTests {
+    @Test("Official Mole live result supplies the exact native fixture selection",
+          .enabled(if: ProcessInfo.processInfo.environment["MOEKIT_INSTALLER_TRASH_FIXTURE"] == "1"))
+    func liveMoleToTrashAndRestore() async throws {
+        let env = ProcessInfo.processInfo.environment
+        try #require(env["GITHUB_ACTIONS"] == "true" && env["RUNNER_ENVIRONMENT"] == "github-hosted")
+        let resource = try #require(Bundle(for: InstallerLiveMoleBundle.self).url(forResource: "MoleAnalyzerFixturePath", withExtension: "txt"))
+        let binary = try String(contentsOf: resource, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)
+        let f = try InstallerFixture(name: "MoeKit-live-Mole-owned-\(UUID().uuidString).dmg", realTrash: true)
+        let analyzer = MoleAnalysisExecutor(privateSessionParent: f.base.appendingPathComponent("analysis-session"))
+        let analysisPlan = try await analyzer.prepare(executable: URL(fileURLWithPath: binary), directory: f.downloads)
+        let live = try await analyzer.run(analysisPlan)
+        try #require(live.report.coverage == .known)
+        let selected = try #require(live.report.entries.first(where: { $0.path == f.source.path && !$0.isDirectory && $0.coverage == .known }))
+        try #require(selected.measuredBytes == f.marker.count)
+        let scope = InstallerTrashScope(generation: UUID(), liveAnalysisID: UUID(), liveDirectory: live.directory,
+            liveEntryPaths: Set(live.report.entries.map(\.path)), protectedPaths: [], catalogIsKnown: true)
+        let sink = FixtureOnlyNativeTrashSink(marker: f.marker, allowedParent: f.recovery)
+        let productionVolumeEnvironment = InstallerTrashEnvironment(downloads: f.downloads, recoveryRoot: f.recovery,
+            trash: f.trash, enforceLocalVolume: true)
+        let executor = NativeInstallerTrashExecutor(environment: productionVolumeEnvironment,
+            evidence: InstallerFixtureEvidence(result: .noUseObserved), sink: sink, nativeExecutionEnabled: true)
+        let plan = try await executor.prepare(selection: URL(fileURLWithPath: selected.path), scope: scope)
+        let moved = try await executor.moveToTrash(planID: plan.id, scope: scope)
+        try #require(moved.movedToTrash)
+        let context = f.context
+        let restore = try await executor.prepareRestore(receiptID: plan.id, context: context)
+        let restored = try await executor.restore(planID: restore.id, context: context)
+        try #require(restored.receipt?.state == .restored)
+        try #require(try Data(contentsOf: f.source) == f.marker)
+        try f.checkSentinel()
+        try InstallerNativeFixtureEvidence.record(kind: "live-mole", detail: [
+            "result": "verified-live-selection-trash-and-restore", "sourceDevice": String(plan.file.device),
+            "sourceInode": String(plan.file.inode), "release": live.release.version])
+    }
+}
+private final class InstallerLiveMoleBundle: NSObject {}

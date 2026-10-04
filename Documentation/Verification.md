@@ -7,6 +7,7 @@
 - [ ] `python3 Scripts/verify-source.py`：记录结果，确认不是 Swift 编译检查
 - [ ] 固定版本 Tuist 可生成 workspace；MoeKit scheme 包含 MoeKitTests
 - [ ] macOS 构建和 Swift Testing 全量测试通过；保留 `.xcresult`
+- [ ] Native CI 的 `Unsigned universal archive` 在精确源码上单独执行双架构 Release archive，保留脚本沙箱，复用发布包校验器检查 app 与唯一 supervisor 的路径、类型和 arm64/x86_64；仅保留诊断与哈希，不接触证书、不启动或分发未签名 app
 - [ ] Native CI 检查构建后的 SwiftUI bundle 元数据，并在无签名 Secret 的 runner 中以 `--demo` 启动 10 秒；该检查仅证明进程未提前退出，不代表窗口渲染、交互或辅助功能已验收
 - [ ] 手动 preview artifact 的源码 SHA 与目标提交一致；校验和与签名验证通过
 

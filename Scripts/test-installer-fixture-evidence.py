@@ -15,7 +15,7 @@ class EvidenceTests(unittest.TestCase):
         self.owned = tempfile.TemporaryDirectory(prefix='moekit-evidence-verifier-')
         self.root = Path(self.owned.name)
         self.root.chmod(0o700)
-        self.records = {'native-trash': 'verified-trash-and-restore', 'mounted-image': 'verified-attach-and-detach', 'idle-use': 'noUseObserved'}
+        self.records = {'native-trash': 'verified-trash-and-restore', 'mounted-image': 'verified-attach-and-detach', 'idle-use': 'noUseObserved', 'live-mole': 'verified-live-selection-trash-and-restore'}
         for kind, result in self.records.items():
             path = self.root / f'{kind}.json'
             path.write_text(json.dumps({'schema': 1, 'kind': kind, 'sourceSHA': SHA,

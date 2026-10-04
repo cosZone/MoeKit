@@ -10,10 +10,10 @@ import stat
 parser = argparse.ArgumentParser()
 parser.add_argument('--directory', required=True, type=Path)
 parser.add_argument('--source-sha', required=True)
-parser.add_argument('--kinds', nargs='+', default=['native-trash', 'mounted-image', 'idle-use'])
+parser.add_argument('--kinds', nargs='+', default=['native-trash', 'mounted-image', 'idle-use', 'live-mole'])
 args = parser.parse_args()
 assert re.fullmatch(r'[0-9a-f]{40}', args.source_sha), 'invalid source SHA'
-expected = {'native-trash': 'verified-trash-and-restore', 'mounted-image': 'verified-attach-and-detach', 'idle-use': 'noUseObserved'}
+expected = {'native-trash': 'verified-trash-and-restore', 'mounted-image': 'verified-attach-and-detach', 'idle-use': 'noUseObserved', 'live-mole': 'verified-live-selection-trash-and-restore'}
 assert set(args.kinds) <= expected.keys()
 root = args.directory.lstat()
 assert stat.S_ISDIR(root.st_mode) and stat.S_IMODE(root.st_mode) == 0o700

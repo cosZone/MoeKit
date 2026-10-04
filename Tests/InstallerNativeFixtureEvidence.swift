@@ -10,7 +10,7 @@ enum InstallerNativeFixtureEvidence {
         guard env["GITHUB_ACTIONS"] == "true", env["RUNNER_ENVIRONMENT"] == "github-hosted",
               let sha = env["MOEKIT_INSTALLER_SOURCE_SHA"], sha.count == 40,
               sha.allSatisfy({ $0.isHexDigit }), let path = env["MOEKIT_INSTALLER_EVIDENCE_DIR"],
-              ["native-trash", "mounted-image", "idle-use"].contains(kind), detail.count <= 16 else {
+              ["native-trash", "mounted-image", "idle-use", "live-mole"].contains(kind), detail.count <= 16 else {
             throw InstallerTrashFailure.unavailable("Missing exact-commit hosted-runner fixture evidence configuration")
         }
         let directory = try InstallerDirectoryAnchor.open(URL(fileURLWithPath: path))

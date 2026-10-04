@@ -263,10 +263,10 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
             guard fsync(plan.sourceParent.fd) == 0, fsync(operation.fd) == 0 else { throw InstallerTrashFailure.journal }
             try checkpoint(.afterRestoreCapture)
             let stagedIdentity = try InstallerFileAccess.snapshotAt(operation.fd, "restore.dmg")
-            guard plan.sourceIdentity.matchesCaptured(stagedIdentity), plan.sourceIdentity.matchesCaptured(try InstallerFileAccess.snapshot(plan.source.fd)) else { throw InstallerTrashFailure.changed }
-            capturedVerified = true
             receipt = receipt.advancing(to: .restoreCaptured, payloadName: "restore.dmg", payloadFile: stagedIdentity)
             try journal.append(receipt, operation: operation)
+            guard plan.sourceIdentity.matchesCaptured(stagedIdentity), plan.sourceIdentity.matchesCaptured(try InstallerFileAccess.snapshot(plan.source.fd)) else { throw InstallerTrashFailure.changed }
+            capturedVerified = true
             try Task.checkCancellation(); try validateParent(plan.parent); try catalogLease.requireSnapshot(plan.catalog)
             try InstallerFileAccess.assertAbsent(plan.parent, receipt.originalURL.lastPathComponent)
             receipt = receipt.advancing(to: .restoreIntent, payloadName: "restore.dmg")

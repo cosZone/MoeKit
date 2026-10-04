@@ -8,6 +8,9 @@ import XCTest
 final class InstallerTrashViewTests: XCTestCase {
     @MainActor
     func testInstallerConfirmationRenders() async throws {
+        let language = try XCTUnwrap(Bundle.main.preferredLocalizations.first)
+        XCTAssertTrue(["en", "zh-Hans"].contains(language))
+        if language == "zh-Hans" { verifyChineseSafetyCopy() }
         let downloads = URL(fileURLWithPath: "/Synthetic/Downloads", isDirectory: true)
         let selected = downloads.appendingPathComponent("Long installer name with quotes \" and newline\nplus direction marker \u{202E}dmg.dmg")
         for scenario in ["disabled", "trash-confirmation", "restore-confirmation", "incomplete-recovery"] {
@@ -52,7 +55,6 @@ final class InstallerTrashViewTests: XCTestCase {
                 appearance.performAsCurrentDrawingAppearance { hosting.cacheDisplay(in: hosting.bounds, to: bitmap) }
                 let png = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
                 let attachment = XCTAttachment(data: png, uniformTypeIdentifier: "public.png")
-                let language = try XCTUnwrap(Bundle.main.preferredLocalizations.first)
                 attachment.name = "installer-\(scenario)-\(language)-\(dark ? "dark" : "light")-720x1600.png"
                 attachment.lifetime = .keepAlways; add(attachment)
                 XCTAssertGreaterThan(png.count, 1000)
@@ -61,6 +63,28 @@ final class InstallerTrashViewTests: XCTestCase {
                 XCTAssertEqual(mutationCount, 0)
             }
         }
+    }
+
+    /// Runs in the existing zh-Hans render invocation. Assertions catch a
+    /// missing catalog entry or a changed interpolation signature before the
+    /// synthetic screenshots are attached; they do not verify native behavior.
+    @MainActor private func verifyChineseSafetyCopy() {
+        XCTAssertEqual(String(localized: "Move this file to Trash"), "将此文件移到废纸篓")
+        XCTAssertEqual(String(localized: "Restore to original path"), "恢复到原路径")
+        XCTAssertEqual(String(localized: "I have finished installing and using this disk image"), "我已完成此磁盘映像的安装和使用")
+        XCTAssertEqual(String(localized: "Recovery record unavailable; outcome unknown"), "恢复记录不可用；结果未知")
+        XCTAssertEqual(String(localized: "The destination already exists. MoeKit will not replace it."), "目标位置已存在条目。MoeKit 不会将其替换。")
+        XCTAssertEqual(String(localized: "This first version requires all disk images to be ejected. Eject them yourself before review; MoeKit never ejects images."),
+                       "此功能首版要求先推出所有磁盘映像。请在查看方案前自行推出；MoeKit 从不代为推出映像。")
+        let size = "4 KB", bytes: Int64 = 4096
+        XCTAssertEqual(String(localized: "1 file · \(size) (\(bytes) bytes)"), "1 个文件 · 4 KB（4096 字节）")
+        let receipt = "synthetic-receipt", sequence = 3
+        XCTAssertEqual(String(localized: "Receipt \(receipt) · record \(sequence)"), "凭据 synthetic-receipt · 第 3 条记录")
+        let pid: Int32 = 17, code: Int32 = 13, stage = "PROC_PIDINFO"
+        XCTAssertEqual(String(localized: "Current-user process \(pid) could not be completely checked at \(stage) (system error \(code)). It may have exited, changed, exceeded a limit, or denied access."),
+                       "无法完整检查当前用户的进程 17，检查阶段为 PROC_PIDINFO（系统错误 13）。该进程可能已退出、发生变化、超出限制或拒绝访问。")
+        let path = "\"/Synthetic/Downloads/line\\nname.dmg\""
+        XCTAssertEqual(String(localized: "Full path, escaped: \(path)"), "完整路径（已转义）：\(path)")
     }
 
     @MainActor private func settle(_ store: InstallerTrashStore) async {
@@ -86,7 +110,7 @@ private actor RenderInstallerExecutor: InstallerTrashExecuting {
     }
     func recoveryReceipts() async throws -> [InstallerRecoveryItem] {
         [.init(id: id, operationURL: operationURL, receipt: incomplete ? nil : receipt,
-               issue: incomplete ? "Synthetic incomplete journal; no file operation is authorized" : nil)]
+               issue: incomplete ? String(localized: "This recovery record is incomplete or unreadable. Its contents were retained; no operation will be retried automatically.") : nil)]
     }
     func validatedRecoveryLocation(receiptID: UUID) async throws -> URL { operationURL }
     func prepareRestore(receiptID: UUID, context: InstallerRecoveryContext) async throws -> InstallerRestorePlan {

@@ -135,6 +135,7 @@ jobs:
       DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
       TEST_RUNNER_MOEKIT_INSTALLER_MOUNT_FIXTURE: '1'
       TEST_RUNNER_MOEKIT_INSTALLER_TRASH_FIXTURE: '1'
+      TEST_RUNNER_MOEKIT_CACHE_NATIVE_FIXTURE: '1'
       TEST_RUNNER_GITHUB_ACTIONS: 'true'
       TEST_RUNNER_RUNNER_ENVIRONMENT: github-hosted
       TEST_RUNNER_MOEKIT_INSTALLER_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -180,6 +181,8 @@ jobs:
           xcodebuild "${args[@]}" build-for-testing
           xcodebuild "${args[@]}" test-without-building -testLanguage en -testRegion US -resultBundlePath TestResults.xcresult \
             '-skip-testing:MoeKitTests/InstallerUseEvidenceTests/nativeIdleCurrentUserCoverage()'
+      - name: Verify affirmative native cache fixture evidence
+        run: python3 Scripts/verify-cache-fixture-evidence.py --directory InstallerFixtureEvidence --source-sha "$SOURCE_SHA"
       - name: Verify affirmative native installer fixture evidence
         run: python3 Scripts/verify-installer-fixture-evidence.py --directory InstallerFixtureEvidence --source-sha "$SOURCE_SHA" --kinds native-trash mounted-image live-mole
       - name: Render workspaces and first-use guidance in Simplified Chinese
@@ -291,6 +294,7 @@ jobs:
       DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
       TEST_RUNNER_MOEKIT_INSTALLER_MOUNT_FIXTURE: '1'
       TEST_RUNNER_MOEKIT_INSTALLER_TRASH_FIXTURE: '1'
+      TEST_RUNNER_MOEKIT_CACHE_NATIVE_FIXTURE: '1'
       TEST_RUNNER_GITHUB_ACTIONS: 'true'
       TEST_RUNNER_RUNNER_ENVIRONMENT: github-hosted
       TEST_RUNNER_MOEKIT_INSTALLER_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}

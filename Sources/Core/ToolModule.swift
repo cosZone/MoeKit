@@ -159,7 +159,7 @@ enum MoleCapability: String, CaseIterable, Identifiable, Sendable {
         case .space:
             String(localized: "Inspect directory sizes, large files, and scan coverage.")
         case .clean:
-            String(localized: "Review caches, project artifacts, and installers.")
+            String(localized: "Review selected user caches, move them to Trash, restore them, or separately confirm permanent removal.")
         case .apps:
             String(localized: "Review installed apps and their related files.")
         case .maintenance:
@@ -170,8 +170,8 @@ enum MoleCapability: String, CaseIterable, Identifiable, Sendable {
     }
 
     var readiness: ToolReadiness {
-        if self == .space { return .available }
-        return .unavailable(reason: String(localized: "This Mole command is not connected. Only separately confirmed analysis is available."))
+        if self == .space || self == .clean { return .available }
+        return .unavailable(reason: String(localized: "This Mole command is not connected. Confirmed analysis and the separate native cache adapter are available."))
     }
 
     var descriptor: ToolCapabilityDescriptor {

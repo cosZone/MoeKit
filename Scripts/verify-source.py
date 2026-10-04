@@ -95,6 +95,16 @@ for path in installer_sources:
                     r"\.removeItem\s*\(", r"\.moveItem\s*\(", r"\brenameat\s*\(",
                     r'"(?:clean|purge|uninstall)"'):
         require(not re.search(pattern, text), f"Installer must retain data with exclusive moves only: {path.relative_to(ROOT)} ({pattern})")
+# Native batch cleanup has exactly one separately confirmed irreversible sink.
+# Keep every other cleanup file free of unlink/remove/permission-changing APIs.
+for path in (ROOT / "Sources/Cleanup").glob("*.swift"):
+    text = path.read_text()
+    for pattern in (r"\b(?:unlink|rmdir|chmod|fchmod|chown|fchown)\s*\(",
+                    r"\.removeItem\s*\(", r"\.moveItem\s*\(", r"\brenameat\s*\("):
+        require(not re.search(pattern, text), f"Cleanup mutation outside exact-plan primitives: {path.relative_to(ROOT)} ({pattern})")
+    require(path.name == "CleanupPermanentRemoval.swift" or not re.search(r"\bunlinkat\s*\(", text),
+            f"Irreversible cleanup outside separately confirmed private-slot sink: {path.relative_to(ROOT)}")
+
 helper = ROOT / "Sources/Installer/InstallerUseEvidence.swift"
 if helper.is_file():
     text = helper.read_text()

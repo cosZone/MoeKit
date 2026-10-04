@@ -25,7 +25,9 @@ struct CatalogWriteCoordinator {
         guard lock >= 0 else { throw posixError() }
         defer { Darwin.close(lock) } // Closing also releases flock, even on errors.
         try validateLock(status(lock))
-        guard Darwin.flock(lock, LOCK_EX | LOCK_NB) == 0 else {
+        // Unqualified overload resolution selects the C function; Darwin.flock
+        // resolves to the identically named C struct in the macOS Swift SDK.
+        guard flock(lock, LOCK_EX | LOCK_NB) == 0 else {
             let code = errno
             if code == EWOULDBLOCK || code == EAGAIN { throw CatalogPersistence.CatalogError.writerBusy }
             throw posixError(code)

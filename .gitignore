@@ -28,3 +28,6 @@ __pycache__/
 DerivedDataTests/
 DerivedDataArchive/
 Unsigned/
+
+# Generated only for secret-free native Mole fixture tests
+Tests/Resources/MoleAnalyzerFixturePath.txt

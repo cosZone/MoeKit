@@ -18,13 +18,12 @@ struct MoleModuleTests {
         #expect(mole.systemImage == "internaldrive")
     }
 
-    @Test("Every Mole operation is explicitly unavailable in this milestone")
+    @Test("Only confirmed Mole analysis is connected; all mutation remains unavailable")
     func honestReadiness() throws {
         let mole = try #require(ToolModuleRegistry.builtIn.descriptor(id: MoleModule.id))
-        #expect(!mole.readiness.canExecute)
-        #expect(mole.readiness.explanation?.isEmpty == false)
-        #expect(mole.capabilities.allSatisfy { !$0.readiness.canExecute })
-        #expect(mole.capabilities.allSatisfy { $0.readiness.explanation?.isEmpty == false })
+        #expect(mole.readiness.canExecute)
+        #expect(mole.capabilities.filter { $0.readiness.canExecute }.map(\.id) == ["mole.space"])
+        #expect(mole.capabilities.filter { !$0.readiness.canExecute }.allSatisfy { $0.readiness.explanation?.isEmpty == false })
     }
 
     @Test("Search covers IDs, keywords, and capabilities with all words required")

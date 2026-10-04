@@ -97,7 +97,7 @@ struct ToolPreparationView: View {
                     }.frame(maxWidth: .infinity, alignment: .leading).padding(6)
                 }
                 Text(tool == .mole
-                     ? "Mole execution remains unavailable. Space can import a JSON report without installing or running Mole. No cleanup command is connected."
+                     ? "Space can import a JSON report without running Mole. Live analysis requires a separately verified official analyzer and confirmation. No cleanup command is connected."
                      : "Project discovery reads Git metadata without running Git. A file at /usr/bin/git may be an Apple launcher; it does not prove Command Line Tools are installed. Git status execution remains unavailable.")
                     .font(.callout).foregroundStyle(.secondary)
             }.padding(24)

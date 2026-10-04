@@ -94,6 +94,12 @@ def verify(directory: Path, language: str) -> int:
         for appearance in ("light", "dark")
         for width, height in ((580, 520), (680, 720))
     })
+    expected.update({
+        f"mole-analysis-{scenario}-{language}-{appearance}-{width}x{height}": (width, height)
+        for scenario in ("initial", "confirmation", "partial", "failure")
+        for appearance in ("light", "dark")
+        for width, height in ((720, 560), (900, 800))
+    })
     manifest = json.loads((directory / "manifest.json").read_text())
     images, scopes = {}, {}
     for test in manifest:

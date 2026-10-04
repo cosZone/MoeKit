@@ -53,6 +53,10 @@ jobs:
           test "$(tuist version)" = '4.148.3'
           xcodebuild -version
           tuist generate --no-open
+      - name: Prepare official Mole synthetic fixture without signing secrets
+        run: |
+          python3 Scripts/prepare-mole-ci-fixture.py
+          tuist generate --no-open
       - name: Build and run Release-configuration unit tests without signing secrets
         run: |
           set -euo pipefail

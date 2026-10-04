@@ -29,6 +29,10 @@ import zipfile
 
 REPOSITORY = "cosZone/MoeKit"
 BUNDLE_ID = "com.yusixian.MoeKit"
+HELPER_PATH = "Contents/MacOS/MoleAnalysisSupervisor"
+HELPER_ID = BUNDLE_ID + ".MoleAnalysisSupervisor"
+EXECUTABLE_PATHS = frozenset({"Contents/MacOS/MoeKit", HELPER_PATH})
+ARCHITECTURES = ("arm64", "x86_64")
 SECRET_NAMES = ("SIGNING_CERTIFICATE_P12", "SIGNING_CERTIFICATE_PASSWORD", "DEVELOPMENT_TEAM")
 VERSION_RE = re.compile(r"(0|[1-9][0-9]{0,3})\.(0|[1-9][0-9]{0,3})\.(0|[1-9][0-9]{0,3})-preview\.(0|[1-9][0-9]{0,5})\Z")
 SHA_RE = re.compile(r"[0-9a-f]{40}\Z")
@@ -54,9 +58,8 @@ OPERATIONS = frozenset({
     "p12-import", "keychain-partition-list", "identity-find", "archive-unpack",
     "codesign-sign", "codesign-verify", "codesign-display", "entitlements-read",
     "certificate-extract", "archive-package", "archive-round-trip",
-    "codesign-verify-packaged", "keychain-search-list-check", "keychain-register-search-list",
+    "keychain-search-list-check", "keychain-register-search-list",
     "dmg-stage", "dmg-create", "dmg-verify", "dmg-attach", "dmg-detach",
-    "codesign-verify-dmg",
 })
 
 
@@ -262,28 +265,122 @@ def verify_provenance(info: dict, context: dict[str, str]) -> None:
             info.get("MoeKitBuildRunAttempt") == context["run_attempt"], "App build-run provenance mismatch.")
 
 
+def verify_bundle_entry(relative: str, *, directory: bool, mode: int, magic: bytes) -> None:
+    """The release contains exactly the app and one reviewed original helper.
+
+    Apply the same layout policy before signing and before unpacking ZIP input.
+    Paths here have already been checked for traversal and canonical spelling.
+    """
+    parts = PurePosixPath(relative).parts
+    require(bool(parts) and parts[0] == "Contents", "Unexpected app bundle root entry.")
+    if len(parts) == 1:
+        require(directory, "App Contents must be a directory.")
+        return
+    require(parts[1] in {"Info.plist", "PkgInfo", "MacOS", "Resources", "_CodeSignature"},
+            "Unexpected app bundle contents.")
+    if parts[1] in {"Info.plist", "PkgInfo"}:
+        require(len(parts) == 2 and not directory, "Unexpected bundle metadata layout.")
+    elif len(parts) == 2:
+        require(directory, "Expected bundle directory is not a directory.")
+    if parts[1] == "MacOS" and len(parts) > 2:
+        require(relative in EXECUTABLE_PATHS and not directory, "Unexpected embedded executable path.")
+    if parts[1] == "_CodeSignature" and len(parts) > 2:
+        require(relative == "Contents/_CodeSignature/CodeResources" and not directory,
+                "Unexpected code signature layout.")
+    if directory:
+        require(not any(part.lower().endswith((".app", ".framework", ".xpc", ".appex", ".plugin", ".bundle"))
+                        for part in parts), "Unexpected nested code bundle.")
+    elif relative in EXECUTABLE_PATHS:
+        require(magic in MACHO_MAGICS and bool(mode & 0o111), "Expected executable is not executable Mach-O code.")
+    else:
+        require(magic not in MACHO_MAGICS and not mode & 0o111,
+                "Unexpected embedded executable; review nested-code signing before releasing.")
+
+
 def verify_app(app: Path, context: dict[str, str], *, provenance: bool = True) -> None:
     require(app.is_dir() and not app.is_symlink(), "App bundle is missing or unsafe.")
+    files = set()
+    # Inspect links and layout before opening metadata or executable paths.
+    for path in app.rglob("*"):
+        mode = path.lstat().st_mode
+        require(stat.S_ISREG(mode) or stat.S_ISDIR(mode), "Unexpected symlink or special file in app bundle.")
+        relative = path.relative_to(app).as_posix()
+        magic = b""
+        if stat.S_ISREG(mode):
+            with path.open("rb") as stream:
+                magic = stream.read(4)
+            files.add(relative)
+        verify_bundle_entry(relative, directory=stat.S_ISDIR(mode), mode=mode, magic=magic)
+    require(EXECUTABLE_PATHS <= files, "The app and reviewed supervisor executables are required.")
     info = plistlib.loads((app / "Contents/Info.plist").read_bytes())
     if provenance:
         verify_provenance(info, context)
     else:
         validate_info(info, context)
-    executable = app / "Contents/MacOS/MoeKit"
-    require(executable.is_file() and os.access(executable, os.X_OK), "App executable is missing.")
-    require(set(text_run("/usr/bin/lipo", "-archs", str(executable), operation="app-architectures").split()) == {"arm64", "x86_64"},
-            "The app must contain exactly arm64 and x86_64 slices.")
-    # This milestone has no embedded frameworks, XPC services, helpers, or plugins.
-    # New nested code requires its own explicit signing review instead of --deep signing.
-    for path in app.rglob("*"):
-        require(not path.is_symlink(), "Unexpected symlink in the first-preview bundle; review packaging.")
-        require(path.is_file() or path.is_dir(), "Unexpected special file in app bundle.")
-        if path.is_file():
-            with path.open("rb") as stream:
-                magic = stream.read(4)
-            require(magic not in MACHO_MAGICS or path == executable,
-                    "Unexpected embedded executable; review nested-code signing before releasing.")
-    require(not (app / "Contents/embedded.provisionprofile").exists(), "Unexpected provisioning profile in preview bundle.")
+    for relative in sorted(EXECUTABLE_PATHS):
+        require(set(text_run("/usr/bin/lipo", "-archs", str(app / relative), operation="app-architectures").split())
+                == set(ARCHITECTURES), "Each code object must contain exactly arm64 and x86_64 slices.")
+
+
+def code_objects(app: Path) -> tuple[tuple[Path, str], ...]:
+    # Fixed inside-out order. Never discover signable code by glob or --deep.
+    return ((app / HELPER_PATH, HELPER_ID), (app, BUNDLE_ID))
+
+
+def sign_code_objects(app: Path, identity: str, keychain: Path | None = None) -> None:
+    keychain_arguments = ("--keychain", str(keychain)) if keychain is not None else ()
+    for path, identifier in code_objects(app):
+        # Neither parent nor helper inherits any previous signature's entitlements.
+        run("/usr/bin/codesign", "--force", "--sign", identity, *keychain_arguments,
+            "--identifier", identifier, "--options", "runtime", "--timestamp=none", str(path),
+            operation="codesign-sign")
+
+
+def verify_code_objects(app: Path) -> None:
+    """Strictly verify both objects and inspect every architecture, even off-host."""
+    for path, identifier in code_objects(app):
+        run("/usr/bin/codesign", "--verify", "--strict", "--all-architectures",
+            '-R=identifier "' + identifier + '"', str(path), operation="codesign-verify")
+        for architecture in ARCHITECTURES:
+            result = captured_run("/usr/bin/codesign", "--display", "--architecture", architecture,
+                                  "--verbose=4", str(path), operation="codesign-display")
+            details = (result.stdout + result.stderr).decode("utf-8", errors="strict")
+            require(re.search(r"^Identifier=" + re.escape(identifier) + r"$", details, re.MULTILINE) is not None,
+                    "Unexpected code signing identifier.")
+            flags = re.search(r"^CodeDirectory .*\bflags=0x([0-9a-fA-F]+)\b", details, re.MULTILINE)
+            require(flags is not None and int(flags[1], 16) & 0x10000 != 0,
+                    "Hardened runtime flag is missing from a code object architecture.")
+            entitlements = run("/usr/bin/codesign", "--display", "--architecture", architecture,
+                               "--entitlements", ":-", str(path), operation="entitlements-read")
+            parsed = plistlib.loads(entitlements) if entitlements.strip() else {}
+            require(parsed == {}, "Unexpected code object entitlements; a separate entitlement review is required.")
+
+
+def verify_development_signatures(app: Path, identity: str, team: str, scratch: Path) -> None:
+    require(re.fullmatch(r"[A-Fa-f0-9]{40}", identity) is not None and
+            re.fullmatch(r"[A-Z0-9]{10}", team) is not None, "Invalid signing identity verification input.")
+    verify_code_objects(app)
+    for index, (path, identifier) in enumerate(code_objects(app)):
+        # Match the imported certificate, Apple trust anchor, team and exact ID.
+        # This supplements, rather than parses/trusts, the displayed requirement.
+        requirement = (f'identifier "{identifier}" and anchor apple generic '
+                       f'and certificate leaf = H"{identity}" and certificate leaf[subject.OU] = "{team}"')
+        run("/usr/bin/codesign", "--verify", "--strict", "--all-architectures", "-R=" + requirement,
+            str(path), operation="codesign-verify")
+        for architecture in ARCHITECTURES:
+            result = captured_run("/usr/bin/codesign", "--display", "--architecture", architecture,
+                                  "--verbose=4", str(path), operation="codesign-display")
+            details = (result.stdout + result.stderr).decode("utf-8", errors="strict")
+            require("Signature=adhoc" not in details and
+                    re.search(r"^Authority=Apple Development:", details, re.MULTILINE) is not None,
+                    "A code object is not signed with an Apple Development identity.")
+            require(re.search(r"^TeamIdentifier=" + re.escape(team) + r"$", details, re.MULTILINE) is not None,
+                    "A code object signing certificate does not match DEVELOPMENT_TEAM.")
+            prefix = str(scratch / f"signer-{index}-{architecture}-")
+            run("/usr/bin/codesign", "--display", "--architecture", architecture, "--extract-certificates=" + prefix,
+                str(path), operation="certificate-extract")
+            require(hashlib.sha1(Path(prefix + "0").read_bytes()).hexdigest().upper() == identity.upper(),
+                    "A code object signer does not match the imported identity.")
 
 
 def content_digest(files: dict[str, str]) -> str:
@@ -329,13 +426,20 @@ def inspect_zip(path: Path, context: dict[str, str]) -> str:
                     with archive.open(item) as stream:
                         require(stream.read(8) == bytes.fromhex("0005160700020000"),
                                 "ZIP resource metadata is not AppleDouble data.")
-            elif not item.is_dir():
-                require(len(parts) > 1, "ZIP app root is not a directory.")
-                with archive.open(item) as stream:
-                    digest = hashlib.sha256()
-                    for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-                        digest.update(chunk)
-                files["/".join(parts[1:])] = digest.hexdigest()
+            elif len(parts) == 1:
+                require(item.is_dir(), "ZIP app root is not a directory.")
+            else:
+                relative = "/".join(parts[1:])
+                magic = b""
+                if not item.is_dir():
+                    with archive.open(item) as stream:
+                        magic = stream.read(4)
+                        digest = hashlib.sha256(magic)
+                        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                            digest.update(chunk)
+                    files[relative] = digest.hexdigest()
+                verify_bundle_entry(relative, directory=item.is_dir(), mode=item.external_attr >> 16, magic=magic)
+        require(EXECUTABLE_PATHS <= files.keys(), "ZIP must contain the app and reviewed supervisor executables.")
         verify_provenance(plistlib.loads(archive.read("MoeKit.app/Contents/Info.plist")), context)
         return content_digest(files)
 
@@ -346,7 +450,9 @@ def metadata(context: dict[str, str]) -> dict:
             "run_id": context["run_id"], "run_attempt": context["run_attempt"],
             "source_url": f"https://github.com/{REPOSITORY}/commit/{context['source_sha']}",
             "run_url": f"https://github.com/{REPOSITORY}/actions/runs/{context['run_id']}",
-            "bundle_id": BUNDLE_ID, "configuration": "Release", "architectures": ["arm64", "x86_64"],
+            "bundle_id": BUNDLE_ID, "configuration": "Release", "architectures": list(ARCHITECTURES),
+            "embedded_code": {HELPER_PATH: {"identifier": HELPER_ID, "architectures": list(ARCHITECTURES),
+                                            "origin": "original MoeKit source; no bundled Mole analyzer"}},
             "minimum_macos": "15.0", "xcode": "16.4", "tuist": "4.148.3",
             "tests": "Release-configuration unit tests passed on the runner architecture with ENABLE_TESTABILITY=YES; archive built separately from the same source.",
             "native_ui_verified": False, "notarized": False, "updater": False}
@@ -357,7 +463,8 @@ def check_metadata(info: dict, context: dict[str, str], *, signed: bool) -> None
         require(info.get(key) == value, "Artifact provenance does not match this source and run.")
     if signed:
         require(info.get("signing") == "Apple Development" and info.get("signature_verified") is True and
-                info.get("expected_team_verified") is True and info.get("entitlements") == {},
+                info.get("expected_team_verified") is True and info.get("entitlements") == {} and
+                info.get("code_objects_verified") == [HELPER_PATH, "."] and info.get("hardened_runtime") is True,
                 "Artifact is not a verified development-signed preview.")
         require(info.get("package_verification") == {
             "dmg_integrity": True, "dmg_read_only": True,
@@ -403,7 +510,7 @@ def verify_dmg_contents(mount: Path, context: dict[str, str], expected_digest: s
     app = mount / "MoeKit.app"
     verify_app(app, context)
     require(app_content_digest(app) == expected_digest, "DMG app content differs from the verified signed ZIP.")
-    run("/usr/bin/codesign", "--verify", "--deep", "--strict", "--all-architectures", str(app), operation="codesign-verify-dmg")
+    verify_code_objects(app)
 
 
 def package_dmg(app: Path, destination: Path, scratch: Path,
@@ -554,25 +661,9 @@ def sign() -> None:
         # codesign also consults the user search list. Cleanup restores the saved list.
         # This does not change the default keychain, trust, or private-key access controls.
         register_signing_keychain(keychain, original)
-        # No inherited entitlements and no --deep signing. No network timestamp or notarization.
-        run("/usr/bin/codesign", "--force", "--sign", identity, "--keychain", str(keychain),
-            "--options", "runtime", "--timestamp=none", str(app), operation="codesign-sign")
-        run("/usr/bin/codesign", "--verify", "--deep", "--strict", "--all-architectures", str(app), operation="codesign-verify")
-        result = captured_run("/usr/bin/codesign", "--display", "--verbose=4", str(app),
-                              operation="codesign-display")
-        details = (result.stdout + result.stderr).decode("utf-8", errors="strict")
-        require("Signature=adhoc" not in details and "Authority=Apple Development:" in details,
-                "The final app is not signed with an Apple Development identity.")
-        require(re.search(r"^TeamIdentifier=" + re.escape(os.environ["DEVELOPMENT_TEAM"]) + r"$", details, re.MULTILINE) is not None,
-                "The signing certificate does not match DEVELOPMENT_TEAM.")
-        require("runtime" in details, "Hardened runtime flag is missing.")
-        entitlements = run("/usr/bin/codesign", "--display", "--entitlements", ":-", str(app), operation="entitlements-read")
-        parsed = plistlib.loads(entitlements) if entitlements.strip() else {}
-        require(parsed == {}, "Unexpected app entitlements; a separate entitlement review is required.")
-        prefix = str(scratch / "signer")
-        run("/usr/bin/codesign", "--display", "--extract-certificates=" + prefix, str(app), operation="certificate-extract")
-        require(hashlib.sha1(Path(prefix + "0").read_bytes()).hexdigest().upper() == identity.upper(),
-                "The final app signer does not match the imported identity.")
+        # No inherited entitlements, network timestamp, notarization or --deep signing.
+        sign_code_objects(app, identity, keychain)
+        verify_development_signatures(app, identity, os.environ["DEVELOPMENT_TEAM"], scratch)
         verify_app(app, context)
         destination = Path("Preview")
         destination.mkdir(exist_ok=False)
@@ -585,13 +676,14 @@ def sign() -> None:
         run("/usr/bin/ditto", "-x", "-k", str(destination / zip_name), str(round_trip), operation="archive-round-trip")
         packaged_app = round_trip / "MoeKit.app"
         verify_app(packaged_app, context)
-        run("/usr/bin/codesign", "--verify", "--deep", "--strict", "--all-architectures", str(packaged_app), operation="codesign-verify-packaged")
+        verify_code_objects(packaged_app)
         require(app_content_digest(packaged_app) == app_digest, "ZIP round-trip changed the signed app content.")
         package_dmg(packaged_app, destination / dmg_name, scratch, context, app_digest)
         _, notes_hash = release_notes(context)
         info = metadata(context)
         info.update(signing="Apple Development", signature_verified=True, expected_team_verified=True,
                     entitlements={}, hardened_runtime=True, secure_timestamp=False,
+                    code_objects_verified=[HELPER_PATH, "."],
                     gatekeeper="Unnotarized development preview; macOS may block it. Not Developer ID distribution.",
                     app_content_sha256=app_digest, release_notes_sha256=notes_hash,
                     artifacts={name: sha256(destination / name) for name in (dmg_name, zip_name)},

@@ -50,9 +50,9 @@ struct SettingsView: View {
             Section("Tools") {
                 Button("Tool preparation…") { openWindow(id: "tool-preparation") }
                 ForEach(store.registry.descriptors) { module in
-                    LabeledContent(module.title, value: module.readiness.canExecute ? String(localized: "Available") : String(localized: "Adapter not connected"))
+                    LabeledContent(module.title, value: module.id == MoleModule.id ? String(localized: "Verify analyzer before use") : (module.readiness.canExecute ? String(localized: "Available") : String(localized: "Adapter not connected")))
                 }
-                Text("Mole JSON reports can be imported into Space. Cleanup, uninstall, maintenance and live status execution are not connected in this milestone.")
+                Text("Space supports report import and separately confirmed analysis with a verified official analyzer. Cleanup, uninstall, maintenance and live status remain unavailable.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("Storage") {

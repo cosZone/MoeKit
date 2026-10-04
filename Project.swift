@@ -41,8 +41,32 @@ let project = Project(
             ]),
             sources: ["Sources/**"],
             resources: ["Resources/**"],
-            dependencies: [],
+            scripts: [.post(
+                script: """
+                set -eu
+                /bin/cp -p "${BUILT_PRODUCTS_DIR}/MoleAnalysisSupervisor" "${TARGET_BUILD_DIR}/${EXECUTABLE_FOLDER_PATH}/MoleAnalysisSupervisor"
+                """,
+                name: "Embed verified Mole analysis supervisor",
+                inputPaths: ["$(BUILT_PRODUCTS_DIR)/MoleAnalysisSupervisor"],
+                outputPaths: ["$(TARGET_BUILD_DIR)/$(EXECUTABLE_FOLDER_PATH)/MoleAnalysisSupervisor"],
+                basedOnDependencyAnalysis: true
+            )],
+            dependencies: [.target(name: "MoleAnalysisSupervisor")],
             settings: .settings(base: ["ASSETCATALOG_COMPILER_APPICON_NAME": "AppIcon", "ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME": ""])
+        ),
+        .target(
+            name: "MoleAnalysisSupervisor",
+            destinations: .macOS,
+            product: .commandLineTool,
+            bundleId: "com.yusixian.MoeKit.MoleAnalysisSupervisor",
+            deploymentTargets: .macOS("15.0"),
+            sources: ["Helpers/MoleAnalysisSupervisor/main.c"],
+            settings: .settings(base: [
+                "SKIP_INSTALL": "YES",
+                "CODE_SIGN_INJECT_BASE_ENTITLEMENTS": "NO",
+                "OTHER_CFLAGS": "$(inherited) -Wall -Wextra -Werror",
+                "OTHER_CODE_SIGN_FLAGS": "$(inherited) -i $(PRODUCT_BUNDLE_IDENTIFIER)",
+            ])
         ),
         .target(
             name: "MoeKitTests",
@@ -50,7 +74,8 @@ let project = Project(
             product: .unitTests,
             bundleId: "com.yusixian.MoeKitTests",
             deploymentTargets: .macOS("15.0"),
-            sources: ["Tests/**"],
+            sources: ["Tests/**/*.swift"],
+            resources: ["Tests/Resources/**"],
             dependencies: [.target(name: "MoeKit")]
         ),
     ],

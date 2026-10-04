@@ -548,8 +548,24 @@ private final class InstallerMountFixtureCI {
             try verifyOwnedContent()
             _ = try imageIdentity()
         } catch {
-            throw InstallerUseReadError.unavailable("Owned mount fixture failed at \(stage): \(error)")
+            throw InstallerUseReadError.unavailable("Owned mount fixture failed at \(stage): \(error). \(sourceStateDiagnostics())")
         }
+    }
+
+    /// Observe why cleanup may retain the image after an unsuccessful attach.
+    /// Field names only: this cannot adopt a new snapshot or authorize cleanup.
+    private func sourceStateDiagnostics() -> String {
+        guard let sourceAnchor, let retainedSource, let sourceSnapshot else {
+            return "Owned source diagnostic: retention-not-established"
+        }
+        let anchorValid: Bool
+        do { try sourceAnchor.validate(); anchorValid = true }
+        catch { anchorValid = false }
+        let held = try? InstallerFileAccess.snapshot(retainedSource.fd)
+        let named = try? InstallerFileAccess.snapshotAt(sourceAnchor.fd, image.lastPathComponent)
+        let heldFields = held.map { Self.changedFields(sourceSnapshot, $0) } ?? "unreadable"
+        let namedFields = named.map { Self.changedFields(sourceSnapshot, $0) } ?? "unreadable"
+        return "Owned source diagnostic: anchorValid=\(anchorValid) heldChanged=\(heldFields) namedChanged=\(namedFields)"
     }
 
     func useTarget() throws -> InstallerUseTarget {
@@ -851,7 +867,7 @@ private final class InstallerMountFixtureCI {
         guard process.terminationReason == .exit, process.terminationStatus == 0, !overflow, complete else {
             // Only fixed categories and numeric/boolean fields are emitted.
             // Never expose raw stderr, command arguments, paths or plist bytes.
-            throw InstallerUseReadError.unavailable("The owned DMG fixture system operation did not complete. reason=\(process.terminationReason.rawValue) status=\(process.terminationStatus) stdoutOverflow=\(overflow) streamsComplete=\(complete) stderrCategory=\(diagnostic.category) stderrTruncated=\(diagnostic.truncated)")
+            throw InstallerUseReadError.unavailable("The owned DMG fixture system operation did not complete. reason=\(process.terminationReason.rawValue) status=\(process.terminationStatus) stdoutOverflow=\(overflow) streamsComplete=\(complete) \(diagnostic.summary)")
         }
         return output
     }
@@ -909,7 +925,10 @@ private struct InstallerFixtureCommandDiagnostics {
     static let maximumBytes = 8_192
     private(set) var prefix = Data()
     private(set) var truncated = false
+    private(set) var observedByteCount = 0
     mutating func append(_ bytes: ArraySlice<UInt8>) {
+        let (total, overflow) = observedByteCount.addingReportingOverflow(bytes.count)
+        observedByteCount = overflow ? Int.max : total
         let available = Self.maximumBytes - prefix.count
         prefix.append(contentsOf: bytes.prefix(available))
         if bytes.count > available { truncated = true }
@@ -919,14 +938,56 @@ private struct InstallerFixtureCommandDiagnostics {
         let text = String(decoding: prefix, as: UTF8.self).lowercased()
         let patterns: [(String, [String])] = [
             ("resource-busy", ["resource busy"]),
+            ("resource-temporarily-unavailable", ["resource temporarily unavailable"]),
+            ("operation-timed-out", ["operation timed out", "operation timeout"]),
             ("permission-denied", ["permission denied", "operation not permitted"]),
             ("no-mountable-filesystem", ["no mountable file systems"]),
             ("device-unavailable", ["device not configured", "no such device"]),
+            ("file-not-found", ["no such file or directory"]),
+            ("out-of-space", ["no space left on device"]),
+            ("out-of-memory", ["cannot allocate memory", "not enough memory"]),
+            ("descriptor-limit", ["too many open files"]),
+            ("read-only-filesystem", ["read-only file system"]),
+            ("file-exists", ["file exists"]),
+            ("authentication-error", ["authentication error", "authentication failed"]),
+            ("unsupported-operation", ["operation not supported", "function not implemented"]),
             ("input-output", ["input/output error", "i/o error"]),
             ("invalid-format", ["not recognized", "invalid argument"]),
+            ("corrupt-image", ["corrupt image"]),
             ("checksum", ["checksum"]),
         ]
         return patterns.first { $0.1.contains { text.contains($0) } }?.0 ?? "unclassified"
+    }
+
+    /// Only a newline-terminated, exact hdiutil failure template yields an Int32 hint.
+    /// This is not an errno interpretation; paths, arbitrary strings and numeric
+    /// substrings from other messages are never emitted. Truncated tails cannot
+    /// become apparently complete diagnostic lines.
+    var numericHint: Int32? {
+        let bytes = Array(prefix)
+        var lines = bytes.split(separator: 10, omittingEmptySubsequences: false)
+        if bytes.last != 10 { _ = lines.popLast() }
+        for line in lines {
+            guard let text = String(bytes: line, encoding: .utf8) else { continue }
+            for operation in ["create", "attach", "detach"] {
+                for label in ["Unknown error ", "Error "] {
+                    let header = "hdiutil: \(operation) failed - \(label)"
+                    guard text.hasPrefix(header) else { continue }
+                    let suffix = text.dropFirst(header.count)
+                    let digits = suffix.first == "-" ? suffix.dropFirst() : suffix[...]
+                    guard !digits.isEmpty, digits.count <= 10,
+                          digits.allSatisfy({ $0.isASCII && $0.isNumber }),
+                          let value = Int32(suffix) else { continue }
+                    return value
+                }
+            }
+        }
+        return nil
+    }
+
+    var summary: String {
+        let hint = numericHint.map(String.init) ?? "none"
+        return "stderrCategory=\(category) stderrNumericHint=\(hint) stderrUnknown=\(category == "unclassified") stderrBytes=\(observedByteCount) stderrTruncated=\(truncated)"
     }
 }
 
@@ -947,5 +1008,53 @@ extension InstallerUseEvidenceTests {
         #expect(bounded.category == "unclassified")
         bounded.append(Array("Resource busy".utf8)[...])
         #expect(bounded.prefix.count == 8_192 && bounded.category == "unclassified")
+        #expect(bounded.observedByteCount == 20_013)
+    }
+
+    @Test func fixtureFailureDiagnosticsRemainFixedAndBounded() {
+        for (message, category) in [
+            ("Resource temporarily unavailable", "resource-temporarily-unavailable"),
+            ("Operation timed out", "operation-timed-out"),
+            ("Authentication error", "authentication-error"),
+            ("No such file or directory", "file-not-found"),
+            ("No space left on device", "out-of-space"),
+            ("Too many open files", "descriptor-limit"),
+            ("Read-only file system", "read-only-filesystem"),
+            ("corrupt image", "corrupt-image")
+        ] {
+            var diagnostic = InstallerFixtureCommandDiagnostics()
+            diagnostic.append(Array("hdiutil: attach failed - \(message)\n".utf8)[...])
+            #expect(diagnostic.category == category)
+            #expect(diagnostic.numericHint == nil)
+        }
+        let privateText = "/Users/Private Person/keychain secret\n/private/var/owned.dmg \"token\"\u{1b}[31m\u{202e}\nrelative/secret.dmg"
+        var unknown = InstallerFixtureCommandDiagnostics()
+        unknown.append(Array(privateText.utf8)[...])
+        #expect(unknown.summary == "stderrCategory=unclassified stderrNumericHint=none stderrUnknown=true stderrBytes=\(privateText.utf8.count) stderrTruncated=false")
+    }
+
+    @Test func numericFixtureHintsRequireExactCompleteTemplates() {
+        for value in [Int32.min, -1, 0, 49153, Int32.max] {
+            var diagnostic = InstallerFixtureCommandDiagnostics()
+            diagnostic.append(Array("hdiutil: attach failed - Unknown error \(value)\n".utf8)[...])
+            #expect(diagnostic.numericHint == value)
+        }
+        for text in ["hdiutil: attach failed - Unknown error 2147483648\n",
+                     "hdiutil: attach failed - Unknown error 12",
+                     "hdiutil: attach failed - Unknown error -2147483649\n",
+                     "hdiutil: attach failed - Unknown error １２\n",
+                     "hdiutil: attach failed - Unknown error +12\n",
+                     "hdiutil: attach failed - Unknown error 12 /private/secret\n",
+                     "hdiutil: attach failed - Unknown error /private/12\n",
+                     "private hdiutil: attach failed - Unknown error 12\n",
+                     "hdiutil: unrelated failed - Unknown error 12\n"] {
+            var diagnostic = InstallerFixtureCommandDiagnostics()
+            diagnostic.append(Array(text.utf8)[...])
+            #expect(diagnostic.numericHint == nil)
+        }
+        let tail = "hdiutil: attach failed - Unknown error 12"
+        var truncated = InstallerFixtureCommandDiagnostics()
+        truncated.append(Array((String(repeating: "x", count: InstallerFixtureCommandDiagnostics.maximumBytes - tail.utf8.count - 1) + "\n" + tail + "private").utf8)[...])
+        #expect(truncated.truncated && truncated.numericHint == nil)
     }
 }

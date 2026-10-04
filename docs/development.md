@@ -40,7 +40,7 @@
 
 ## 发布计划
 
-借鉴 MoePeek 的 SemVer、单一版本来源、忽略个人 Signing.xcconfig、保留示例配置、签名验证和 draft 测试发布经验。若未来采用 Sparkle，需单独设计密钥管理和测试期间更新器隔离。
+借鉴 MoePeek 的 SemVer、单一版本来源、忽略个人 Signing.xcconfig、保留示例配置、签名验证和 draft 测试发布经验。后续 Sparkle 集成与测试隔离见 仓库内 `Documentation/Automatic-updates.md`；生产密钥配置由维护者本人完成。
 
 MoePeek 的现有发布 workflow 未包含测试门禁或 Apple 公证；MoeKit 不直接沿用这一缺口。未来发布需完成 CI 构建与测试、稳定签名、合适的公证与分发验证、发布材料检查，再建立正式发布流程。当前不创建标签、发布下载链接或可用性徽章。
 

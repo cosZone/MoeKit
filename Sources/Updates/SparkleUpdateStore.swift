@@ -40,11 +40,12 @@ final class SparkleUpdateStore {
          defaults: UserDefaults? = .standard,
          makeDriver: ((SparkleUpdateConfiguration, Bool) -> any AppUpdateDriving)? = nil) {
         self.defaults = defaults
-        includePreviews = defaults?.object(forKey: Self.previewPreference) as? Bool
+        let previews = defaults?.object(forKey: Self.previewPreference) as? Bool
             ?? (configuration?.release.preview != nil)
+        includePreviews = previews
         if let configuration, !isolated {
-            driver = makeDriver?(configuration, includePreviews)
-                ?? SparkleUpdateDriver(configuration: configuration, includePreviews: includePreviews)
+            driver = makeDriver?(configuration, previews)
+                ?? SparkleUpdateDriver(configuration: configuration, includePreviews: previews)
         } else { driver = nil }
         driver?.didChange = { [weak self] value in self?.snapshot = value }
     }
@@ -127,5 +128,5 @@ private final class SparkleUpdateDriver: NSObject, AppUpdateDriving, SPUUpdaterD
 
     func allowedChannels(for updater: SPUUpdater) -> Set<String> { includePreviews ? ["preview"] : [] }
     func feedURLString(for updater: SPUUpdater) -> String? { SparkleUpdateConfiguration.feedURL.absoluteString }
-    func allowedSystemProfileKeys(for updater: SPUUpdater) -> [String] { [] }
+    func allowedSystemProfileKeys(for updater: SPUUpdater) -> [String]? { [] }
 }

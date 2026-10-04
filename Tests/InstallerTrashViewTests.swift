@@ -51,8 +51,14 @@ final class InstallerTrashViewTests: XCTestCase {
                 window.isReleasedWhenClosed = false; window.appearance = appearance; window.contentView = hosting
                 defer { window.contentView = nil; window.close() }
                 for _ in 0..<5 { hosting.layoutSubtreeIfNeeded(); try await Task.sleep(for: .milliseconds(50)); window.setContentSize(size) }
+                // The last setContentSize above can leave layout/display
+                // invalidated. Flush that final size before raster capture.
+                hosting.layoutSubtreeIfNeeded()
                 XCTAssertEqual(hosting.bounds.size, size)
                 resetScrollOrigins(in: hosting)
+                hosting.layoutSubtreeIfNeeded()
+                hosting.displayIfNeeded()
+                let frameEvidence = try verifyRequiredFrames(in: hosting, window: window, scenario: scenario)
                 let bitmap = try XCTUnwrap(hosting.bitmapImageRepForCachingDisplay(in: hosting.bounds))
                 appearance.performAsCurrentDrawingAppearance { hosting.cacheDisplay(in: hosting.bounds, to: bitmap) }
                 let png = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
@@ -75,6 +81,8 @@ final class InstallerTrashViewTests: XCTestCase {
                 Attestation title: \(String(localized: "I have finished installing and using this disk image"))
                 Unknown recovery title: \(String(localized: "Recovery record unavailable; outcome unknown"))
                 Mutation calls: \(mutationCount)
+                Required heading/action frames inside capture: \(frameEvidence.count)
+                \(frameEvidence.joined(separator: "\n"))
                 Scope: owned installer view with synthetic paths and receipts only.
                 Scenario: \(scenario). No native executor, process inspection, disk-image inventory or real file moves.
                 The scroll container keeps controls reachable beyond the captured viewport.
@@ -84,6 +92,44 @@ final class InstallerTrashViewTests: XCTestCase {
                 metadata.lifetime = .keepAlways; add(metadata)
             }
         }
+    }
+
+    /// Read frame metadata from this owned view only. This is a geometric
+    /// capture check, not keyboard navigation or VoiceOver acceptance.
+    @MainActor private func verifyRequiredFrames(in hosting: NSView, window: NSWindow, scenario: String) throws -> [String] {
+        var labels = [String(localized: "Downloaded disk image"), String(localized: "Read recovery records")]
+        switch scenario {
+        case "trash-confirmation":
+            labels += [String(localized: "Confirm native macOS Trash"), String(localized: "I have finished installing and using this disk image"),
+                       String(localized: "Move this file to Trash"), String(localized: "Cancel plan")]
+        case "restore-confirmation":
+            labels += [String(localized: "Confirm original-path restore"), String(localized: "Restore to original path"), String(localized: "Cancel plan")]
+        case "incomplete-recovery":
+            labels += [String(localized: "Recovery record unavailable; outcome unknown"), String(localized: "Reveal validated recovery location")]
+        default: break
+        }
+        var queue: [Any] = [hosting]
+        var seen: Set<ObjectIdentifier> = []
+        var elements: [any NSAccessibilityProtocol] = []
+        while !queue.isEmpty, seen.count < 1_024 {
+            let next = queue.removeFirst()
+            guard let element = next as? any NSAccessibilityProtocol else { continue }
+            guard seen.insert(ObjectIdentifier(element)).inserted else { continue }
+            elements.append(element)
+            queue += element.accessibilityChildren() ?? []
+        }
+        XCTAssertTrue(queue.isEmpty, "Owned accessibility tree exceeded the capture-check bound")
+        let captured = window.convertToScreen(hosting.convert(hosting.bounds, to: nil))
+        var evidence: [String] = []
+        for label in labels {
+            let matches = elements.filter { element in
+                [element.accessibilityLabel(), element.accessibilityTitle(), element.accessibilityValue() as? String].contains(label)
+            }.map { $0.accessibilityFrame() }.filter { !$0.isEmpty && $0.width.isFinite && $0.height.isFinite }
+            let frame = try XCTUnwrap(matches.min(by: { $0.width * $0.height < $1.width * $1.height }), "Required capture element missing: \(label)")
+            XCTAssertTrue(captured.insetBy(dx: -0.5, dy: -0.5).contains(frame), "Required element outside the captured viewport: \(label), frame \(frame), capture \(captured)")
+            evidence.append("Captured element: \(label) · screen frame: \(NSStringFromRect(frame))")
+        }
+        return evidence
     }
 
     /// An initially focused action button can cause an AppKit scroll view to

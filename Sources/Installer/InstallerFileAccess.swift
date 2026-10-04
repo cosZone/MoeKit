@@ -126,7 +126,7 @@ enum InstallerFileAccess {
               filesec_query_property(security, FILESEC_ACL, &hasACL) == 0,
               (directory ? s.matchesDirectory(snapshot(attributes)) : s == snapshot(attributes)) else { throw InstallerTrashFailure.unsafeRecovery }
         if hasACL == 0 { return }
-        guard hasACL == 1 else { throw InstallerTrashFailure.unsafeRecovery }
+        // filesec reports a nonzero validity mask, not a normalized Boolean.
         var readACL: acl_t?
         guard filesec_get_property(security, FILESEC_ACL, &readACL) == 0, let acl = readACL else { throw InstallerTrashFailure.unsafeRecovery }
         defer { acl_free(UnsafeMutableRawPointer(acl)) }
@@ -174,8 +174,9 @@ enum InstallerFileAccess {
         var attributes = stat(), hasACL: Int32 = 0
         guard fstatx_np(fd, &attributes, security) == 0,
               filesec_query_property(security, FILESEC_ACL, &hasACL) == 0,
-              before == snapshot(attributes), hasACL == 0 || hasACL == 1 else { throw InstallerTrashFailure.changed }
-        if hasACL == 1 {
+              before == snapshot(attributes) else { throw InstallerTrashFailure.changed }
+        // A successful nonzero property mask means an ACL is present.
+        if hasACL != 0 {
             var value: acl_t?
             guard filesec_get_property(security, FILESEC_ACL, &value) == 0, let acl = value else { throw InstallerTrashFailure.unsupported }
             defer { acl_free(UnsafeMutableRawPointer(acl)) }

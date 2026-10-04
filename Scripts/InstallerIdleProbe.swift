@@ -401,7 +401,7 @@ enum InstallerIdleProbe {
         guard fstatx_np(fd, &metadata, security) == 0,
               filesec_query_property(security, FILESEC_ACL, &hasACL) == 0 else { return "unavailable" }
         if hasACL == 0 { return "absent" }
-        guard hasACL == 1 else { return "unavailable" }
+        // A successful nonzero filesec presence value is a validity mask.
         var value: acl_t?
         guard filesec_get_property(security, FILESEC_ACL, &value) == 0, let acl = value else { return "unavailable" }
         defer { acl_free(UnsafeMutableRawPointer(acl)) }
@@ -524,7 +524,7 @@ private final class ProbeDirectory {
               filesec_query_property(security, FILESEC_ACL, &hasACL) == 0,
               s.sameDirectory(ProbeSnapshot(metadata)) else { throw ProbeFailure("The private directory's ACL could not be verified.") }
         if hasACL == 0 { return }
-        guard hasACL == 1 else { throw ProbeFailure("The private directory's ACL state is unknown.") }
+        // A successful nonzero filesec presence value is a validity mask.
         var value: acl_t?
         guard filesec_get_property(security, FILESEC_ACL, &value) == 0, let acl = value else {
             throw ProbeFailure("The private directory's ACL could not be read.")

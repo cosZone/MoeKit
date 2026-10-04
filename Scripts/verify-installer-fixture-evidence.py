@@ -31,6 +31,7 @@ for kind in args.kinds:
         assert record['detail']['duplicateNamesPreserved'] == 'true'
     if kind == 'mounted-image':
         assert record['detail']['observedRefusal'] == 'true'
+        assert record['detail']['crossDeviceRefusal'] == 'true'
     for key in ('sourceDevice', 'sourceInode'):
         assert record['detail'][key].isdigit() and int(record['detail'][key]) > 0
     print(f'Verified actual {kind} fixture for {args.source_sha}')

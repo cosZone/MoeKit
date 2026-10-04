@@ -19,7 +19,7 @@ class EvidenceTests(unittest.TestCase):
         for kind, result in self.records.items():
             path = self.root / f'{kind}.json'
             path.write_text(json.dumps({'schema': 1, 'kind': kind, 'sourceSHA': SHA,
-                'detail': {'result': result, 'sourceDevice': '12', 'sourceInode': '34', 'observedRefusal': 'true', 'duplicateNamesPreserved': 'true', 'observedUseControl': 'true'}}))
+                'detail': {'result': result, 'sourceDevice': '12', 'sourceInode': '34', 'observedRefusal': 'true', 'duplicateNamesPreserved': 'true', 'observedUseControl': 'true', 'crossDeviceRefusal': 'true'}}))
             path.chmod(0o600)
     def tearDown(self):
         self.owned.cleanup()
@@ -29,6 +29,18 @@ class EvidenceTests(unittest.TestCase):
         self.assertEqual(self.run_check(), 0)
     def test_missing_skipped_fixture_refuses(self):
         (self.root / 'idle-use.json').unlink()
+        self.assertNotEqual(self.run_check(), 0)
+    def test_missing_cross_device_proof_refuses(self):
+        path = self.root / 'mounted-image.json'
+        value = json.loads(path.read_text())
+        del value['detail']['crossDeviceRefusal']
+        path.write_text(json.dumps(value))
+        self.assertNotEqual(self.run_check(), 0)
+    def test_false_cross_device_proof_refuses(self):
+        path = self.root / 'mounted-image.json'
+        value = json.loads(path.read_text())
+        value['detail']['crossDeviceRefusal'] = 'false'
+        path.write_text(json.dumps(value))
         self.assertNotEqual(self.run_check(), 0)
     def test_other_commit_refuses(self):
         self.assertNotEqual(self.run_check('b' * 40), 0)

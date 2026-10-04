@@ -39,6 +39,8 @@ struct InstallerFileAccessTests {
         errno = 0
         #expect(acl_get_entry(acl, Int32(ACL_FIRST_ENTRY.rawValue), &entry) == -1)
         #expect(errno == EINVAL)
+        try #require(acl_set_fd_np(directory.fd, acl, ACL_TYPE_EXTENDED) == 0)
+        try InstallerFileAccess.validatePrivate(directory.fd, directory: true)
         // Use the public text parser for a fixture-only harmless deny ACL.
         let nonempty = try #require(acl_from_text("!#acl 1\ngroup:ABCDEFAB-CDEF-ABCD-EFAB-CDEF0000000C:::deny:delete\n"))
         defer { acl_free(UnsafeMutableRawPointer(nonempty)) }
@@ -57,6 +59,13 @@ struct InstallerFileAccessTests {
                 let acl = try #require(acl_from_text("!#acl 1\ngroup:ABCDEFAB-CDEF-ABCD-EFAB-CDEF0000000C:::\(permissions)\n"))
                 defer { acl_free(UnsafeMutableRawPointer(acl)) }
                 try #require(acl_set_fd_np(descriptor, acl, ACL_TYPE_EXTENDED) == 0)
+                let security = try #require(filesec_init())
+                defer { filesec_free(security) }
+                var attributes = stat(), present: Int32 = 0
+                try #require(fstatx_np(descriptor, &attributes, security) == 0)
+                try #require(filesec_query_property(security, FILESEC_ACL, &present) == 0)
+                // Darwin returns a validity bitmask, not necessarily the integer1.
+                #expect(present != 0)
                 try InstallerFileAccess.rejectMutationGrantingACL(descriptor)
             }
             for permissions in ["write", "append", "delete", "delete_child", "writeattr", "writeextattr", "writesecurity", "chown"] {

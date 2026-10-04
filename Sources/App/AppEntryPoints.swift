@@ -25,8 +25,9 @@ final class AppVisibilityPreferences {
     }
 }
 
-/// App-owned routing outlives workspace windows. Hiding/closing a window never
-/// cancels a workspace operation or changes the shared WorkspaceStore.
+/// App-owned routing outlives workspace windows. Closing a window never
+/// destroys the shared WorkspaceStore. Individual views retain their existing
+/// cancellation/revocation rules when a window closes.
 @MainActor
 final class AppEntryPointController: NSObject {
     let preferences: AppVisibilityPreferences

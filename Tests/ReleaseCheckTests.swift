@@ -47,6 +47,9 @@ struct ReleaseVersionTests {
         #expect(throws: ReleaseCheckError.invalidResponse) { try GitHubReleaseChecker.validate(response(url: URL(string: "https://example.invalid")!)) }
         #expect(throws: ReleaseCheckError.invalidResponse) { try GitHubReleaseChecker.validate(response(headers: ["Content-Type": "text/html"])) }
         #expect(throws: ReleaseCheckError.incomplete) { try GitHubReleaseChecker.validate(response(headers: ["Content-Type": "application/json", "Link": "<https://api.github.com/next>; rel=\"next\""])) }
+        for link in ["<https://api.github.com/next>; rel=next", "<https://api.github.com/next>; rel=\"next last\"", " malformed ", "<https://api.github.com/next>;   rel = next"] {
+            #expect(throws: ReleaseCheckError.incomplete) { try GitHubReleaseChecker.validate(response(headers: ["Content-Type": "application/json", "Link": link])) }
+        }
         #expect(throws: ReleaseCheckError.tooLarge) { try GitHubReleaseChecker.validate(response(headers: ["Content-Type": "application/json", "Content-Length": "1048577"])) }
     }
 }
@@ -64,9 +67,10 @@ private actor ControlledReleaseChecker: ReleaseChecking {
 @MainActor
 struct ReleaseCheckStoreTests {
     private func waitFor(_ condition: () async -> Bool) async {
-        for _ in 0..<1000 {
+        let deadline = ContinuousClock.now + .seconds(5)
+        while ContinuousClock.now < deadline {
             if await condition() { return }
-            await Task.yield()
+            try? await Task.sleep(for: .milliseconds(5))
         }
         Issue.record("Controlled update-check operation did not settle")
     }

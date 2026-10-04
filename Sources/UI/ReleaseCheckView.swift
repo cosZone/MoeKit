@@ -14,11 +14,14 @@ struct ReleaseCheckView: View {
                         .foregroundStyle(.secondary)
                 }
                 Toggle("Include preview releases", isOn: $updates.includePreviews)
+                    .installerCaptureRegion("updates.channel", text: String(localized: "Include preview releases"))
                 Text("Checks public GitHub releases only when requested. GitHub receives your IP address; no project paths, task records or credentials are sent.")
                     .font(.caption).foregroundStyle(.secondary)
+                    .installerCaptureRegion("updates.privacy", text: String(localized: "Checks public GitHub releases only when requested. GitHub receives your IP address; no project paths, task records or credentials are sent."))
             }
             Section {
-                result
+                VStack(alignment: .leading, spacing: 8) { result }
+                    .installerCaptureRegion("updates.result", text: "Release check result")
                 if let date = updates.checkedAt {
                     LabeledContent("Checked", value: date.formatted(date: .abbreviated, time: .standard))
                         .font(.caption).foregroundStyle(.secondary)
@@ -27,6 +30,7 @@ struct ReleaseCheckView: View {
                     Button("Check for updates…") { updates.check() }
                         .disabled(updates.isChecking)
                         .keyboardShortcut(.defaultAction)
+                        .installerCaptureRegion("updates.check", text: String(localized: "Check for updates…"))
                     if updates.isChecking {
                         Button("Cancel") { updates.cancel() }
                     }
@@ -35,11 +39,13 @@ struct ReleaseCheckView: View {
             Section {
                 Text("Updates are downloaded and installed manually from the release page. Automatic installation is not enabled.")
                     .font(.caption).foregroundStyle(.secondary)
+                    .installerCaptureRegion("updates.installation", text: String(localized: "Updates are downloaded and installed manually from the release page. Automatic installation is not enabled."))
                 Link("All releases on GitHub", destination: MoeKitLinks.repository.appendingPathComponent("releases"))
+                    .installerCaptureRegion("updates.releases", text: "GitHub release navigation")
             }
         }
         .formStyle(.grouped)
-        .frame(width: 540, height: 440)
+        .frame(width: 540, height: 520)
         .onDisappear { updates.cancel() }
         .onExitCommand { updates.cancel(); dismiss() }
     }

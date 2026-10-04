@@ -8075,22 +8075,6 @@
         }
       }
     },
-    "Closing a window keeps MoeKit and current tasks running. Use Quit MoeKit to exit.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Closing a window keeps MoeKit and current tasks running. Use Quit MoeKit to exit."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "关闭窗口后，MoeKit 和当前任务仍会继续运行。请选择“退出 MoeKit”结束应用。"
-          }
-        }
-      }
-    },
     "Could not reach GitHub. Check your connection and try again.": {
       "localizations": {
         "en": {
@@ -8439,6 +8423,36 @@
           "stringUnit": {
             "state": "translated",
             "value": "查看版本并下载"
+          }
+        }
+      }
+    },
+    "Closing windows keeps MoeKit open. Some operations cancel when their view closes. Use Quit MoeKit to exit.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关闭窗口后 MoeKit 仍会运行。部分操作会在其视图关闭时取消。请选择“退出 MoeKit”结束应用。"
+          }
+        }
+      }
+    },
+    "Space supports reports and confirmed analysis. Native cache cleanup and exact-process stopping each require separate confirmation. Uninstall, maintenance and live status remain unavailable.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "空间分析支持报告导入和逐次确认的分析。原生缓存清理与精确进程停止均需单独确认。卸载、维护与实时状态尚未开放。"
+          }
+        }
+      }
+    },
+    "Your project list, pins and private recovery receipts are stored in MoeKit’s Application Support folder. Task records and imported reports last for the current session.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "项目列表、置顶状态和私有恢复凭据保存在 MoeKit 的 Application Support 文件夹。任务记录和导入报告仅保留在当前会话。"
           }
         }
       }

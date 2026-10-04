@@ -30,9 +30,10 @@ private final class ReleaseRedirectPolicy: NSObject, URLSessionTaskDelegate, Sen
 struct GitHubReleaseChecker: ReleaseChecking {
     static let endpoint = URL(string: "https://api.github.com/repos/cosZone/MoeKit/releases?per_page=100")!
     static let maximumBytes = 1_048_576
+    var makeConfiguration: @Sendable () -> URLSessionConfiguration = { .ephemeral }
 
     func releases() async throws -> [PublishedRelease] {
-        let configuration = URLSessionConfiguration.ephemeral
+        let configuration = makeConfiguration()
         configuration.timeoutIntervalForRequest = 15
         configuration.timeoutIntervalForResource = 30
         configuration.httpCookieStorage = nil
@@ -63,7 +64,7 @@ struct GitHubReleaseChecker: ReleaseChecking {
             throw ReleaseCheckError.invalidResponse
         }
         guard response.expectedContentLength <= Int64(maximumBytes) else { throw ReleaseCheckError.tooLarge }
-        if response.value(forHTTPHeaderField: "Link")?.contains("rel=\"next\"") == true {
+        if response.value(forHTTPHeaderField: "Link")?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
             // Never report “up to date” from a partial history.
             throw ReleaseCheckError.incomplete
         }

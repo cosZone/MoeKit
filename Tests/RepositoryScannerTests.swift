@@ -769,6 +769,81 @@ struct RepositoryScannerTests {
         await #expect(throws: CancellationError.self) { try await task.value }
     }
 
+    @Test("Thirty-two ordinary sibling roots reuse ancestors and remain fully searchable")
+    func allThirtyTwoRoots() async throws {
+        let fixture = try ScannerFixture()
+        defer { fixture.remove() }
+        var roots: [URL] = []
+        for number in 0..<32 { roots.append(try fixture.repository("projects/project-\(number)")) }
+        let result = try await RepositoryScanner().scan(roots: roots)
+        #expect(result.items.count == 32)
+        #expect(result.visitedDirectories == 32)
+        #expect(result.issues.isEmpty)
+        #expect(!result.wasLimited)
+    }
+
+    @Test("Descriptor exhaustion is an explicit partial resource-limit result")
+    func descriptorLimitIsPartial() async throws {
+        let fixture = try ScannerFixture()
+        defer { fixture.remove() }
+        // A long valid chain plus 32 selected siblings exceeds the shared cap
+        // without allocating an unbounded number of filesystem entries.
+        let prefix = Array(repeating: "nested", count: 12).joined(separator: "/")
+        var roots: [URL] = []
+        for number in 0..<32 { roots.append(try fixture.folder("selected-\(number)/\(prefix)")) }
+        let result = try await RepositoryScanner().scan(roots: roots)
+        #expect(result.wasLimited)
+        #expect(result.issues.contains { $0.kind == .resourceLimit })
+    }
+
+    @Test("Replacing the selected root or its ancestor during progress does not enumerate outside data", arguments: [false, true])
+    func ancestorReplacedDuringProgress(aboveRoot: Bool) async throws {
+        let fixture = try ScannerFixture()
+        defer { fixture.remove() }
+        let selected = try fixture.folder("parent/selected")
+        _ = try fixture.repository("parent/selected/inside")
+        _ = try fixture.repository("outside/selected/private", head: "ref: refs/heads/must-not-be-read\n")
+        let replacement = fixture.root.appendingPathComponent(aboveRoot ? "outside" : "outside/selected")
+        let changed = aboveRoot ? selected.deletingLastPathComponent() : selected
+        let result = try await RepositoryScanner().scan(roots: [selected], progress: { update in
+            if update.enumeratedEntries == 1 && update.completedRoots == 0 {
+                do {
+                    try FileManager.default.moveItem(at: changed, to: fixture.root.appendingPathComponent("old"))
+                    try FileManager.default.createSymbolicLink(at: changed, withDestinationURL: replacement)
+                } catch {
+                    Issue.record("The synthetic ancestor replacement failed: \(error)")
+                }
+            }
+        })
+        #expect(result.items.isEmpty)
+        #expect(result.issues.contains { $0.kind == .directoryUnreadable })
+    }
+
+    @Test("A metadata ancestor replacement between traversal and open produces unknown metadata", arguments: [false, true])
+    func metadataAncestorReplacedBeforeOpen(symbolic: Bool) async throws {
+        let fixture = try ScannerFixture()
+        defer { fixture.remove() }
+        let project = try fixture.repository("selected/project", head: "ref: refs/heads/inside\n")
+        _ = try fixture.repository("outside", head: "ref: refs/heads/must-not-be-read\n")
+        let selected = fixture.root.appendingPathComponent("selected")
+        let scanner = RepositoryScanner(beforeMetadataOpen: { url in
+            guard url.lastPathComponent == "HEAD" else { return }
+            let git = project.appendingPathComponent(".git")
+            try FileManager.default.moveItem(at: git, to: fixture.root.appendingPathComponent("old"))
+            let outside = fixture.root.appendingPathComponent("outside/.git")
+            if symbolic {
+                try FileManager.default.createSymbolicLink(at: git, withDestinationURL: outside)
+            } else {
+                try FileManager.default.moveItem(at: outside, to: git)
+            }
+        })
+        let result = try await scanner.scan(root: selected)
+        #expect(result.items.count == 1)
+        #expect(result.items.first?.branch == nil)
+        #expect(result.items.first?.metadata == nil)
+        #expect(result.issues.contains { $0.kind == .metadataUnreadable })
+    }
+
 }
 
 private struct ScannerFixture: Sendable {

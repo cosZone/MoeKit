@@ -25,7 +25,7 @@
 
 [Mole 官方说明](https://github.com/tw93/Mole#quick-start) 与 [Git 官方 macOS 安装说明](https://git-scm.com/install/mac) 提供的 Homebrew 命令分别为 `brew install mole`、`brew install git`。按钮只复制界面上的固定命令，不自动执行、不打开终端、不安装 Homebrew。自行执行可能下载文件、安装依赖、修改工具安装目录或更新 Homebrew；先阅读官方说明。官方页面可能以后变化，MoeKit 不把指引等同于已验证安装。
 
-无需安装工具即可导入 Mole JSON 或使用现有项目元数据发现。Demo 显式禁止读取真实工具位置，也不制造示例安装成功。
+无需安装工具即可导入 Mole JSON 或使用现有项目元数据发现。Demo 显式禁止读取真实工具位置，也不制造示例安装成功。常见位置列表始终用 `~/.local/bin` 显示用户目录候选项，避免首次打开或 Demo 截图泄露账户主目录名；真实路径只在主动检查后用于结果。
 
 ## 生命周期与验证
 

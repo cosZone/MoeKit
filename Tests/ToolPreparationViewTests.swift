@@ -7,9 +7,10 @@ import XCTest
 final class ToolPreparationViewTests: XCTestCase {
     @MainActor
     func testToolPreparationRenders() async throws {
-        for inspected in [false, true] {
+        for scenario in ["unchecked", "observed", "demo"] {
             let preparation = ToolPreparationStore(inspector: RenderToolInspector())
-            if inspected {
+            if scenario == "demo" { preparation.setDemoEnabled(true) }
+            if scenario == "observed" {
                 preparation.inspect(.mole, locations: [URL(fileURLWithPath: "/synthetic/mo")])
                 for _ in 0..<1_000 {
                     if !preparation.isInspecting { break }
@@ -20,11 +21,14 @@ final class ToolPreparationViewTests: XCTestCase {
             for dark in [false, true] {
                 for size in [NSSize(width: 580, height: 520), NSSize(width: 680, height: 720)] {
                     let language = try XCTUnwrap(Bundle.main.preferredLocalizations.first)
-                    let name = "tool-preparation-\(inspected ? "observed" : "unchecked")-\(language)-\(dark ? "dark" : "light")-\(Int(size.width))x\(Int(size.height))"
+                    XCTAssertTrue(["en", "zh-Hans"].contains(language))
+                    XCTAssertEqual(ToolCandidateState.foundUnverified(symbolicLink: true).title, language == "zh-Hans" ? "已找到 · 未验证" : "Found · unverified")
+                    let name = "tool-preparation-\(scenario)-\(language)-\(dark ? "dark" : "light")-\(Int(size.width))x\(Int(size.height))"
                     _ = NSApplication.shared
                     let appearance = try XCTUnwrap(NSAppearance(named: dark ? .darkAqua : .aqua))
                     let root = ToolPreparationView(preparation: preparation,
-                        homeDirectory: URL(fileURLWithPath: "/synthetic-home"))
+                        homeDirectory: URL(fileURLWithPath: "/Users/private-fixture-account"),
+                        showsLocations: scenario == "demo")
                         .environment(\.colorScheme, dark ? .dark : .light)
                         .environment(\.locale, Locale.current)
                         .frame(width: size.width, height: size.height)
@@ -51,6 +55,20 @@ final class ToolPreparationViewTests: XCTestCase {
                     attachment.name = name + ".png"
                     attachment.lifetime = .keepAlways
                     add(attachment)
+                    let metadata = XCTAttachment(string: """
+                    Content size: \(Int(size.width)) × \(Int(size.height)) points
+                    Process locale: \(Locale.current.identifier)
+                    Bundle language: \(language)
+                    Projects title: \(WorkspaceSection.projects.title)
+                    Partial-result title: \(TaskStatus.partial.title)
+                    Tool candidate title: \(ToolCandidateState.foundUnverified(symbolicLink: true).title)
+                    Scope: owned tool-preparation view, synthetic paths and observations only.
+                    Scenario: \(scenario). No real tool inspection, installation or execution.
+                    No screen capture, native interaction or accessibility acceptance claimed.
+                    """)
+                    metadata.name = name + "-scope.txt"
+                    metadata.lifetime = .keepAlways
+                    add(metadata)
                     XCTAssertGreaterThan(png.count, 1_000)
                     XCTAssertFalse(preparation.isInspecting)
                 }

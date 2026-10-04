@@ -32,9 +32,18 @@ enum BoundedRegularFileReader {
         }
         defer { Darwin.close(descriptor) }
 
+        return try read(descriptor: descriptor, maximumBytes: maximumBytes, validateAfterOpen: validateAfterOpen)
+    }
+
+    /// Borrows a descriptor opened by a scope-aware caller. Ownership stays with
+    /// that caller; the same type, size, cancellation and mutation guards apply.
+    static func read(descriptor: Int32, maximumBytes: Int,
+                     validateAfterOpen: () throws -> Void = {}) throws -> Data {
+        try Task.checkCancellation()
+        guard maximumBytes >= 0, maximumBytes < Int.max else { throw ReadError.invalidLimit }
         let before = try checkedStatus(descriptor, maximumBytes: maximumBytes)
-        // Preserve the caller's scope recheck after opening and before any content
-        // read. This is still best effort for ancestor-directory replacement races.
+        // A scope-aware caller validates the pinned directory chain before content
+        // is read. The path-only entry point does not provide ancestor protection.
         try validateAfterOpen()
         try Task.checkCancellation()
         var data = Data()

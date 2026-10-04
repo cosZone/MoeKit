@@ -30,10 +30,12 @@ actor NativeToolCandidateInspector: ToolCandidateInspecting {
             return result(.unsupported(.invalidPath))
         }
         var status = stat()
-        let code = path.withCString { Darwin.lstat($0, &status) }
-        guard code == 0 else {
-            let error = errno
-            return result(error == ENOENT || error == ENOTDIR ? .missing : .unreadable)
+        let errorCode = path.withCString { pointer -> Int32? in
+            guard Darwin.lstat(pointer, &status) == 0 else { return errno }
+            return nil
+        }
+        if let errorCode {
+            return result(errorCode == ENOENT || errorCode == ENOTDIR ? .missing : .unreadable)
         }
         switch status.st_mode & mode_t(S_IFMT) {
         case mode_t(S_IFLNK): return result(.foundUnverified(symbolicLink: true))

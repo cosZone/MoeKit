@@ -1,6 +1,7 @@
 import Foundation
 import Darwin
 import Testing
+import Observation
 @testable import MoeKit
 
 @Suite("Metadata-only tool preparation")
@@ -17,6 +18,16 @@ struct ToolPreparationTests {
         #expect(PreparedTool.git.installCommand == "brew install git")
         #expect(PreparedTool.mole.documentationURL.host == "github.com")
         #expect(PreparedTool.git.documentationURL.host == "git-scm.com")
+    }
+
+    @Test("Conventional location presentation never exposes the account home path")
+    func homeLabelsArePrivate() {
+        let home = URL(fileURLWithPath: "/Users/private-fixture-account", isDirectory: true)
+        for tool in PreparedTool.allCases {
+            let labels = tool.conventionalLocations(home: home).map { tool.conventionalLocationLabel($0, home: home) }
+            #expect(labels.allSatisfy { !$0.contains("private-fixture-account") && !$0.contains(home.path) })
+            #expect(labels.contains("~/.local/bin/" + (tool == .mole ? "mo" : "git")))
+        }
     }
 
     @Test("Executable permissions never verify identity or execute script contents")
@@ -104,6 +115,22 @@ struct ToolPreparationStoreTests {
         store.inspect(.mole, locations: [Self.location])
         #expect(await inspector.count == 0)
         #expect(!store.isInspecting)
+    }
+
+    @Test("Inspection lifecycle is observable so busy controls and cancellation stay visible")
+    func observableLifecycle() async throws {
+        let inspector = ControlledToolInspector()
+        let store = ToolPreparationStore(inspector: inspector)
+        let started = ToolObservationFlag()
+        withObservationTracking { _ = store.isInspecting } onChange: { started.mark() }
+        store.inspect(.mole, locations: [Self.location])
+        #expect(started.value)
+        await inspector.waitForStart()
+        let finished = ToolObservationFlag()
+        withObservationTracking { _ = store.isInspecting } onChange: { finished.mark() }
+        await inspector.complete()
+        try await settle(store)
+        #expect(finished.value)
     }
 
     @Test("Duplicate starts and cancellation keep one owned operation until settlement")
@@ -244,4 +271,12 @@ private actor ControlledToolInspector: ToolCandidateInspecting {
         continuation?.resume(throwing: ToolTestFailure.synthetic)
         continuation = nil
     }
+}
+
+/// A lock-protected observation signal; callbacks may arrive on any executor.
+private final class ToolObservationFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var marked = false
+    func mark() { lock.lock(); defer { lock.unlock() }; marked = true }
+    var value: Bool { lock.lock(); defer { lock.unlock() }; return marked }
 }

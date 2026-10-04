@@ -9,11 +9,14 @@ struct ToolPreparationView: View {
     @State private var copiedCommand: String?
     @State private var selectingFile = false
     @State private var selectionGeneration = UUID()
+    @State private var showsLocations: Bool
 
     init(preparation: ToolPreparationStore,
-         homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser) {
+         homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
+         showsLocations: Bool = false) {
         self.homeDirectory = homeDirectory
         _preparation = State(initialValue: preparation)
+        _showsLocations = State(initialValue: showsLocations)
     }
 
     private var canInspect: Bool { !preparation.isDemoEnabled && !preparation.isInspecting && !selectingFile }
@@ -43,9 +46,9 @@ struct ToolPreparationView: View {
                                 .disabled(!canInspect)
                             Button("Inspect another file…") { chooseFile() }.disabled(!canInspect)
                         }
-                        DisclosureGroup("Locations checked by this button") {
+                        DisclosureGroup("Locations checked by this button", isExpanded: $showsLocations) {
                             ForEach(locations, id: \.path) { location in
-                                Text(location.path).font(.caption.monospaced()).textSelection(.enabled)
+                                Text(tool.conventionalLocationLabel(location, home: homeDirectory)).font(.caption.monospaced()).textSelection(.enabled)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                             }
                         }.font(.callout)

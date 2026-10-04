@@ -11,6 +11,15 @@ enum PreparedTool: String, CaseIterable, Identifiable, Sendable {
         URL(string: self == .mole ? "https://github.com/tw93/Mole#quick-start" : "https://git-scm.com/install/mac")!
     }
 
+    /// Keep the account's home path out of first-use and Demo presentation.
+    /// The real URL remains internal to an explicit real-mode inspection.
+    func conventionalLocationLabel(_ url: URL, home: URL) -> String {
+        if url.deletingLastPathComponent().path == home.appendingPathComponent(".local/bin").path {
+            return "~/.local/bin/" + url.lastPathComponent
+        }
+        return url.path
+    }
+
     /// Fixed candidates, never PATH search, shell expansion or a directory walk.
     func conventionalLocations(home: URL) -> [URL] {
         let names = self == .mole ? ["mo", "mole"] : ["git"]
@@ -89,7 +98,8 @@ final class ToolPreparationStore {
         self.inspector = inspector
     }
 
-    var isInspecting: Bool { inspectionTask != nil }
+    // Drive SwiftUI from observable state, not the ignored Task handle.
+    var isInspecting: Bool { inspectingTool != nil }
 
     func inspect(_ tool: PreparedTool, locations: [URL], expectedMode: UUID? = nil) {
         guard !isDemoEnabled, inspectionTask == nil,

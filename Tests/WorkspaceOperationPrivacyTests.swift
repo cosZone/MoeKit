@@ -334,9 +334,8 @@ struct WorkspaceOperationPrivacyTests {
         try CatalogPersistence(directory: root).save([project])
         var shouldFail = true
         let failure = privateError(root)
-        let persistence = CatalogPersistence(directory: root) { data, file in
+        let persistence = CatalogPersistence(directory: root) {
             if shouldFail { throw failure }
-            try data.write(to: file, options: .atomic)
         }
         let store = WorkspaceStore(isDemoEnabled: false, persistence: persistence)
         store.togglePin(project.id)

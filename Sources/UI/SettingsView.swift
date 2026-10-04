@@ -1,7 +1,9 @@
 import SwiftUI
 
 struct SettingsView: View {
+    var checkForUpdates: () -> Void = {}
     @Environment(WorkspaceStore.self) private var store
+    @Environment(AppVisibilityPreferences.self) private var visibility
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
@@ -19,6 +21,7 @@ struct SettingsView: View {
     @ViewBuilder
     private var generalSettings: some View {
         @Bindable var store = store
+        @Bindable var visibility = visibility
         Form {
             Section {
                 HStack(spacing: 14) {
@@ -28,6 +31,24 @@ struct SettingsView: View {
                         Text("A native home for your personal CLI toolbox").foregroundStyle(.secondary)
                     }
                 }
+            }
+            Section("App icons") {
+                Toggle("Show Dock icon", isOn: $visibility.showDockIcon)
+                    .installerCaptureIdentity("icons.dock", text: String(localized: "Show Dock icon"))
+                Toggle("Show menu bar icon", isOn: $visibility.showMenuBarIcon)
+                    .installerCaptureIdentity("icons.menu", text: String(localized: "Show menu bar icon"))
+                Text("Closing windows keeps MoeKit open. Some operations cancel when their view closes. Use Quit MoeKit to exit.")
+                    .font(.caption).foregroundStyle(.secondary)
+                if visibility.hasNoPersistentIcon {
+                    Label("Both icons are hidden. Open MoeKit from Finder or Spotlight to return to the workspace and settings.", systemImage: "info.circle")
+                        .font(.caption)
+                        .installerCaptureIdentity("icons.recovery", text: String(localized: "Both icons are hidden. Open MoeKit from Finder or Spotlight to return to the workspace and settings."))
+                }
+            }
+            Section("Updates") {
+                Button("Check for updates…", action: checkForUpdates)
+                Text("Review newer releases and download them from GitHub. Automatic installation is not enabled.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
             Section("Getting started") {
                 Button("Open getting started") {
@@ -52,11 +73,11 @@ struct SettingsView: View {
                 ForEach(store.registry.descriptors) { module in
                     LabeledContent(module.title, value: module.id == MoleModule.id ? String(localized: "Verify analyzer before use") : (module.readiness.canExecute ? String(localized: "Available") : String(localized: "Adapter not connected")))
                 }
-                Text("Space supports report import and separately confirmed analysis with a verified official analyzer. Cleanup, uninstall, maintenance and live status remain unavailable.")
+                Text("Space supports reports and confirmed analysis. Native cache cleanup and exact-process stopping each require separate confirmation. Uninstall, maintenance and live status remain unavailable.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("Storage") {
-                Text("Your project list and pins are stored in MoeKit’s Application Support folder. Task records and imported reports last for the current session.")
+                Text("Your project list, pins and private recovery receipts are stored in MoeKit’s Application Support folder. Task records and imported reports last for the current session.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }.formStyle(.grouped)

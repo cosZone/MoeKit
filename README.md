@@ -15,6 +15,7 @@ Swift 6 · SwiftUI / AppKit · macOS 15+ · Tuist 4.148.3 · SPM
 - **Tasks**：本次会话的发现任务、取消、状态与底部结果详情；可展开 Diagnostics
 - 独立 Demo 开关与明确示例标识；正常启动无虚构项目、运行结果或磁盘测量
 - 可跳过、可重开的上手引导：项目整理、进程查看或示例体验；先说明范围，再由用户主动选择文件夹或开始扫描
+- 菜单栏原生入口，Dock / 菜单栏图标独立设置与重开恢复；主动检查 GitHub 新版本并手动下载，尚未启用 Sparkle 自动安装。详见 [更新与应用入口](Documentation/Updates-and-app-icons.md)
 - 原生 NavigationSplitView、Table、工具栏与 SF Symbols；自定义应用图标
 
 尚未实现：任意 CLI 执行、AI 专用无头浏览器归属与清理、广域 Mole 清理、卸载、维护、实时系统指标、提权、第三方插件加载及持久任务历史。导入报告不运行 Mole，报告数值不等于可回收空间。

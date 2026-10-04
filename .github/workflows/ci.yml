@@ -204,6 +204,7 @@ jobs:
             -only-testing:MoeKitTests/UISnapshotTests/testGettingStartedDestinationsRender \
             -only-testing:MoeKitTests/UISnapshotTests/testFirstUseWorkspacesRender \
             -only-testing:MoeKitTests/UISnapshotTests/testSettingsModeGuidanceRenders \
+            -only-testing:MoeKitTests/ReleaseCheckViewTests/testUpdatePanelAndHiddenIconsRender \
             -only-testing:MoeKitTests/ToolPreparationViewTests/testToolPreparationRenders \
             -only-testing:MoeKitTests/MoleAnalysisViewTests/testAnalysisSheetRenders \
             -only-testing:MoeKitTests/InstallerTrashViewTests/testInstallerConfirmationRenders \
@@ -361,6 +362,10 @@ jobs:
                         -only-testing:MoeKitTests/InstallerTrashStoreTests
                         -only-testing:MoeKitTests/CleanupExecutorTests
                         -only-testing:MoeKitTests/CleanupStoreTests
+                        -only-testing:MoeKitTests/ReleaseVersionTests
+                        -only-testing:MoeKitTests/ReleaseTransportTests
+                        -only-testing:MoeKitTests/ReleaseCheckStoreTests
+                        -only-testing:MoeKitTests/AppEntryPointTests
                         -only-testing:MoeKitTests/ProcessTerminationTests
                         -only-testing:MoeKitTests/ProcessTerminationStoreTests
                         -only-testing:MoeKitTests/NativeProcessTerminationTests)
@@ -400,7 +405,8 @@ jobs:
                       "ToolPreparationTests", "ToolPreparationStoreTests",
                       "MoleAnalysisModelsTests", "MoleAnalysisFilesTests", "MoleAnalysisStoreTests",
                       "InstallerFileAccessTests", "InstallerTrashExecutorTests", "InstallerUseEvidenceTests", "InstallerTrashStoreTests",
-                      "CleanupExecutorTests", "CleanupStoreTests", "ProcessTerminationTests", "ProcessTerminationStoreTests", "NativeProcessTerminationTests")
+                      "CleanupExecutorTests", "CleanupStoreTests", "ProcessTerminationTests", "ProcessTerminationStoreTests", "NativeProcessTerminationTests",
+                      "ReleaseVersionTests", "ReleaseCheckStoreTests", "ReleaseTransportTests", "AppEntryPointTests")
           if summary.get("passedTests", 0) < 27 or summary.get("failedTests") != 0 or summary.get("skippedTests") != 0:
               raise SystemExit(f"Optimized catalog tests must execute and pass without skips: {summary}")
           if any(suite not in inventory for suite in required):

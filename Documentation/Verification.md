@@ -97,6 +97,13 @@
 - 中文图片保存在 `native-chinese-view-renders-<SHA>`，独立 `.xcresult` 与原英文结果一同留存；是否通过、对应 SHA 与图片人工检查结果以实际 CI / PR 记录为准
 - 仅覆盖所列中文视图布局，不包括其他模块、系统弹窗、工具栏、键盘、VoiceOver 或活动窗口对比度；示例项目名、路径和品牌名称保留原样
 
+## 项目目录并发保存
+
+- Native CI 将同一目录保存源码编译成独立原生 fixture，并由 Python 用管道握手控制两个 exec 后的进程；不在多线程 Swift Testing 进程里 fork，不使用真实项目目录
+- Debug、优化 Release、优化 Release + Address Sanitizer 均执行首次保存/既有目录、`/tmp` 与 `/private/tmp` 别名、锁忙碌、提交冲突、锁持有者失败及重载后重试的 8 种确定性场景，核对原始字节与永久锁 inode
+- `CatalogWriteCoordinatorTests` 覆盖不安全锁、替换锁/目录、短写入与 EINTR、失败 rename 清理、私有新建权限和同进程重入；保留既有损坏、未知字段、16 MiB、读失败及恢复生命周期用例
+- 本地 Linux 的 Python/源码检查不能代替上述 macOS 原生执行；按精确提交查看 Native CI 结果。这些测试不证明任意外部编辑器、网络文件系统或断电下的事务保证
+
 ## Demo 错误与异步所有权回归
 
 - `WorkspaceOperationPrivacyTests` 只使用唯一临时目录、合成报告及可控 continuation，覆盖快速往返 Demo、旧任务迟到成功/失败、旧进度回调、取消后立即重入、旧 defer 不清空新任务、既有报告/时间保留，以及真实模式 catalog 恢复提示

@@ -70,9 +70,8 @@ struct WorkspacePersistenceTests {
         let file = root.appendingPathComponent("projects.json")
         let original = try Data(contentsOf: file)
         var fails = true
-        let persistence = CatalogPersistence(directory: root) { data, url in
+        let persistence = CatalogPersistence(directory: root) {
             if fails { throw NSError(domain: NSCocoaErrorDomain, code: NSFileWriteOutOfSpaceError) }
-            try data.write(to: url, options: .atomic)
         }
         let store = WorkspaceStore(isDemoEnabled: false, persistence: persistence)
         store.togglePin(project.id)
@@ -100,6 +99,33 @@ struct WorkspacePersistenceTests {
         #expect(store.errorMessage != nil)
         #expect(try Data(contentsOf: file) == externalBytes)
         #expect(try CatalogPersistence(directory: root).load() == [first, other])
+    }
+
+    @Test("Busy catalog guidance survives real-mode recovery and clears after a successful retry")
+    func busyWriterRecovery() throws {
+        let root = fixtureRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let project = ProjectRecord(name: "Example", path: root.appendingPathComponent("synthetic-project").path, kind: .folder)
+        try CatalogPersistence(directory: root).save([project])
+        let file = root.appendingPathComponent("projects.json")
+        let original = try Data(contentsOf: file)
+        let store = WorkspaceStore(isDemoEnabled: false, persistence: CatalogPersistence(directory: root))
+        try CatalogWriteCoordinator.withExclusiveAccess(at: root) { _ in
+            store.togglePin(project.id)
+            #expect(store.errorMessage == CatalogPersistence.CatalogError.writerBusy.errorDescription)
+            #expect(store.projects.first?.isPinned == true)
+            let savedWhileBusy = try Data(contentsOf: file)
+            #expect(savedWhileBusy == original)
+        }
+        store.isDemoEnabled = true
+        #expect(store.errorMessage == nil)
+        store.isDemoEnabled = false
+        #expect(store.errorMessage == CatalogPersistence.CatalogError.writerBusy.errorDescription)
+        importProject(into: store, path: project.path)
+        #expect(store.errorMessage == nil)
+        #expect(try CatalogPersistence(directory: root).load().first?.isPinned == true)
+        store.isDemoEnabled = true; store.isDemoEnabled = false
+        #expect(store.errorMessage == nil)
     }
 
     private func fixtureRoot() -> URL {

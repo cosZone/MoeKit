@@ -24,7 +24,7 @@ struct CatalogPersistenceTests {
         changed.isPinned = false
         try persistence.save([changed])
         #expect(try fixture.persistence().load() == [changed])
-        #expect(try FileManager.default.contentsOfDirectory(atPath: fixture.root.path) == ["projects.json"])
+        #expect(Set(try FileManager.default.contentsOfDirectory(atPath: fixture.root.path)) == ["projects.json", "projects.json.lock"])
     }
 
     @Test("Corrupt, truncated and unsupported future catalogs are never replaced", arguments: [
@@ -164,9 +164,8 @@ struct CatalogPersistenceTests {
         let original = try JSONEncoder().encode([project])
         try fixture.write(original)
         var fails = true
-        let persistence = CatalogPersistence(directory: fixture.root) { data, url in
+        let persistence = CatalogPersistence(directory: fixture.root) {
             if fails { throw NSError(domain: NSCocoaErrorDomain, code: code) }
-            try data.write(to: url, options: .atomic)
         }
         #expect(try persistence.load() == [project])
         var updated = project

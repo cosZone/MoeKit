@@ -37,8 +37,8 @@ struct SettingsView: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("Preview") {
-                Toggle("Use demo data", isOn: $store.isDemoEnabled).disabled(store.isScanning)
-                Text("Demo mode uses example projects and results. It never starts a process or changes project files.")
+                Toggle("Use demo data", isOn: $store.isDemoEnabled)
+                Text("Demo mode uses example projects and results. Changing modes cancels current discovery and report imports. It never starts a process or changes project files.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("Project discovery") {

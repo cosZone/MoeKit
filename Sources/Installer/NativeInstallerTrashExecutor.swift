@@ -113,6 +113,7 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
             recordedAt: Date(), payloadName: plan.display.originalURL.lastPathComponent, trashURL: nil, trashFile: nil)
         try journal.append(receipt, operation: operation)
         var captured = false
+        var capturedSnapshot: InstallerFileSnapshot?
         var trashStarted = false
         do {
             try revalidate(plan); try journal.validate(); try catalogLease.requireSnapshot(plan.catalog); try Task.checkCancellation()
@@ -120,11 +121,13 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
             try InstallerFileAccess.exclusiveMove(from: plan.parent, name: plan.display.originalURL.lastPathComponent,
                 to: operation, destinationName: plan.display.originalURL.lastPathComponent)
             captured = true
+            capturedSnapshot = try InstallerFileAccess.snapshotAt(operation.fd, plan.display.originalURL.lastPathComponent)
             guard fsync(plan.parent.fd) == 0, fsync(operation.fd) == 0 else { throw InstallerTrashFailure.journal }
             try checkpoint(.afterCapture)
             // lstat before opening prevents unexpected directories/FIFOs/devices
             // from ever being read. A wrong capture can only roll back or remain.
             let capturedIdentity = try InstallerFileAccess.snapshotAt(operation.fd, plan.display.originalURL.lastPathComponent)
+            guard capturedIdentity == capturedSnapshot else { throw InstallerTrashFailure.changed }
             receipt = receipt.advancing(to: .captured, payloadName: plan.display.originalURL.lastPathComponent, payloadFile: capturedIdentity)
             try journal.append(receipt, operation: operation)
             guard plan.display.file.matchesCaptured(capturedIdentity), plan.display.file.matchesCaptured(try InstallerFileAccess.snapshot(plan.file.fd)) else { throw InstallerTrashFailure.changed }
@@ -156,7 +159,7 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
                 try? journal.append(unknown, operation: operation)
                 return .init(receipt: unknown, message: String(localized: "The Trash outcome could not be verified. Do not repeat the move; inspect recovery and Finder."), movedToTrash: false, requiresRecovery: true)
             }
-            if captured { return rollback(receipt, journal: journal, operation: operation, originalParent: plan.parent, payloadName: plan.display.originalURL.lastPathComponent) }
+            if captured { return rollback(receipt, journal: journal, operation: operation, originalParent: plan.parent, payloadName: plan.display.originalURL.lastPathComponent, capturedSnapshot: capturedSnapshot) }
             throw error
         }
     }
@@ -240,6 +243,9 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
         try Task.checkCancellation()
         var receipt = plan.display.receipt
         var captured = false
+        var restoreCapturedSnapshot: InstallerFileSnapshot?
+        var restoreStageChanged = false
+        var restoreRollbackCommitted = false
         var capturedVerified = false
         var originalMoveStarted = false
         // A retained source already in this exact restore slot needs no second
@@ -260,9 +266,11 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
                 try InstallerFileAccess.exclusiveMove(from: plan.sourceParent, name: plan.display.sourceURL.lastPathComponent, to: operation, destinationName: "restore.dmg")
             }
             captured = true
+            restoreCapturedSnapshot = try InstallerFileAccess.snapshotAt(operation.fd, "restore.dmg")
             guard fsync(plan.sourceParent.fd) == 0, fsync(operation.fd) == 0 else { throw InstallerTrashFailure.journal }
             try checkpoint(.afterRestoreCapture)
             let stagedIdentity = try InstallerFileAccess.snapshotAt(operation.fd, "restore.dmg")
+            guard stagedIdentity == restoreCapturedSnapshot else { restoreStageChanged = true; throw InstallerTrashFailure.changed }
             receipt = receipt.advancing(to: .restoreCaptured, payloadName: "restore.dmg", payloadFile: stagedIdentity)
             try journal.append(receipt, operation: operation)
             guard plan.sourceIdentity.matchesCaptured(stagedIdentity), plan.sourceIdentity.matchesCaptured(try InstallerFileAccess.snapshot(plan.source.fd)) else { throw InstallerTrashFailure.changed }
@@ -272,7 +280,7 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
             receipt = receipt.advancing(to: .restoreIntent, payloadName: "restore.dmg")
             try journal.append(receipt, operation: operation)
             try checkpoint(.beforeRestore); try Task.checkCancellation()
-            guard stagedIdentity == (try InstallerFileAccess.snapshotAt(operation.fd, "restore.dmg")) else { throw InstallerTrashFailure.changed }
+            guard stagedIdentity == (try InstallerFileAccess.snapshotAt(operation.fd, "restore.dmg")) else { restoreStageChanged = true; throw InstallerTrashFailure.changed }
             try InstallerFileAccess.exclusiveMove(from: operation, name: "restore.dmg", to: plan.parent, destinationName: receipt.originalURL.lastPathComponent)
             originalMoveStarted = true
             guard receipt.originalFile.matchesCaptured(try InstallerFileAccess.snapshotAt(plan.parent.fd, receipt.originalURL.lastPathComponent)) else { throw InstallerTrashFailure.changed }
@@ -285,39 +293,52 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
                 // Capture races must not return an unexpected object to Downloads.
                 // Return it only to its original anchored recovery/Trash name.
                 do {
+                    guard let restoreCapturedSnapshot else { throw InstallerTrashFailure.changed }
+                    guard restoreCapturedSnapshot == (try InstallerFileAccess.snapshotAt(operation.fd, "restore.dmg")) else {
+                        restoreStageChanged = true; throw InstallerTrashFailure.changed
+                    }
                     guard try journal.latest(receipt.id) == receipt else { throw InstallerTrashFailure.journal }
-                    let intent = receipt.advancing(to: .rollbackIntent, payloadName: "restore.dmg")
+                    let intent = receipt.advancing(to: .rollbackIntent, payloadName: "restore.dmg", payloadFile: restoreCapturedSnapshot)
                     try journal.append(intent, operation: operation); receipt = intent
                     try InstallerFileAccess.exclusiveMove(from: operation, name: "restore.dmg", to: plan.sourceParent, destinationName: plan.display.sourceURL.lastPathComponent)
+                    restoreRollbackCommitted = true
+                    guard restoreCapturedSnapshot.matchesCaptured(try InstallerFileAccess.snapshotAt(plan.sourceParent.fd, plan.display.sourceURL.lastPathComponent)) else { throw InstallerTrashFailure.changed }
                     guard fsync(operation.fd) == 0, fsync(plan.sourceParent.fd) == 0 else { throw InstallerTrashFailure.journal }
                     let retained = receipt.advancing(to: .uncertain)
                     try journal.append(retained, operation: operation)
                     return .init(receipt: retained, message: String(localized: "Restore stopped and the captured item was returned without replacing anything. Review recovery; a new restore is not automatic."), movedToTrash: false, requiresRecovery: true)
                 } catch { /* Keep every remaining object intact. */ }
             }
-            let retained = receipt.advancing(to: originalMoveStarted || !captured ? .uncertain : .retained, payloadName: captured && !originalMoveStarted ? "restore.dmg" : nil)
+            let retained = receipt.advancing(to: originalMoveStarted || !captured || restoreStageChanged || restoreRollbackCommitted ? .uncertain : .retained, payloadName: captured && !originalMoveStarted ? "restore.dmg" : nil)
             try? journal.append(retained, operation: operation)
             return .init(receipt: retained, message: String(localized: "Restore could not be verified. Existing destinations were not overwritten; inspect the retained recovery location."), movedToTrash: false, requiresRecovery: true)
         }
     }
 
     private func rollback(_ receipt: InstallerTrashReceipt, journal: InstallerRecoveryJournal, operation: InstallerDirectoryAnchor,
-                          originalParent: InstallerDirectoryAnchor, payloadName: String) -> InstallerTrashOutcome {
+                          originalParent: InstallerDirectoryAnchor, payloadName: String, capturedSnapshot: InstallerFileSnapshot?) -> InstallerTrashOutcome {
         var latest = receipt
         var returnedToOriginal = false
+        var stageWasReplaced = false
         do {
             guard journal.mutationJournalIsHealthy, try journal.latest(receipt.id) == receipt else { throw InstallerTrashFailure.journal }
-            let intent = latest.advancing(to: .rollbackIntent, payloadName: payloadName)
+            guard let capturedSnapshot else { throw InstallerTrashFailure.changed }
+            guard capturedSnapshot == (try InstallerFileAccess.snapshotAt(operation.fd, payloadName)) else {
+                stageWasReplaced = true
+                throw InstallerTrashFailure.changed
+            }
+            let intent = latest.advancing(to: .rollbackIntent, payloadName: payloadName, payloadFile: capturedSnapshot)
             try journal.append(intent, operation: operation); latest = intent
             try InstallerFileAccess.exclusiveMove(from: operation, name: payloadName, to: originalParent, destinationName: receipt.originalURL.lastPathComponent)
             returnedToOriginal = true
+            guard capturedSnapshot.matchesCaptured(try InstallerFileAccess.snapshotAt(originalParent.fd, receipt.originalURL.lastPathComponent)) else { throw InstallerTrashFailure.changed }
             try checkpoint(.afterRollback)
             guard fsync(originalParent.fd) == 0, fsync(operation.fd) == 0 else { throw InstallerTrashFailure.journal }
             let rolledBack = latest.advancing(to: .rolledBack)
             try journal.append(rolledBack, operation: operation)
             return .init(receipt: rolledBack, message: String(localized: "The move stopped before Trash. The captured item was returned without replacing anything."), movedToTrash: false, requiresRecovery: false)
         } catch {
-            let retained = latest.advancing(to: returnedToOriginal ? .uncertain : .retained, payloadName: returnedToOriginal ? nil : payloadName)
+            let retained = latest.advancing(to: returnedToOriginal || stageWasReplaced ? .uncertain : .retained, payloadName: returnedToOriginal ? nil : payloadName)
             try? journal.append(retained, operation: operation)
             return .init(receipt: retained, message: returnedToOriginal ? String(localized: "The captured item was returned, but its final recovery record could not be verified. Inspect the original and recovery locations; do not repeat the move.") : String(localized: "The move stopped before Trash. Recovery data was retained; inspect it before any new operation."), movedToTrash: false, requiresRecovery: true)
         }

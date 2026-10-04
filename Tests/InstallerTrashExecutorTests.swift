@@ -355,6 +355,25 @@ struct InstallerTrashExecutorTests {
         #expect(try Data(contentsOf: destination) == f.marker)
         #expect(!FileManager.default.fileExists(atPath: f.source.path))
     }
+    @Test("A staging replacement detected before Trash is never rolled into Downloads")
+    func stageReplacementBeforeRollback() async throws {
+        let f = try InstallerFixture(), sink = InstallerFixtureSink(f.trash)
+        let executor = f.executor(sink: sink) { point in
+            if point == .beforeTrash {
+                let names = try FileManager.default.contentsOfDirectory(at: f.recovery, includingPropertiesForKeys: nil)
+                let op = try #require(names.first(where: { UUID(uuidString: $0.lastPathComponent) != nil }))
+                let source = op.appendingPathComponent(f.source.lastPathComponent)
+                try FileManager.default.moveItem(at: source, to: op.appendingPathComponent("displaced-confirmed.dmg"))
+                try Data("different staging occupant".utf8).write(to: source, options: .withoutOverwriting)
+            }
+        }
+        let plan = try await executor.prepare(selection: f.source, scope: f.scope)
+        let result = try await executor.moveToTrash(planID: plan.id, scope: plan.scope)
+        #expect(result.receipt?.state == .uncertain); #expect(sink.callCount == 0)
+        #expect(!FileManager.default.fileExists(atPath: f.source.path))
+        #expect(try Data(contentsOf: plan.recoveryURL.appendingPathComponent("displaced-confirmed.dmg")) == f.marker)
+        #expect(try Data(contentsOf: plan.recoveryURL.appendingPathComponent(f.source.lastPathComponent)) == Data("different staging occupant".utf8))
+    }
     @Test("Actual macOS Trash API and receipt restore only on owned CI fixture",
           .enabled(if: ProcessInfo.processInfo.environment["MOEKIT_INSTALLER_TRASH_FIXTURE"] == "1"))
     func nativeTrashRoundTrip() async throws {
@@ -416,7 +435,8 @@ struct InstallerLiveMoleFlowTests {
         let live = try await analyzer.run(analysisPlan)
         try #require(live.report.coverage == .known)
         let selected = try #require(live.report.entries.first(where: { $0.path == f.source.path && !$0.isDirectory && $0.coverage == .known }))
-        try #require(selected.measuredBytes == f.marker.count)
+        let measuredBytes = try #require(selected.measuredBytes)
+        try #require(measuredBytes == Int64(f.marker.count))
         let scope = InstallerTrashScope(generation: UUID(), liveAnalysisID: UUID(), liveDirectory: live.directory,
             liveEntryPaths: Set(live.report.entries.map(\.path)), protectedPaths: [], catalogIsKnown: true)
         let sink = FixtureOnlyNativeTrashSink(marker: f.marker, allowedParent: f.recovery)

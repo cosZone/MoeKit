@@ -9,6 +9,8 @@ struct ProcessIdentity: Hashable, Sendable {
     let startMicroseconds: UInt64?
     let uid: UInt32?
     let executablePath: String?
+    /// Kernel execution version; nil snapshots remain inspection-only.
+    var executionVersion: UInt32? = nil
 
     var isComplete: Bool {
         pid > 1 && startSeconds.map { $0 > 0 } == true
@@ -191,6 +193,9 @@ enum ProcessClassifier {
             reasons.append(String(localized: "Process start time is inconsistent with this snapshot."))
         }
         let path = record.identity.executablePath?.lowercased() ?? ""
+        if ["/system/", "/usr/libexec/", "/usr/sbin/", "/sbin/"].contains(where: path.hasPrefix) {
+            reasons.append(String(localized: "Operating-system executable path is protected."))
+        }
         let name = record.name.lowercased()
         let binary = (path as NSString).lastPathComponent
         // Deliberately conservative hints, not an exhaustive safety guarantee.
@@ -269,9 +274,9 @@ enum ProcessStopPlanner {
                                   canonicalProjectPath: assessment.canonicalProjectPath,
                                   protectionReasons: protectionReasons, risks: risks)
         }
-        var warnings = [String(localized: "Preview only. Stopping and force stopping are not implemented."),
+        var warnings = [String(localized: "Review is not permission to stop. A fresh identity check and explicit confirmation are required."),
                         String(localized: "Only exact selected identities are listed. Parents, children and process groups are not added automatically."),
-                        String(localized: "A future stop must re-read identities and prefer cooperative shutdown. A submitted signal would not prove exit.")]
+                        String(localized: "Graceful stop sends SIGTERM to exact selected identities. Force stop requires a separate confirmation; signal submission does not prove exit.")]
         if snapshot.isPartial { warnings.append(String(localized: "This is a partial snapshot; unseen processes or dependencies may exist.")) }
         if snapshot.capturedAt > now || now.timeIntervalSince(snapshot.capturedAt) > maximumSnapshotAge {
             warnings.append(String(localized: "This snapshot is stale or has an invalid timestamp. Refresh before reviewing a future action."))

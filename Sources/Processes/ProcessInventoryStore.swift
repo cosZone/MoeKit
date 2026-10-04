@@ -50,7 +50,10 @@ final class ProcessInventoryStore {
     var portFilter: ProcessPortFilter = .all { didSet { constrainSelection(); if portFilter != oldValue { plan = nil } } }
     private(set) var lastScanStatus: TaskStatus?
     private(set) var unavailableProjectCount = 0
-    var plan: StopPlan?
+    let termination = ProcessTerminationStore()
+    var plan: StopPlan? {
+        didSet { if plan?.id != oldValue?.id { termination.cancelReview() } }
+    }
     var errorMessage: String?
     private(set) var projects: [ProcessProjectScope] = []
     @ObservationIgnored var onEvent: ((ProcessInventoryEvent) -> Void)?
@@ -121,7 +124,7 @@ final class ProcessInventoryStore {
     }
 
     func startScan(projects catalog: [ProjectRecord]) {
-        guard !isScanning else { return }
+        guard !isScanning, !termination.isBusy else { return }
         let now = Date.now
         if let lastScanStartedAt, now.timeIntervalSince(lastScanStartedAt) < minimumRefreshInterval {
             errorMessage = String(localized: "Wait a moment before starting another process scan.")
@@ -165,6 +168,7 @@ final class ProcessInventoryStore {
 
     func resetForModeChange() {
         cancel()
+        termination.reset()
         snapshot = nil; projects = []; unavailableProjectCount = 0
         clearFilters()
         errorMessage = nil; lastScanStartedAt = nil; lastScanStatus = nil

@@ -293,7 +293,12 @@ struct WorkspaceOperationPrivacyTests {
             await task.value
             #expect(!store.isScanning && store.pendingDiscovery == nil)
             #expect(store.tasks.first?.status == (cancel ? .cancelled : .failed))
-            #expect(!(store.tasks.first?.summary ?? "").contains(root.path))
+            // Evaluate the optional/coalescing expression before the assertion
+            // macro so Swift Testing does not rewrite it as an optional call.
+            let summary = try #require(store.tasks.first?.summary)
+            #expect(summary.contains(root.path) == false)
+            #expect(summary == (cancel ? String(localized: "Discovery cancelled. No files were changed.")
+                : String(localized: "The selected folders could not be read. Choose accessible folders and try again. No files were changed.")))
             if cancel { #expect(store.errorMessage == nil) }
             else {
                 #expect(store.errorMessage == String(localized: "The selected folders could not be read. Choose accessible folders and try again. No files were changed."))

@@ -1,3 +1,4 @@
+import CryptoKit
 import Darwin
 import Foundation
 import Testing
@@ -290,10 +291,12 @@ struct InstallerUseEvidenceTests {
             let provider = NativeInstallerUseEvidenceProvider()
             let refusal = await provider.evidence(for: try fixture.useTarget())
             try #require(refusal == .unavailable(reason: InstallerUseEvidence.attachedImageLimitation))
+            try await fixture.verifyCrossDeviceMoveRefused()
             try await fixture.detachAndRemove()
             try InstallerNativeFixtureEvidence.record(kind: "mounted-image", detail: [
                 "sourceDevice": String(source.device), "sourceInode": String(source.inode),
-                "result": "verified-attach-and-detach", "observedRefusal": "true"
+                "result": "verified-attach-and-detach", "observedRefusal": "true",
+                "crossDeviceRefusal": "true"
             ])
         } catch {
             // Cleanup still verifies the newly observed source/device/marker.
@@ -486,6 +489,7 @@ private final class InstallerMountFixtureCI {
             stage = "pre-attach full source revalidation"
             try verifyOwnedContent()
             _ = try imageIdentity()
+            let originalDigest = try Self.digestOwnedSource(retained.fd, expected: snapshot)
             stage = "attach owned image read-only"
             let response = try run(["attach", "-readonly", "-nobrowse", "-noautoopen", "-plist", image.path])
             stage = "parse owned attach device"
@@ -495,7 +499,25 @@ private final class InstallerMountFixtureCI {
                 throw InstallerUseReadError.unavailable("The owned fixture attach response was ambiguous; retain it.")
             }
             disk = wholeDisk
-            stage = "post-attach unchanged source snapshot"
+            stage = "verify immutable source bytes and adopt own-attach ctime"
+            // Native hdiutil attach updates source ctime on supported CI hosts.
+            // Only this known fixture-owned step may adopt it, after proving
+            // every other snapshot field and all held-source bytes unchanged.
+            try anchor.validate()
+            let attached = try InstallerFileAccess.snapshot(retained.fd)
+            guard snapshot.matchesCaptured(attached),
+                  attached == (try InstallerFileAccess.snapshotAt(anchor.fd, image.lastPathComponent)) else {
+                throw InstallerUseReadError.unavailable("Own attach changed source fields beyond ctime: \(Self.changedFields(snapshot, attached)).")
+            }
+            guard try Self.digestOwnedSource(retained.fd, expected: attached) == originalDigest else {
+                throw InstallerUseReadError.unavailable("Own attach changed the held source bytes; retain the fixture.")
+            }
+            try anchor.validate()
+            guard attached == (try InstallerFileAccess.snapshotAt(anchor.fd, image.lastPathComponent)) else {
+                throw InstallerUseReadError.unavailable("The owned source path changed during post-attach byte verification.")
+            }
+            sourceSnapshot = attached
+            try verifyOwnedContent()
             _ = try imageIdentity()
         } catch {
             throw InstallerUseReadError.unavailable("Owned mount fixture failed at \(stage): \(error)")
@@ -564,6 +586,64 @@ private final class InstallerMountFixtureCI {
             throw InstallerUseReadError.unavailable("The owned fixture source path/held identity disagrees. Owned-record shape: \(shape)")
         }
         return match
+    }
+
+    /// Exercises the real pre-rename device guard with the already owned,
+    /// read-only mounted marker. No additional mount or mutable image is needed.
+    func verifyCrossDeviceMoveRefused() async throws {
+        try verifyOwnedContent()
+        let data = try await InstallerDiskImageInventory.shared.read(deadline: ProcessInfo.processInfo.systemUptime + 15)
+        let imageRecord = try record(in: data)
+        guard let disk, let destination = sourceAnchor,
+              let entities = imageRecord["system-entities"] as? [[String: Any]],
+              entities.contains(where: { ($0["dev-entry"] as? String) == disk }) else {
+            throw InstallerUseReadError.unavailable("The cross-device fixture's owned source/device could not be verified.")
+        }
+        let mounts = entities.compactMap { $0["mount-point"] as? String }
+        guard mounts.count == 1, let mount = mounts.first,
+              URL(fileURLWithPath: mount).lastPathComponent == volume else {
+            throw InstallerUseReadError.unavailable("The cross-device fixture's unique mounted volume could not be verified.")
+        }
+        let source = try InstallerDirectoryAnchor.open(URL(fileURLWithPath: mount, isDirectory: true))
+        let retainedMarker = try InstallerFileDescriptor(parent: source, name: marker.lastPathComponent)
+        let before = try InstallerFileAccess.snapshot(retainedMarker.fd)
+        var filesystem = statfs()
+        guard before.mode & UInt32(S_IFMT) == UInt32(S_IFREG), before.links == 1,
+              before == (try InstallerFileAccess.snapshotAt(source.fd, marker.lastPathComponent)),
+              fstatfs(source.fd, &filesystem) == 0, filesystem.f_flags & UInt32(MNT_RDONLY) != 0,
+              source.identity.device != destination.identity.device,
+              before.device == source.identity.device else {
+            throw InstallerUseReadError.unavailable("The owned cross-device fixture is not a pinned read-only source on a different device.")
+        }
+        try requireMountedMarkerBytes(retainedMarker.fd)
+        let destinationName = "cross-device-refusal.txt"
+        try InstallerFileAccess.assertAbsent(destination, destinationName)
+        var rejection: InstallerTrashFailure?
+        do {
+            try InstallerFileAccess.exclusiveMove(from: source, name: marker.lastPathComponent,
+                                                 to: destination, destinationName: destinationName)
+        } catch let failure as InstallerTrashFailure { rejection = failure }
+        guard rejection == .unsupportedRename else {
+            throw InstallerUseReadError.unavailable("The actual cross-device move did not reject with unsupportedRename.")
+        }
+        try source.validate()
+        try destination.validate()
+        guard before == (try InstallerFileAccess.snapshot(retainedMarker.fd)),
+              before == (try InstallerFileAccess.snapshotAt(source.fd, marker.lastPathComponent)) else {
+            throw InstallerUseReadError.unavailable("The owned mounted marker changed during cross-device refusal.")
+        }
+        try requireMountedMarkerBytes(retainedMarker.fd)
+        try InstallerFileAccess.assertAbsent(destination, destinationName)
+        try verifyOwnedContent()
+        _ = try imageIdentity()
+    }
+
+    private func requireMountedMarkerBytes(_ fd: Int32) throws {
+        var bytes = [UInt8](repeating: 0, count: markerBytes.count + 1)
+        let count = bytes.withUnsafeMutableBytes { pread(fd, $0.baseAddress, $0.count, 0) }
+        guard count == markerBytes.count, Data(bytes.prefix(markerBytes.count)) == markerBytes else {
+            throw InstallerUseReadError.unavailable("The pinned mounted fixture marker bytes do not match the authored marker.")
+        }
     }
 
     func detachAndRemove() async throws {
@@ -655,6 +735,30 @@ private final class InstallerMountFixtureCI {
         if a.modifiedSeconds != b.modifiedSeconds || a.modifiedNanoseconds != b.modifiedNanoseconds { fields.append("mtime") }
         if a.changedSeconds != b.changedSeconds || a.changedNanoseconds != b.changedNanoseconds { fields.append("ctime") }
         return fields.isEmpty ? "none" : fields.joined(separator: ",")
+    }
+
+    private static func digestOwnedSource(_ fd: Int32, expected: InstallerFileSnapshot) throws -> [UInt8] {
+        guard expected.bytes > 0, expected.bytes <= 64 * 1_024 * 1_024,
+              expected == (try InstallerFileAccess.snapshot(fd)) else {
+            throw InstallerUseReadError.unavailable("The owned image is outside its byte budget or changed before hashing.")
+        }
+        var hash = SHA256(), offset: Int64 = 0
+        var buffer = [UInt8](repeating: 0, count: 64 * 1_024)
+        while offset < expected.bytes {
+            let wanted = Int(min(Int64(buffer.count), expected.bytes - offset))
+            let count = buffer.withUnsafeMutableBytes { pread(fd, $0.baseAddress, wanted, off_t(offset)) }
+            guard count > 0, count <= wanted else {
+                throw InstallerUseReadError.unavailable("The entire owned image could not be hashed.")
+            }
+            hash.update(data: Data(buffer.prefix(count)))
+            offset += Int64(count)
+        }
+        var extra: UInt8 = 0
+        guard pread(fd, &extra, 1, off_t(offset)) == 0,
+              expected == (try InstallerFileAccess.snapshot(fd)) else {
+            throw InstallerUseReadError.unavailable("The owned image changed while hashing.")
+        }
+        return Array(hash.finalize())
     }
 
     private static func isWholeDisk(_ value: String) -> Bool {

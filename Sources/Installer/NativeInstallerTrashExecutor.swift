@@ -300,6 +300,9 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
                     guard try journal.latest(receipt.id) == receipt else { throw InstallerTrashFailure.journal }
                     let intent = receipt.advancing(to: .rollbackIntent, payloadName: "restore.dmg", payloadFile: restoreCapturedSnapshot)
                     try journal.append(intent, operation: operation); receipt = intent
+                    guard restoreCapturedSnapshot == (try InstallerFileAccess.snapshotAt(operation.fd, "restore.dmg")) else {
+                        restoreStageChanged = true; throw InstallerTrashFailure.changed
+                    }
                     try InstallerFileAccess.exclusiveMove(from: operation, name: "restore.dmg", to: plan.sourceParent, destinationName: plan.display.sourceURL.lastPathComponent)
                     restoreRollbackCommitted = true
                     guard restoreCapturedSnapshot.matchesCaptured(try InstallerFileAccess.snapshotAt(plan.sourceParent.fd, plan.display.sourceURL.lastPathComponent)) else { throw InstallerTrashFailure.changed }
@@ -329,6 +332,9 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
             }
             let intent = latest.advancing(to: .rollbackIntent, payloadName: payloadName, payloadFile: capturedSnapshot)
             try journal.append(intent, operation: operation); latest = intent
+            guard capturedSnapshot == (try InstallerFileAccess.snapshotAt(operation.fd, payloadName)) else {
+                stageWasReplaced = true; throw InstallerTrashFailure.changed
+            }
             try InstallerFileAccess.exclusiveMove(from: operation, name: payloadName, to: originalParent, destinationName: receipt.originalURL.lastPathComponent)
             returnedToOriginal = true
             guard capturedSnapshot.matchesCaptured(try InstallerFileAccess.snapshotAt(originalParent.fd, receipt.originalURL.lastPathComponent)) else { throw InstallerTrashFailure.changed }

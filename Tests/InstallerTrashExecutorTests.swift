@@ -444,7 +444,14 @@ struct InstallerLiveMoleFlowTests {
             trash: f.trash, enforceLocalVolume: true)
         let executor = NativeInstallerTrashExecutor(environment: productionVolumeEnvironment,
             evidence: InstallerFixtureEvidence(result: .noUseObserved), sink: sink, nativeExecutionEnabled: true)
-        let plan = try await executor.prepare(selection: URL(fileURLWithPath: selected.path), scope: scope)
+        let plan: InstallerTrashPlan
+        do {
+            plan = try await executor.prepare(selection: URL(fileURLWithPath: selected.path), scope: scope)
+        } catch {
+            let directory = try volumeDescription(f.downloads)
+            let file = try volumeDescription(f.source)
+            throw InstallerUseReadError.unavailable("Production planner refused owned fixture: \(error). Directory volume: \(directory). File volume: \(file)")
+        }
         let moved = try await executor.moveToTrash(planID: plan.id, scope: scope)
         try #require(moved.movedToTrash)
         let context = f.context
@@ -456,6 +463,16 @@ struct InstallerLiveMoleFlowTests {
         try InstallerNativeFixtureEvidence.record(kind: "live-mole", detail: [
             "result": "verified-live-selection-trash-and-restore", "sourceDevice": String(plan.file.device),
             "sourceInode": String(plan.file.inode), "release": live.release.version])
+    }
+    private func volumeDescription(_ url: URL) throws -> String {
+        let values = try url.resourceValues(forKeys: [.volumeIsLocalKey, .volumeIsInternalKey, .volumeIsRemovableKey, .volumeIsEjectableKey, .isUbiquitousItemKey])
+        let fd = open(url.path, O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)
+        try #require(fd >= 0)
+        defer { close(fd) }
+        var fs = statfs()
+        try #require(fstatfs(fd, &fs) == 0)
+        let type = withUnsafeBytes(of: &fs.f_fstypename) { String(decoding: $0.prefix(while: { $0 != 0 }), as: UTF8.self) }
+        return "type=\(type), flags=\(fs.f_flags), local=\(String(describing: values.volumeIsLocal)), internal=\(String(describing: values.volumeIsInternal)), removable=\(String(describing: values.volumeIsRemovable)), ejectable=\(String(describing: values.volumeIsEjectable)), ubiquitous=\(String(describing: values.isUbiquitousItem))"
     }
 }
 private final class InstallerLiveMoleBundle: NSObject {}

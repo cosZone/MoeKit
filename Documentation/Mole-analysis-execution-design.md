@@ -1,6 +1,6 @@
 # Mole analysis: fixed-code execution design
 
-Status: implementation under review; this branch adds an explicit analysis entry point. A released build is not implied. Exact-commit macOS verification and independent review are required before merging or shipping.
+Status: shipped in [0.1.0-preview.6](https://github.com/cosZone/MoeKit/releases/tag/v0.1.0-preview.6) from reviewed source `20504353f96aaa135c1ba1eaa551301e8d3eb008`. The [release run](https://github.com/cosZone/MoeKit/actions/runs/37201568085) passed exact-version synthetic execution, Release tests, universal archive and separate app/helper certificate-signing checks. Full native interaction, accessibility and real-user permission acceptance remain unverified. Future changes still require exact-commit tests and independent review; this design does not grant execution or release permission.
 
 ## Deliberate boundary
 

@@ -6,6 +6,8 @@ struct MoleWorkspaceView: View {
     var body: some View {
         if store.selectedCapability == .space {
             MoleSpaceView()
+        } else if store.selectedCapability == .clean {
+            CleanupWorkspaceView()
         } else {
             VStack(spacing: 0) {
                 HStack {

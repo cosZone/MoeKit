@@ -70,9 +70,8 @@ struct WorkspacePersistenceTests {
         let file = root.appendingPathComponent("projects.json")
         let original = try Data(contentsOf: file)
         var fails = true
-        let persistence = CatalogPersistence(directory: root) { data, url in
+        let persistence = CatalogPersistence(directory: root) {
             if fails { throw NSError(domain: NSCocoaErrorDomain, code: NSFileWriteOutOfSpaceError) }
-            try data.write(to: url, options: .atomic)
         }
         let store = WorkspaceStore(isDemoEnabled: false, persistence: persistence)
         store.togglePin(project.id)

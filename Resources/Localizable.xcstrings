@@ -4230,6 +4230,26 @@
           }
         }
       }
+    },
+    "Another MoeKit window is saving the catalog. Changes are temporary; try saving again.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "另一个 MoeKit 窗口正在保存项目目录。当前更改仅临时保留，请再次保存。"
+          }
+        }
+      }
+    },
+    "The catalog lock is not a private regular file. Changes were not saved.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "项目目录锁不是仅当前用户可访问的普通文件，更改未保存。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

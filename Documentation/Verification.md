@@ -96,3 +96,10 @@
 - XCTest 核对实际 bundle 语言及「项目」「部分结果」模型哨兵；导出的 scope 文件记录 process locale、首选语言、bundle 语言与实际哨兵值，辅助脚本核对 8 / 16 张图的完整性、尺寸和语言，防止静默回退或跳过测试
 - 中文图片保存在 `native-chinese-view-renders-<SHA>`，独立 `.xcresult` 与原英文结果一同留存；是否通过、对应 SHA 与图片人工检查结果以实际 CI / PR 记录为准
 - 仅覆盖所列中文视图布局，不包括其他模块、系统弹窗、工具栏、键盘、VoiceOver 或活动窗口对比度；示例项目名、路径和品牌名称保留原样
+
+## 项目目录并发保存
+
+- Native CI 将同一目录保存源码编译成独立原生 fixture，并由 Python 用管道握手控制两个 exec 后的进程；不在多线程 Swift Testing 进程里 fork，不使用真实项目目录
+- Debug、优化 Release、优化 Release + Address Sanitizer 均执行首次保存/既有目录、`/tmp` 与 `/private/tmp` 别名、锁忙碌、提交冲突、锁持有者失败及重载后重试的 8 种确定性场景，核对原始字节与永久锁 inode
+- `CatalogWriteCoordinatorTests` 覆盖不安全锁、替换锁/目录、短写入与 EINTR、失败 rename 清理、私有新建权限和同进程重入；保留既有损坏、未知字段、16 MiB、读失败及恢复生命周期用例
+- 本地 Linux 的 Python/源码检查不能代替上述 macOS 原生执行；按精确提交查看 Native CI 结果。这些测试不证明任意外部编辑器、网络文件系统或断电下的事务保证

@@ -13,6 +13,8 @@ final class CatalogPersistence {
         case recoveryRequired
         case changedSinceLoad
         case tooLarge
+        case writerBusy
+        case unsafeLock
 
         var errorDescription: String? {
             switch self {
@@ -21,6 +23,8 @@ final class CatalogPersistence {
             case .recoveryRequired: String(localized: "The catalog could not be read. Recover the original file before saving changes.")
             case .changedSinceLoad: String(localized: "The catalog changed outside this window. Changes are temporary; reopen MoeKit to reload the saved catalog.")
             case .tooLarge: String(localized: "The project catalog exceeds the 16 MB limit. Changes were not saved.")
+            case .writerBusy: String(localized: "Another MoeKit window is saving the catalog. Changes are temporary; try saving again.")
+            case .unsafeLock: String(localized: "The catalog lock is not a private regular file. Changes were not saved.")
             }
         }
     }
@@ -32,15 +36,15 @@ final class CatalogPersistence {
     }
 
     private let fileURL: URL
-    private let atomicWrite: (Data, URL) throws -> Void
+    private let beforeAtomicWrite: () throws -> Void
     private var snapshot = Snapshot.notLoaded
 
     init(directory: URL? = nil,
-         atomicWrite: @escaping (Data, URL) throws -> Void = { try $0.write(to: $1, options: .atomic) }) {
+         beforeAtomicWrite: @escaping () throws -> Void = {}) {
         let root = directory ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("MoeKit", isDirectory: true)
         fileURL = root.appendingPathComponent("projects.json")
-        self.atomicWrite = atomicWrite
+        self.beforeAtomicWrite = beforeAtomicWrite
     }
 
     func load() throws -> [ProjectRecord] {
@@ -62,13 +66,15 @@ final class CatalogPersistence {
         try Self.validate(projects)
         let data = try JSONEncoder().encode(projects)
         guard data.count <= Self.maximumBytes else { throw CatalogError.tooLarge }
-        // Also protect changes made after launch (including another app instance,
-        // truncation, replacement by a future schema, or a now-unreadable file).
-        // This is a best-effort conflict check, not a filesystem compare-and-swap.
-        guard try readExistingData() == previous else { throw CatalogError.changedSinceLoad }
-        try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try atomicWrite(data, fileURL)
-        snapshot = .loaded(data)
+        // Cooperating writers use the same permanent sidecar inode. The bounded
+        // reread, comparison, replacement and snapshot update are one critical
+        // section, including the initially missing-file case.
+        try CatalogWriteCoordinator.withExclusiveAccess(at: fileURL.deletingLastPathComponent()) { writer in
+            guard try writer.readExistingData() == previous else { throw CatalogError.changedSinceLoad }
+            try beforeAtomicWrite()
+            try writer.replace(with: data)
+            snapshot = .loaded(data)
+        }
     }
 
     private func readExistingData() throws -> Data? {

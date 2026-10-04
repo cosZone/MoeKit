@@ -40,6 +40,10 @@ jobs:
           grep -F -- '-testRegion' XcodeHelp.txt
           swift --version
           test "$(tuist version)" = '4.148.3'
+      - name: Verify native catalog writer concurrency
+        run: |
+          set -euo pipefail
+          python3 Scripts/test-catalog-concurrency.py --configuration debug | tee CatalogConcurrencyResults.txt
       - name: Generate Xcode workspace
         run: tuist generate --no-open
       - name: Build app and tests, then run the built tests
@@ -135,6 +139,7 @@ jobs:
           name: native-test-results-${{ env.SOURCE_SHA }}
           path: |
             TestResults.xcresult
+            CatalogConcurrencyResults.txt
             ChineseRenderResults.xcresult
           if-no-files-found: ignore
           retention-days: 14
@@ -178,7 +183,8 @@ jobs:
             args+=(-enableAddressSanitizer YES)
             test_args+=(-only-testing:MoeKitTests/CatalogPersistenceTests
                         -only-testing:MoeKitTests/WorkspacePersistenceTests
-                        -only-testing:MoeKitTests/CatalogRecoveryLifetimeTests)
+                        -only-testing:MoeKitTests/CatalogRecoveryLifetimeTests
+                        -only-testing:MoeKitTests/CatalogWriteCoordinatorTests)
           fi
           xcodebuild -project MoeKit.xcodeproj -alltargets -configuration Release \
             ENABLE_TESTABILITY=YES CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= \
@@ -203,13 +209,19 @@ jobs:
           summary = json.loads(Path("ReleaseTestSummary.json").read_text())
           inventory = Path("ReleaseTestInventory.json").read_text()
           json.loads(inventory)
-          required = ("CatalogPersistenceTests", "WorkspacePersistenceTests", "CatalogRecoveryLifetimeTests")
-          if summary.get("passedTests", 0) < 17 or summary.get("failedTests") != 0 or summary.get("skippedTests") != 0:
+          required = ("CatalogPersistenceTests", "WorkspacePersistenceTests", "CatalogRecoveryLifetimeTests", "CatalogWriteCoordinatorTests")
+          if summary.get("passedTests", 0) < 27 or summary.get("failedTests") != 0 or summary.get("skippedTests") != 0:
               raise SystemExit(f"Optimized catalog tests must execute and pass without skips: {summary}")
           if any(suite not in inventory for suite in required):
               raise SystemExit("An expected catalog suite is absent from the executed test inventory")
           print(f"Verified executed optimized suites: {required}; passed: {summary['passedTests']}")
           PYTHON
+      - name: Verify optimized native catalog writer concurrency
+        run: |
+          set -euo pipefail
+          configuration=release
+          if [ "$INSTRUMENTATION" = address-sanitizer ]; then configuration=asan; fi
+          python3 Scripts/test-catalog-concurrency.py --configuration "$configuration" | tee CatalogConcurrencyResults.txt
       - name: Preserve optimized test results and build settings
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -220,5 +232,6 @@ jobs:
             ReleaseBuildSettings.json
             ReleaseTestSummary.json
             ReleaseTestInventory.json
+            CatalogConcurrencyResults.txt
           if-no-files-found: ignore
           retention-days: 14

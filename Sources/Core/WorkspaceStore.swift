@@ -68,14 +68,17 @@ final class WorkspaceStore {
          gettingStarted: GettingStartedState = .init(),
          scanner: any WorkspaceRepositoryScanning = RepositoryScanner(),
          reportImporter: any WorkspaceReportImporting = MoleReportImporter(),
-         toolPreparation: ToolPreparationStore = .init()) {
+         toolPreparation: ToolPreparationStore? = nil) {
         self.isDemoEnabled = isDemoEnabled
         self.persistence = persistence
         self.gettingStarted = gettingStarted
         self.scanner = scanner
         self.reportImporter = reportImporter
-        self.toolPreparation = toolPreparation
-        toolPreparation.setDemoEnabled(isDemoEnabled)
+        // Construct the MainActor model in this initializer, not in a nested
+        // actor-isolated default argument inside SwiftUI State initialization.
+        let preparation = toolPreparation ?? ToolPreparationStore()
+        self.toolPreparation = preparation
+        preparation.setDemoEnabled(isDemoEnabled)
         processes.onEvent = { [weak self] event in self?.recordProcessEvent(event) }
         do { projects = try persistence.load() }
         catch {

@@ -201,9 +201,9 @@ final class InstallerRecoveryJournal {
 }
 
 extension InstallerTrashReceipt {
-    func advancing(to state: InstallerReceiptState, payloadName: String? = nil, trashURL: URL? = nil, trashFile: InstallerFileSnapshot? = nil) -> InstallerTrashReceipt {
+    func advancing(to state: InstallerReceiptState, payloadName: String? = nil, trashURL: URL? = nil, trashFile: InstallerFileSnapshot? = nil, payloadFile: InstallerFileSnapshot? = nil) -> InstallerTrashReceipt {
         .init(policy: policy, id: id, sequence: sequence + 1, originalURL: originalURL, originalParent: originalParent,
               originalFile: originalFile, operationURL: operationURL, operationDirectory: operationDirectory, state: state,
-              recordedAt: Date(), payloadName: payloadName, trashURL: trashURL ?? self.trashURL, trashFile: trashFile ?? self.trashFile)
+              recordedAt: Date(), payloadName: payloadName, trashURL: trashURL ?? self.trashURL, trashFile: trashFile ?? self.trashFile, payloadFile: payloadFile ?? self.payloadFile)
     }
 }

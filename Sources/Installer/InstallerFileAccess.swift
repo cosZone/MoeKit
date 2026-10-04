@@ -104,11 +104,11 @@ enum InstallerFileAccess {
         guard s.uid == geteuid(), s.mode & 0o777 == (directory ? 0o700 : 0o600), s.flags == 0,
               s.mode & UInt32(S_IFMT) == UInt32(directory ? S_IFDIR : S_IFREG), directory || s.links == 1 else { throw InstallerTrashFailure.unsafeRecovery }
         guard let acl = acl_get_fd_np(fd, ACL_TYPE_EXTENDED) else { throw InstallerTrashFailure.unsafeRecovery }
-        defer { acl_free(acl) }
+        defer { acl_free(UnsafeMutableRawPointer(acl)) }
         guard acl_valid(acl) == 0 else { throw InstallerTrashFailure.unsafeRecovery }
         var entry: acl_entry_t?
         errno = 0
-        let result = acl_get_entry(acl, ACL_FIRST_ENTRY, &entry)
+        let result = acl_get_entry(acl, Int32(ACL_FIRST_ENTRY.rawValue), &entry)
         // Darwin returns 0 for an existing entry, and -1/EINVAL at the end
         // of a valid ACL (including empty). This differs from Linux POSIX ACL.
         guard result == -1, errno == EINVAL else { throw InstallerTrashFailure.unsafeRecovery }

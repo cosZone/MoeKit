@@ -115,11 +115,11 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
             // lstat before opening prevents unexpected directories/FIFOs/devices
             // from ever being read. A wrong capture can only roll back or remain.
             let capturedIdentity = try InstallerFileAccess.snapshotAt(operation.fd, plan.display.originalURL.lastPathComponent)
+            receipt = receipt.advancing(to: .captured, payloadName: plan.display.originalURL.lastPathComponent, payloadFile: capturedIdentity)
+            try journal.append(receipt, operation: operation)
             guard plan.display.file.matchesCaptured(capturedIdentity), plan.display.file.matchesCaptured(try InstallerFileAccess.snapshot(plan.file.fd)) else { throw InstallerTrashFailure.changed }
             let staged = try InstallerFileDescriptor(parent: operation, name: plan.display.originalURL.lastPathComponent)
             guard capturedIdentity == (try InstallerFileAccess.snapshot(staged.fd)) else { throw InstallerTrashFailure.changed }
-            receipt = receipt.advancing(to: .captured, payloadName: plan.display.originalURL.lastPathComponent)
-            try journal.append(receipt, operation: operation)
             try await requireNoObservedUse(capturedIdentity, path: operation.url.appendingPathComponent(plan.display.originalURL.lastPathComponent).path,
                                           excluding: [plan.file.fd, staged.fd])
             try Task.checkCancellation()
@@ -163,7 +163,7 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
         let journal = try InstallerRecoveryJournal(rootURL: environment.recoveryRoot, create: false, exclusive: false)
         let operation = try journal.operation(receiptID)
         guard let receipt = try? journal.latest(receiptID) else { return operation.url }
-        if receipt.state == .trashed, let url = receipt.trashURL { _ = try verifiedTrashFile(url, expected: receipt.originalFile); return url }
+        if receipt.state == .trashed, let url = receipt.trashURL { _ = try verifiedTrashFile(url, expected: receipt.originalFile, exact: receipt.trashFile); return url }
         // Unknown/unexpected payloads are revealed as the validated owned
         // operation folder, not followed or converted to restore authority.
         return try journal.operation(receiptID).url
@@ -181,7 +181,7 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
         let sourceURL: URL
         if receipt.state == .trashed {
             guard let trash = receipt.trashURL else { throw InstallerTrashFailure.journal }
-            _ = try verifiedTrashFile(trash, expected: receipt.originalFile); sourceURL = trash
+            _ = try verifiedTrashFile(trash, expected: receipt.originalFile, exact: receipt.trashFile); sourceURL = trash
         } else {
             guard let name = receipt.payloadName else { throw InstallerTrashFailure.journal }
             try InstallerFileAccess.basename(name)
@@ -191,7 +191,8 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
         let sourceParent = try InstallerDirectoryAnchor.open(sourceURL.deletingLastPathComponent())
         let source = try InstallerFileDescriptor(parent: sourceParent, name: sourceURL.lastPathComponent)
         let identity = try InstallerFileAccess.snapshot(source.fd)
-        guard receipt.originalFile.matchesCaptured(identity), identity == (try InstallerFileAccess.snapshotAt(sourceParent.fd, sourceURL.lastPathComponent)) else { throw InstallerTrashFailure.changed }
+        let expectedSource = receipt.state == .trashed ? receipt.trashFile : receipt.payloadFile
+        guard let expectedSource, identity == expectedSource, receipt.originalFile.matchesCaptured(identity), identity == (try InstallerFileAccess.snapshotAt(sourceParent.fd, sourceURL.lastPathComponent)) else { throw InstallerTrashFailure.changed }
         try await requireNoObservedUse(identity, path: sourceURL.path, excluding: [source.fd])
         try Task.checkCancellation()
         let now = Date()
@@ -217,6 +218,7 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
         try Task.checkCancellation()
         var receipt = plan.display.receipt
         var captured = false
+        var capturedVerified = false
         var originalMoveStarted = false
         // A retained source already in this exact restore slot needs no second
         // capture; all other sources get a verified exclusive stage first.
@@ -233,7 +235,8 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
             try checkpoint(.afterRestoreCapture)
             let stagedIdentity = try InstallerFileAccess.snapshotAt(operation.fd, "restore.dmg")
             guard plan.sourceIdentity.matchesCaptured(stagedIdentity), plan.sourceIdentity.matchesCaptured(try InstallerFileAccess.snapshot(plan.source.fd)) else { throw InstallerTrashFailure.changed }
-            receipt = receipt.advancing(to: .restoreCaptured, payloadName: "restore.dmg")
+            capturedVerified = true
+            receipt = receipt.advancing(to: .restoreCaptured, payloadName: "restore.dmg", payloadFile: stagedIdentity)
             try journal.append(receipt, operation: operation)
             try Task.checkCancellation(); try validateParent(plan.parent)
             try InstallerFileAccess.assertAbsent(plan.parent, receipt.originalURL.lastPathComponent)
@@ -241,15 +244,15 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
             try journal.append(receipt, operation: operation)
             try checkpoint(.beforeRestore); try Task.checkCancellation()
             guard stagedIdentity == (try InstallerFileAccess.snapshotAt(operation.fd, "restore.dmg")) else { throw InstallerTrashFailure.changed }
-            originalMoveStarted = true
             try InstallerFileAccess.exclusiveMove(from: operation, name: "restore.dmg", to: plan.parent, destinationName: receipt.originalURL.lastPathComponent)
+            originalMoveStarted = true
             guard receipt.originalFile.matchesCaptured(try InstallerFileAccess.snapshotAt(plan.parent.fd, receipt.originalURL.lastPathComponent)) else { throw InstallerTrashFailure.changed }
             guard fsync(plan.parent.fd) == 0, fsync(operation.fd) == 0 else { throw InstallerTrashFailure.journal }
             receipt = receipt.advancing(to: .restored)
             try journal.append(receipt, operation: operation)
             return .init(receipt: receipt, message: String(localized: "File restored to its original Downloads path. No existing file was replaced."), movedToTrash: false, requiresRecovery: false)
         } catch {
-            if captured, !originalMoveStarted, !alreadyStaged, journal.mutationJournalIsHealthy {
+            if captured, !capturedVerified, !originalMoveStarted, !alreadyStaged, journal.mutationJournalIsHealthy {
                 // Capture races must not return an unexpected object to Downloads.
                 // Return it only to its original anchored recovery/Trash name.
                 do {
@@ -272,19 +275,21 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
     private func rollback(_ receipt: InstallerTrashReceipt, journal: InstallerRecoveryJournal, operation: InstallerDirectoryAnchor,
                           originalParent: InstallerDirectoryAnchor, payloadName: String) -> InstallerTrashOutcome {
         var latest = receipt
+        var returnedToOriginal = false
         do {
             guard journal.mutationJournalIsHealthy, try journal.latest(receipt.id) == receipt else { throw InstallerTrashFailure.journal }
             let intent = latest.advancing(to: .rollbackIntent, payloadName: payloadName)
             try journal.append(intent, operation: operation); latest = intent
             try InstallerFileAccess.exclusiveMove(from: operation, name: payloadName, to: originalParent, destinationName: receipt.originalURL.lastPathComponent)
+            returnedToOriginal = true
             guard fsync(originalParent.fd) == 0, fsync(operation.fd) == 0 else { throw InstallerTrashFailure.journal }
             let rolledBack = latest.advancing(to: .rolledBack)
             try journal.append(rolledBack, operation: operation)
             return .init(receipt: rolledBack, message: String(localized: "The move stopped before Trash. The captured item was returned without replacing anything."), movedToTrash: false, requiresRecovery: false)
         } catch {
-            let retained = latest.advancing(to: .retained, payloadName: payloadName)
+            let retained = latest.advancing(to: returnedToOriginal ? .uncertain : .retained, payloadName: returnedToOriginal ? nil : payloadName)
             try? journal.append(retained, operation: operation)
-            return .init(receipt: retained, message: String(localized: "The move stopped before Trash. Recovery data was retained; inspect it before any new operation."), movedToTrash: false, requiresRecovery: true)
+            return .init(receipt: retained, message: returnedToOriginal ? String(localized: "The captured item was returned, but its final recovery record could not be verified. Inspect the original and recovery locations; do not repeat the move.") : String(localized: "The move stopped before Trash. Recovery data was retained; inspect it before any new operation."), movedToTrash: false, requiresRecovery: true)
         }
     }
     private func validateScope(_ selection: URL, _ scope: InstallerTrashScope) throws {
@@ -328,14 +333,14 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
         case .observedUse(let reason), .unavailable(let reason): throw InstallerTrashFailure.unavailable(reason)
         }
     }
-    private func verifiedTrashFile(_ url: URL, expected: InstallerFileSnapshot) throws -> InstallerFileSnapshot {
+    private func verifiedTrashFile(_ url: URL, expected: InstallerFileSnapshot, exact: InstallerFileSnapshot? = nil) throws -> InstallerFileSnapshot {
         _ = try InstallerFileAccess.components(url)
         guard url.deletingLastPathComponent() == environment.trash else { throw InstallerTrashFailure.changed }
         let parent = try InstallerDirectoryAnchor.open(environment.trash)
         guard parent.identity.uid == geteuid(), parent.identity.device == expected.device else { throw InstallerTrashFailure.changed }
         let file = try InstallerFileDescriptor(parent: parent, name: url.lastPathComponent)
         let actual = try InstallerFileAccess.snapshot(file.fd)
-        guard expected.matchesCaptured(actual), actual == (try InstallerFileAccess.snapshotAt(parent.fd, url.lastPathComponent)) else { throw InstallerTrashFailure.changed }
+        guard expected.matchesCaptured(actual), exact == nil || exact == actual, actual == (try InstallerFileAccess.snapshotAt(parent.fd, url.lastPathComponent)) else { throw InstallerTrashFailure.changed }
         return actual
     }
 }

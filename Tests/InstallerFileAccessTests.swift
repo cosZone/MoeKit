@@ -32,15 +32,15 @@ struct InstallerFileAccessTests {
         try InstallerFileAccess.validatePrivate(directory.fd, directory: true)
         // An empty ACL is valid and Darwin acl_get_entry returns -1/EINVAL.
         let acl = try #require(acl_get_fd_np(directory.fd, ACL_TYPE_EXTENDED))
-        defer { acl_free(acl) }
+        defer { acl_free(UnsafeMutableRawPointer(acl)) }
         #expect(acl_valid(acl) == 0)
         var entry: acl_entry_t?
         errno = 0
-        #expect(acl_get_entry(acl, ACL_FIRST_ENTRY, &entry) == -1)
+        #expect(acl_get_entry(acl, Int32(ACL_FIRST_ENTRY.rawValue), &entry) == -1)
         #expect(errno == EINVAL)
         // Use the public text parser for a fixture-only harmless deny ACL.
         let nonempty = try #require(acl_from_text("!#acl 1\nuser:FFFFEEEE-DDDD-CCCC-BBBB-AAAA00000000:0:deny:delete\n"))
-        defer { acl_free(nonempty) }
+        defer { acl_free(UnsafeMutableRawPointer(nonempty)) }
         try #require(acl_set_fd_np(directory.fd, nonempty, ACL_TYPE_EXTENDED) == 0)
         #expect(throws: InstallerTrashFailure.unsafeRecovery) { try InstallerFileAccess.validatePrivate(directory.fd, directory: true) }
     }

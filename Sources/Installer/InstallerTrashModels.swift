@@ -68,8 +68,17 @@ struct InstallerTrashReceipt: Identifiable, Codable, Equatable, Sendable {
     let payloadName: String?
     let trashURL: URL?
     let trashFile: InstallerFileSnapshot?
+    /// Exact post-mutation snapshot, distinct from the immutable approved file.
+    /// Kept as a value field with a default for old/incomplete records; absence
+    /// is never authority to restore.
+    var payloadFile: InstallerFileSnapshot? = nil
 
-    var canOfferRestore: Bool { state == .trashed || state == .captured || state == .retained || state == .restoreCaptured }
+    var canOfferRestore: Bool {
+        if state == .trashed { return trashFile != nil }
+        guard state == .captured || state == .retained || state == .restoreCaptured,
+              let payloadFile else { return false }
+        return originalFile.matchesCaptured(payloadFile)
+    }
 }
 
 struct InstallerRecoveryItem: Identifiable, Sendable {

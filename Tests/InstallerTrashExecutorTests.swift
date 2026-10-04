@@ -251,10 +251,37 @@ struct InstallerTrashExecutorTests {
         let context = f.context
         let restore = try await executor.prepareRestore(receiptID: plan.id, context: context)
         let result = try await executor.restore(planID: restore.id, context: context)
-        #expect(result.requiresRecovery)
+        #expect(result.requiresRecovery); #expect(result.receipt?.state == .retained)
         #expect(try Data(contentsOf: f.source) == Data("new original-path content".utf8))
         #expect(try Data(contentsOf: plan.recoveryURL.appendingPathComponent("restore.dmg")) == f.marker)
         try f.checkSentinel()
+    }
+    @Test("Same-size Trash rewrite with restored mtime is rejected by exact receipt ctime")
+    func changedTrashBytesPreservedMtime() async throws {
+        let f = try InstallerFixture(), executor = f.executor()
+        let plan = try await executor.prepare(selection: f.source, scope: f.scope)
+        let result = try await executor.moveToTrash(planID: plan.id, scope: plan.scope)
+        let receipt = try #require(result.receipt), target = try #require(receipt.trashURL)
+        let expected = try #require(receipt.trashFile)
+        let fd = open(target.path, O_RDWR | O_NOFOLLOW | O_CLOEXEC)
+        try #require(fd >= 0)
+        defer { close(fd) }
+        try #require(try InstallerFileAccess.snapshot(fd) == expected)
+        try #require(try Data(contentsOf: target) == f.marker)
+        usleep(20_000)
+        var changed = f.marker; changed[0] ^= 1
+        let written = changed.withUnsafeBytes { pwrite(fd, $0.baseAddress, $0.count, 0) }
+        try #require(written == changed.count)
+        var times = [timespec(tv_sec: 0, tv_nsec: Int(UTIME_OMIT)),
+                     timespec(tv_sec: Int(expected.modifiedSeconds), tv_nsec: Int(expected.modifiedNanoseconds))]
+        try #require(futimens(fd, &times) == 0)
+        let actual = try InstallerFileAccess.snapshot(fd)
+        #expect(actual.modifiedSeconds == expected.modifiedSeconds)
+        #expect(actual.modifiedNanoseconds == expected.modifiedNanoseconds)
+        #expect(actual != expected)
+        await #expect(throws: InstallerTrashFailure.changed) { try await executor.prepareRestore(receiptID: receipt.id, context: f.context) }
+        #expect(try Data(contentsOf: target) == changed)
+        #expect(!FileManager.default.fileExists(atPath: f.source.path))
     }
     @Test("Actual macOS Trash API and receipt restore only on owned CI fixture")
     func nativeTrashRoundTrip() async throws {

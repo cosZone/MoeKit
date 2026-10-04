@@ -178,7 +178,10 @@ jobs:
             args+=(-enableAddressSanitizer YES)
             test_args+=(-only-testing:MoeKitTests/CatalogPersistenceTests
                         -only-testing:MoeKitTests/WorkspacePersistenceTests
-                        -only-testing:MoeKitTests/CatalogRecoveryLifetimeTests)
+                        -only-testing:MoeKitTests/CatalogRecoveryLifetimeTests
+                        -only-testing:MoeKitTests/AnchoredDirectoryTests
+                        -only-testing:MoeKitTests/RepositoryScannerTests
+                        -only-testing:MoeKitTests/BoundedRegularFileReaderTests)
           fi
           xcodebuild -project MoeKit.xcodeproj -alltargets -configuration Release \
             ENABLE_TESTABILITY=YES CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= \
@@ -203,7 +206,8 @@ jobs:
           summary = json.loads(Path("ReleaseTestSummary.json").read_text())
           inventory = Path("ReleaseTestInventory.json").read_text()
           json.loads(inventory)
-          required = ("CatalogPersistenceTests", "WorkspacePersistenceTests", "CatalogRecoveryLifetimeTests")
+          required = ("CatalogPersistenceTests", "WorkspacePersistenceTests", "CatalogRecoveryLifetimeTests",
+                      "AnchoredDirectoryTests", "RepositoryScannerTests", "BoundedRegularFileReaderTests")
           if summary.get("passedTests", 0) < 17 or summary.get("failedTests") != 0 or summary.get("skippedTests") != 0:
               raise SystemExit(f"Optimized catalog tests must execute and pass without skips: {summary}")
           if any(suite not in inventory for suite in required):

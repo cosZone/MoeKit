@@ -54,6 +54,7 @@ public struct ScanIssue: Identifiable, Sendable, Hashable {
         case depthLimit
         case directoryLimit
         case entryLimit
+        case resourceLimit
     }
 
     public let url: URL
@@ -109,8 +110,9 @@ public enum RepositoryScannerError: Error, Sendable, LocalizedError {
 ///
 /// Discovery is based on `.git` markers, not a claim that a repository is valid or clean.
 /// Metadata paths are checked component-by-component and symbolic links are refused.
-/// These Foundation checks are best-effort in a concurrently changing filesystem; the
-/// caller must retain the selected folder's security scope for the entire operation.
+/// Enumeration and metadata reads use pinned directory descriptors, never repeated
+/// absolute-path opens. Identity checks detect observable replacement, not an atomic
+/// filesystem snapshot. The caller retains security scope for the whole operation.
 public actor RepositoryScanner {
     public static let maximumMetadataBytes = 16 * 1_024
     /// Also bounds a directory containing a very large number of ordinary files.
@@ -119,9 +121,14 @@ public actor RepositoryScanner {
     private static let skippedDirectoryNames: Set<String> = [
         "node_modules", ".build", ".git", "DerivedData", "build", "target", "dist", ".venv", "vendor"
     ]
-    private let fileManager = FileManager()
+    private let beforeMetadataOpen: (@Sendable (URL) throws -> Void)?
 
-    public init() {}
+    public init() { beforeMetadataOpen = nil }
+
+    /// Deterministic synthetic race injection; never used by the application.
+    init(beforeMetadataOpen: @escaping @Sendable (URL) throws -> Void) {
+        self.beforeMetadataOpen = beforeMetadataOpen
+    }
 
     /// A scan shares one budget across all roots. Repeated physical roots are ignored;
     /// overlapping roots may discover the same repository, but it is returned once.
@@ -132,23 +139,27 @@ public actor RepositoryScanner {
               options.maxDirectories > 0, options.maxEntries > 0 else {
             throw RepositoryScannerError.invalidOptions
         }
+        let descriptorBudget = AnchoredDirectory.Budget()
         var scopes: [Scope] = []
         var issues: [ScanIssue] = []
         for root in roots {
             try Task.checkCancellation()
             do {
-                let scope = try makeScope(root)
+                let scope = try makeScope(root, budget: descriptorBudget)
                 if !scopes.contains(where: { $0.root.path == scope.root.path }) { scopes.append(scope) }
+            } catch let error as AnchoredDirectory.AccessError where error == .descriptorLimit {
+                issues.append(ScanIssue(url: root, kind: .resourceLimit,
+                    message: "The shared directory-handle limit was reached. This selected root was not searched."))
             } catch {
                 issues.append(ScanIssue(url: root, kind: .directoryUnreadable, message: error.localizedDescription))
             }
         }
-        let authorizedRoots = scopes.map(\.root)
+        let authorizedRoots = scopes.map(\.anchor)
         let totalRoots = scopes.count
         var items: [String: DiscoveredRepository] = [:]
         var visited = 0
         var entries = 0
-        var limited = false
+        var limited = issues.contains { $0.kind == .resourceLimit }
         for (index, original) in scopes.enumerated() {
             try Task.checkCancellation()
             guard visited < options.maxDirectories, entries < options.maxEntries else {
@@ -157,7 +168,7 @@ public actor RepositoryScanner {
                                        message: "The shared scan budget was reached. This selected root was not searched."))
                 continue
             }
-            let scope = Scope(root: original.root, components: original.components, authorizedRoots: authorizedRoots)
+            let scope = Scope(anchor: original.anchor, authorizedRoots: authorizedRoots)
             let beforeDirectories = visited
             let beforeEntries = entries
             let beforeItems = items.count
@@ -203,50 +214,44 @@ public actor RepositoryScanner {
         if let repository = try discover(in: scope.root, scope: scope, issues: &issues) {
             try Task.checkCancellation()
             return RepositoryScanResult(
-                items: [repository], issues: issues, visitedDirectories: 1, wasLimited: false
+                items: [repository], issues: issues, visitedDirectories: 1,
+                wasLimited: issues.contains { $0.kind == .resourceLimit }
             )
         }
 
-        // The enumerator streams entries; contentsOfDirectory would first allocate every
-        // entry in a potentially huge directory. Every yielded directory is checked
-        // before the enumerator is allowed to descend into it.
-        var enumerationIssues: [ScanIssue] = []
-        let enumerationOptions: FileManager.DirectoryEnumerationOptions =
-            options.includeHidden ? [] : [.skipsHiddenFiles]
-        guard let enumerator = fileManager.enumerator(
-            at: scope.root,
-            includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey, .isHiddenKey],
-            options: enumerationOptions,
-            errorHandler: { url, error in
-                enumerationIssues.append(ScanIssue(
-                    url: url,
-                    kind: .directoryUnreadable,
-                    message: "Could not enumerate this directory: \(error.localizedDescription)"
-                ))
-                return true
-            }
-        ) else {
-            try Task.checkCancellation()
-            issues.append(contentsOf: enumerationIssues)
-            issues.append(ScanIssue(
-                url: scope.root, kind: .directoryUnreadable,
-                message: "Could not start enumerating the selected directory."
-            ))
-            return RepositoryScanResult(
-                items: [], issues: issues, visitedDirectories: 1, wasLimited: false
-            )
+        // A depth-first stack streams entries and holds only the active path.
+        // All roots, chains and streams share an explicit descriptor cap.
+        var stack: [(directory: AnchoredDirectory, entries: AnchoredDirectory.Entries, depth: Int)] = []
+        do {
+            stack.append((scope.anchor, try scope.anchor.entries(), 0))
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            let resourceLimit = (error as? AnchoredDirectory.AccessError) == .descriptorLimit
+            wasLimited = wasLimited || resourceLimit
+            issues.append(ScanIssue(url: scope.root, kind: resourceLimit ? .resourceLimit : .directoryUnreadable,
+                message: "Could not enumerate the selected directory: \(error.localizedDescription)"))
         }
-
         var enumeratedEntries = 0
         var reportedDepthLimit = false
-        while let candidate = enumerator.nextObject() as? URL {
+        while let frame = stack.last {
             try Task.checkCancellation()
+            let name: String
+            do {
+                guard let next = try frame.entries.next() else { stack.removeLast(); continue }
+                name = next
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                stack.removeLast()
+                issues.append(ScanIssue(url: frame.directory.url, kind: .directoryUnreadable,
+                    message: "Could not continue enumerating this directory: \(error.localizedDescription)"))
+                continue
+            }
             guard enumeratedEntries < options.maxEntries else {
                 wasLimited = true
-                issues.append(ScanIssue(
-                    url: scope.root, kind: .entryLimit,
-                    message: "Stopped after examining \(options.maxEntries) directory entries. Results are partial."
-                ))
+                issues.append(ScanIssue(url: scope.root, kind: .entryLimit,
+                    message: "Stopped after examining \(options.maxEntries) directory entries. Results are partial."))
                 break
             }
             enumeratedEntries += 1
@@ -255,84 +260,54 @@ public actor RepositoryScanner {
                     visitedDirectories: visitedDirectories, enumeratedEntries: enumeratedEntries,
                     discoveredRepositories: items.count))
             }
-
-            // Enumerator URLs already have explicit path components. Foundation's
-            // standardization may resolve symlinks while simplifying `..`; do not
-            // invoke it on any discovered or metadata-controlled path.
-            let directory = candidate
-            guard scope.contains(directory) else {
-                enumerator.skipDescendants()
-                issues.append(ScanIssue(
-                    url: directory, kind: .outsideScope,
-                    message: "Skipped a path outside the selected folder."
-                ))
-                continue
-            }
-
+            let directory = frame.directory.url.appendingPathComponent(name)
             do {
-                // Read fresh attributes rather than trusting the enumerator's cache.
-                let attributes = try fileManager.attributesOfItem(atPath: directory.path)
-                let type = attributes[.type] as? FileAttributeType
-                if type == .typeSymbolicLink {
-                    enumerator.skipDescendants()
-                    // A skipped symbolic link is intentional, not an incomplete scan.
+                let status = try frame.directory.status(name)
+                guard status.st_mode & mode_t(S_IFMT) == mode_t(S_IFDIR) else { continue }
+                if Self.skippedDirectoryNames.contains(name)
+                    || (!options.includeHidden && (name.hasPrefix(".") || status.st_flags & UInt32(UF_HIDDEN) != 0)) {
                     continue
                 }
-                guard type == .typeDirectory else { continue }
-                if Self.skippedDirectoryNames.contains(directory.lastPathComponent)
-                    || (!options.includeHidden && directory.lastPathComponent.hasPrefix(".")) {
-                    enumerator.skipDescendants()
-                    continue
-                }
-
-                let depth = directory.pathComponents.count - scope.components.count
+                let depth = frame.depth + 1
                 if depth > options.maxDepth {
-                    enumerator.skipDescendants()
                     wasLimited = true
                     if !reportedDepthLimit {
-                        issues.append(ScanIssue(
-                            url: scope.root, kind: .depthLimit,
-                            message: "Subfolders deeper than \(options.maxDepth) levels were not searched. Results are partial."
-                        ))
+                        issues.append(ScanIssue(url: scope.root, kind: .depthLimit,
+                            message: "Subfolders deeper than \(options.maxDepth) levels were not searched. Results are partial."))
                         reportedDepthLimit = true
                     }
                     continue
                 }
                 guard visitedDirectories < options.maxDirectories else {
                     wasLimited = true
-                    issues.append(ScanIssue(
-                        url: scope.root, kind: .directoryLimit,
-                        message: "Stopped after visiting \(options.maxDirectories) directories. Results are partial."
-                    ))
+                    issues.append(ScanIssue(url: scope.root, kind: .directoryLimit,
+                        message: "Stopped after visiting \(options.maxDirectories) directories. Results are partial."))
                     break
                 }
-
-                try requireSafePath(directory, scope: scope)
+                let child = try frame.directory.openDirectory(name)
                 visitedDirectories += 1
                 if let repository = try discover(in: directory, scope: scope, issues: &issues) {
                     items.append(repository)
-                    // Nested repositories are intentionally left to an explicit scan.
-                    enumerator.skipDescendants()
+                } else {
+                    stack.append((child, try child.entries(), depth))
                 }
             } catch let failure as MetadataFailure {
-                enumerator.skipDescendants()
                 issues.append(failure.issue)
             } catch is CancellationError {
                 throw CancellationError()
             } catch {
-                enumerator.skipDescendants()
-                issues.append(ScanIssue(
-                    url: directory, kind: .directoryUnreadable,
-                    message: "Could not inspect this directory: \(error.localizedDescription)"
-                ))
+                let resourceLimit = (error as? AnchoredDirectory.AccessError) == .descriptorLimit
+                wasLimited = wasLimited || resourceLimit
+                issues.append(ScanIssue(url: directory, kind: resourceLimit ? .resourceLimit : .directoryUnreadable,
+                    message: "Could not inspect this directory: \(error.localizedDescription)"))
             }
         }
         try Task.checkCancellation()
-        issues.append(contentsOf: enumerationIssues)
         items.sort { $0.url.path.localizedStandardCompare($1.url.path) == .orderedAscending }
         return RepositoryScanResult(
             items: items, issues: issues,
-            visitedDirectories: visitedDirectories, wasLimited: wasLimited, enumeratedEntries: enumeratedEntries
+            visitedDirectories: visitedDirectories, wasLimited: wasLimited || issues.contains { $0.kind == .resourceLimit },
+            enumeratedEntries: enumeratedEntries
         )
     }
 
@@ -348,15 +323,22 @@ public actor RepositoryScanner {
             )
         try Task.checkCancellation()
         return RepositoryScanResult(
-            items: [item], issues: issues, visitedDirectories: 1, wasLimited: false
+            items: [item], issues: issues, visitedDirectories: 1, wasLimited: issues.contains { $0.kind == .resourceLimit }
         )
     }
 
     private struct Scope {
-        let root: URL
-        let components: [String]
-        var authorizedRoots: [URL] = []
-        var allowedRoots: [URL] { authorizedRoots.isEmpty ? [root] : authorizedRoots }
+        let anchor: AnchoredDirectory
+        var root: URL { anchor.url }
+        var components: [String] { root.pathComponents }
+        var authorizedRoots: [AnchoredDirectory] = []
+        var allowedAnchors: [AnchoredDirectory] { authorizedRoots.isEmpty ? [anchor] : authorizedRoots }
+        var allowedRoots: [URL] { allowedAnchors.map(\.url) }
+
+        func metadataAnchor(for url: URL) -> AnchoredDirectory? {
+            guard let root = metadataRoot(for: url) else { return nil }
+            return allowedAnchors.first { $0.url == root }
+        }
 
         func metadataRoot(for url: URL) -> URL? {
             guard url.isFileURL, !url.pathComponents.contains(where: { $0 == "." || $0 == ".." }) else { return nil }
@@ -380,35 +362,18 @@ public actor RepositoryScanner {
         let issue: ScanIssue
     }
 
-    private func makeScope(_ input: URL) throws -> Scope {
+    private func makeScope(_ input: URL, budget: AnchoredDirectory.Budget = .init()) throws -> Scope {
         guard input.isFileURL, input.host == nil || input.host == "" || input.host == "localhost" else {
             throw RepositoryScannerError.invalidRoot("Choose a local folder to scan.")
         }
-        let selected = input
         do {
-            let attributes = try fileManager.attributesOfItem(atPath: selected.path)
-            guard attributes[.type] as? FileAttributeType == .typeDirectory else {
-                throw RepositoryScannerError.invalidRoot("The selected path must be a folder, not a file or symbolic link.")
-            }
-            // Canonicalize only this explicitly selected root. Foundation URL path
-            // normalization can shorten /private/var back to /var on macOS, while
-            // directory enumeration returns /private/var, breaking exact containment.
-            // realpath gives one physical spelling without that alias rewrite.
-            let root = try selected.withUnsafeFileSystemRepresentation { path -> URL in
-                guard let path else {
-                    throw RepositoryScannerError.invalidRoot("The selected folder has no filesystem path.")
-                }
-                guard let resolved = Darwin.realpath(path, nil) else {
-                    throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno))
-                }
-                defer { Darwin.free(resolved) }
-                return URL(fileURLWithPath: String(cString: resolved), isDirectory: true)
-            }
-            return Scope(root: root, components: root.pathComponents)
-        } catch let error as RepositoryScannerError {
+            return Scope(anchor: try AnchoredDirectory.selected(input, budget: budget))
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let error as AnchoredDirectory.AccessError where error == .descriptorLimit {
             throw error
         } catch {
-            throw RepositoryScannerError.invalidRoot("Could not open the selected folder: \(error.localizedDescription)")
+            throw RepositoryScannerError.invalidRoot("Could not pin the selected folder: \(error.localizedDescription)")
         }
     }
 
@@ -419,10 +384,10 @@ public actor RepositoryScanner {
     ) throws -> DiscoveredRepository? {
         try Task.checkCancellation()
         let marker = directory.appendingPathComponent(".git", isDirectory: false)
-        let attributes: [FileAttributeKey: Any]
+        let attributes: stat
         do {
             try requireSafePath(directory, scope: scope)
-            attributes = try fileManager.attributesOfItem(atPath: marker.path)
+            attributes = try metadataStatus(at: marker, scope: scope)
         } catch let failure as MetadataFailure {
             issues.append(failure.issue)
             return nil
@@ -437,15 +402,15 @@ public actor RepositoryScanner {
             return nil
         }
 
-        let type = attributes[.type] as? FileAttributeType
-        if type == .typeSymbolicLink {
+        let type = attributes.st_mode & mode_t(S_IFMT)
+        if type == mode_t(S_IFLNK) {
             issues.append(ScanIssue(
                 url: marker, kind: .symbolicLinkSkipped,
                 message: "The .git marker is a symbolic link and was not followed."
             ))
             return nil
         }
-        guard type == .typeDirectory || type == .typeRegular else {
+        guard type == mode_t(S_IFDIR) || type == mode_t(S_IFREG) else {
             issues.append(ScanIssue(
                 url: marker, kind: .invalidMetadata,
                 message: "The .git marker is not a regular file or directory."
@@ -453,7 +418,7 @@ public actor RepositoryScanner {
             return nil
         }
 
-        let kind: DiscoveredRepository.Kind = type == .typeDirectory ? .gitRepository : .gitWorktree
+        let kind: DiscoveredRepository.Kind = type == mode_t(S_IFDIR) ? .gitRepository : .gitWorktree
         var branch: String?
         var metadata: GitDiscoveryMetadata?
         do {
@@ -465,8 +430,8 @@ public actor RepositoryScanner {
                 gitDirectory = try self.gitDirectory(from: pointer, repository: directory, marker: marker, scope: scope)
             }
             try requireSafePath(gitDirectory, scope: scope)
-            let gitAttributes = try fileManager.attributesOfItem(atPath: gitDirectory.path)
-            guard gitAttributes[.type] as? FileAttributeType == .typeDirectory else {
+            let gitAttributes = try metadataStatus(at: gitDirectory, scope: scope)
+            guard gitAttributes.st_mode & mode_t(S_IFMT) == mode_t(S_IFDIR) else {
                 throw metadataFailure(gitDirectory, .invalidMetadata, "The Git metadata target is not a directory.")
             }
             let head = gitDirectory.appendingPathComponent("HEAD", isDirectory: false)
@@ -496,7 +461,16 @@ public actor RepositoryScanner {
                     if !isMissingFile(error) { throw error }
                     // Only a missing commondir is a plain gitfile. A present commondir
                     // with a missing backlink or target is incomplete worktree evidence.
-                    if fileManager.fileExists(atPath: commonFile.path) { throw error }
+                    let originalError = error
+                    let commonExists: Bool
+                    do {
+                        _ = try metadataStatus(at: commonFile, scope: scope)
+                        commonExists = true
+                    } catch {
+                        if !isMissingFile(error) { throw error }
+                        commonExists = false
+                    }
+                    if commonExists { throw originalError }
                     commonDirectory = gitDirectory
                 }
             }
@@ -527,44 +501,53 @@ public actor RepositoryScanner {
         )
     }
 
-    /// Reject outside paths before accessing any of their metadata. Never resolve an
-    /// untrusted pointer's symlinks; inspect each component inside the scope instead.
-    private func requireSafePath(_ url: URL, scope: Scope) throws {
-        try Task.checkCancellation()
-        guard let metadataRoot = scope.metadataRoot(for: url) else {
-            throw metadataFailure(url, .outsideScope, "Git metadata is outside the selected folder. Branch is unknown.")
+    private func anchoredParent(for url: URL, scope: Scope) throws -> AnchoredDirectory {
+        guard let anchor = scope.metadataAnchor(for: url) else {
+            throw metadataFailure(url, .outsideScope, "Git metadata is outside the selected folders. Branch is unknown.")
         }
-        var cursor = metadataRoot
-        let relative = url.pathComponents.dropFirst(metadataRoot.pathComponents.count)
-        let rootAttributes = try fileManager.attributesOfItem(atPath: cursor.path)
-        guard rootAttributes[.type] as? FileAttributeType == .typeDirectory else {
-            throw metadataFailure(cursor, .symbolicLinkSkipped, "The selected folder changed during discovery; this path was skipped.")
+        let relative = url.pathComponents.dropFirst(anchor.url.pathComponents.count)
+        return try anchor.descendant(relative.dropLast())
+    }
+
+    private func metadataStatus(at url: URL, scope: Scope) throws -> stat {
+        guard let anchor = scope.metadataAnchor(for: url) else {
+            throw metadataFailure(url, .outsideScope, "Git metadata is outside the selected folders. Branch is unknown.")
         }
-        for component in relative {
-            try Task.checkCancellation()
-            cursor.appendPathComponent(component)
-            let attributes = try fileManager.attributesOfItem(atPath: cursor.path)
-            if attributes[.type] as? FileAttributeType == .typeSymbolicLink {
-                throw metadataFailure(cursor, .symbolicLinkSkipped, "A symbolic link in the metadata path was not followed. Branch is unknown.")
+        do {
+            if url.pathComponents == anchor.url.pathComponents {
+                try anchor.validateIdentity()
+                var status = stat()
+                guard Darwin.fstat(anchor.descriptor, &status) == 0 else {
+                    throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno))
+                }
+                return status
             }
+            return try anchoredParent(for: url, scope: scope).status(url.lastPathComponent)
+        } catch let error as AnchoredDirectory.AccessError {
+            throw metadataFailure(url, error == .symbolicLink ? .symbolicLinkSkipped : (error == .descriptorLimit ? .resourceLimit : .metadataUnreadable),
+                "The pinned directory changed or could not be traversed safely. Branch is unknown.")
+        }
+    }
+
+    /// Validate every untrusted path component without ever reopening it by its
+    /// absolute spelling. Dot-dot is handled by metadataPath only after validation.
+    private func requireSafePath(_ url: URL, scope: Scope) throws {
+        let status = try metadataStatus(at: url, scope: scope)
+        guard status.st_mode & mode_t(S_IFMT) != mode_t(S_IFLNK) else {
+            throw metadataFailure(url, .symbolicLinkSkipped, "A symbolic link in the metadata path was not followed. Branch is unknown.")
         }
     }
 
     private func boundedUTF8(at url: URL, scope: Scope) throws -> String {
-        try requireSafePath(url, scope: scope)
-        let attributes = try fileManager.attributesOfItem(atPath: url.path)
-        guard attributes[.type] as? FileAttributeType == .typeRegular else {
-            throw metadataFailure(url, .invalidMetadata, "Git metadata must be a regular UTF-8 file.")
-        }
-        guard let size = attributes[.size] as? NSNumber,
-              size.uint64Value <= UInt64(Self.maximumMetadataBytes) else {
-            throw metadataFailure(url, .metadataTooLarge, "Git metadata exceeds the 16 KiB safety limit. Branch is unknown.")
-        }
         let data: Data
         do {
-            data = try BoundedRegularFileReader.read(at: url, maximumBytes: Self.maximumMetadataBytes) {
-                try requireSafePath(url, scope: scope)
+            let parent = try anchoredParent(for: url, scope: scope)
+            data = try parent.readFile(url.lastPathComponent, maximumBytes: Self.maximumMetadataBytes) {
+                try beforeMetadataOpen?(url)
             }
+        } catch let error as AnchoredDirectory.AccessError {
+            throw metadataFailure(url, error == .symbolicLink ? .symbolicLinkSkipped : (error == .descriptorLimit ? .resourceLimit : .metadataUnreadable),
+                "The pinned metadata directory changed or could not be read safely. Branch is unknown.")
         } catch let error as BoundedRegularFileReader.ReadError {
             switch error {
             case .tooLarge:
@@ -577,7 +560,6 @@ public actor RepositoryScanner {
                 throw metadataFailure(url, .metadataUnreadable, "Git metadata changed or could not be read safely. Branch is unknown.")
             }
         }
-        try requireSafePath(url, scope: scope)
         guard let string = String(data: data, encoding: .utf8) else {
             throw metadataFailure(url, .invalidMetadata, "Git metadata is not valid UTF-8. Branch is unknown.")
         }
@@ -632,9 +614,9 @@ public actor RepositoryScanner {
                 continue
             }
             try requireSafePath(cursor, scope: scope)
-            let attributes = try fileManager.attributesOfItem(atPath: cursor.path)
-            let expected: FileAttributeType = (!isDirectory && offset == remaining.count - 1) ? .typeRegular : .typeDirectory
-            guard attributes[.type] as? FileAttributeType == expected else {
+            let attributes = try metadataStatus(at: cursor, scope: scope)
+            let expected = mode_t((!isDirectory && offset == remaining.count - 1) ? S_IFREG : S_IFDIR)
+            guard attributes.st_mode & mode_t(S_IFMT) == expected else {
                 throw metadataFailure(cursor, .invalidMetadata, "The Git metadata path contains an unexpected file type.")
             }
         }

@@ -283,10 +283,44 @@ struct InstallerTrashExecutorTests {
         #expect(try Data(contentsOf: target) == changed)
         #expect(!FileManager.default.fileExists(atPath: f.source.path))
     }
-    @Test("Actual macOS Trash API and receipt restore only on owned CI fixture")
+    @Test("A failure after rollback never falsely reports the original bytes in staging")
+    func rollbackReceiptFailure() async throws {
+        let f = try InstallerFixture(), sink = InstallerFixtureSink(f.trash)
+        let executor = f.executor(sink: sink) { point in
+            if point == .beforeTrash { throw InstallerTrashFailure.cancelled }
+            if point == .afterRollback { throw InstallerTrashFailure.journal }
+        }
+        let plan = try await executor.prepare(selection: f.source, scope: f.scope)
+        let result = try await executor.moveToTrash(planID: plan.id, scope: plan.scope)
+        #expect(result.receipt?.state == .uncertain); #expect(sink.callCount == 0)
+        #expect(try Data(contentsOf: f.source) == f.marker)
+        #expect(!FileManager.default.fileExists(atPath: plan.recoveryURL.appendingPathComponent(f.source.lastPathComponent).path))
+    }
+    @Test("Substituted operation directory never redirects Trash or rollback")
+    func replacedStagingDirectory() async throws {
+        let f = try InstallerFixture(), sink = InstallerFixtureSink(f.trash)
+        let saved = f.base.appendingPathComponent("original-owned-operation")
+        let executor = f.executor(sink: sink) { point in
+            if point == .afterCapture {
+                let names = try FileManager.default.contentsOfDirectory(at: f.recovery, includingPropertiesForKeys: nil)
+                let operation = try #require(names.first(where: { UUID(uuidString: $0.lastPathComponent) != nil }))
+                try FileManager.default.moveItem(at: operation, to: saved)
+                try FileManager.default.createDirectory(at: operation, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+                try Data("replacement stage sentinel".utf8).write(to: operation.appendingPathComponent(f.source.lastPathComponent))
+            }
+        }
+        let plan = try await executor.prepare(selection: f.source, scope: f.scope)
+        let result = try await executor.moveToTrash(planID: plan.id, scope: plan.scope)
+        #expect(result.requiresRecovery); #expect(sink.callCount == 0)
+        #expect(try Data(contentsOf: saved.appendingPathComponent(f.source.lastPathComponent)) == f.marker)
+        #expect(try Data(contentsOf: plan.recoveryURL.appendingPathComponent(f.source.lastPathComponent)) == Data("replacement stage sentinel".utf8))
+        try f.checkSentinel()
+    }
+    @Test("Actual macOS Trash API and receipt restore only on owned CI fixture",
+          .enabled(if: ProcessInfo.processInfo.environment["MOEKIT_INSTALLER_TRASH_FIXTURE"] == "1"))
     func nativeTrashRoundTrip() async throws {
         let env = ProcessInfo.processInfo.environment
-        guard env["MOEKIT_INSTALLER_TRASH_FIXTURE"] == "1", env["GITHUB_ACTIONS"] == "true", env["RUNNER_ENVIRONMENT"] == "github-hosted" else { return }
+        try #require(env["GITHUB_ACTIONS"] == "true" && env["RUNNER_ENVIRONMENT"] == "github-hosted")
         let f = try InstallerFixture(name: "MoeKit-owned-\(UUID().uuidString).dmg", realTrash: true)
         let expected = try Data(contentsOf: f.source)
         try #require(expected == f.marker)
@@ -301,9 +335,12 @@ struct InstallerTrashExecutorTests {
         let context = f.context
         let restore = try await executor.prepareRestore(receiptID: receipt.id, context: context)
         let restored = try await executor.restore(planID: restore.id, context: context)
-        #expect(restored.receipt?.state == .restored)
-        #expect(try Data(contentsOf: f.source) == f.marker)
+        try #require(restored.receipt?.state == .restored)
+        try #require(try Data(contentsOf: f.source) == f.marker)
         try f.checkSentinel()
+        try InstallerNativeFixtureEvidence.record(kind: "native-trash", detail: [
+            "result": "verified-trash-and-restore", "sourceDevice": String(plan.file.device),
+            "sourceInode": String(plan.file.inode), "operationID": receipt.id.uuidString])
     }
 }
 

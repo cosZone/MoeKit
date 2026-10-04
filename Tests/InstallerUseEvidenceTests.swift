@@ -67,7 +67,8 @@ struct InstallerUseEvidenceTests {
 
     @Test("New, missing or duplicate process rows block a negative result")
     func processChurnBlocks() async {
-        for lists in [[[31], [31, 32]], [[31], []], [[31, 31]]] {
+        let cases: [[[Int32]]] = [[[31], [31, 32]], [[31], []], [[31, 31]]]
+        for lists in cases {
             let fixture = InstallerUseFixture(processLists: lists)
             #expect(isUnavailable(await NativeInstallerUseEvidenceProvider(system: fixture).evidence(for: target)))
         }
@@ -178,11 +179,16 @@ struct InstallerUseEvidenceTests {
     @Test("Every mounted source requires original-identity resolution; shadows remain unknown")
     func mountIdentityResolution() throws {
         let record: [String: Any] = ["image-path": "/fixture/a.dmg", "image-alias": Data([1]), "shadow-path": "<none>"]
-        #expect(try InstallerUseNativeParsing.mountedIdentities(data: plist(["images": [record]]), resolve: { path, alias in
-            #expect(path == "/fixture/a.dmg")
-            #expect(alias == Data([1]))
+        var observedPath: String?
+        var observedAlias: Data?
+        let identities = try InstallerUseNativeParsing.mountedIdentities(data: plist(["images": [record]]), resolve: { path, alias in
+            observedPath = path
+            observedAlias = alias
             return .init(device: 7, inode: 81)
-        }) == [.init(device: 7, inode: 81)])
+        })
+        #expect(observedPath == "/fixture/a.dmg")
+        #expect(observedAlias == Data([1]))
+        #expect(identities == [.init(device: 7, inode: 81)])
         #expect(throws: InstallerUseReadError.self) {
             try InstallerUseNativeParsing.mountedIdentities(data: plist(["images": [record]]), resolve: { _, _ in
                 throw InstallerUseReadError.unavailable("The source was replaced or moved.")
@@ -243,6 +249,7 @@ struct InstallerUseEvidenceTests {
           .enabled(if: InstallerUseCIFixtureGate.enabled("MOEKIT_INSTALLER_IDLE_FIXTURE"),
                    "Run separately, after the normal test suite, on opted-in ephemeral CI"))
     func nativeIdleCurrentUserCoverage() async throws {
+        try InstallerUseCIFixtureGate.requireHostedRunner()
         let fixture = try InstallerOwnedUseFixture()
         defer { fixture.remove() }
         let fd = open(fixture.file.path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW)
@@ -262,6 +269,10 @@ struct InstallerUseEvidenceTests {
             let provider = NativeInstallerUseEvidenceProvider(maximumDuration: min(8, remaining))
             switch await provider.evidence(for: target) {
             case .noUseObserved:
+                try InstallerNativeFixtureEvidence.record(kind: "idle-use", detail: [
+                    "sourceDevice": String(file.device), "sourceInode": String(file.inode),
+                    "result": "noUseObserved"
+                ])
                 return
             case .observedUse(let reason):
                 Issue.record("Unexpected real use of the idle owned fixture: \(reason)")
@@ -278,14 +289,20 @@ struct InstallerUseEvidenceTests {
           .enabled(if: InstallerMountFixtureCI.isEnabled,
                    "Requires explicit opt-in on a secret-free ephemeral GitHub-hosted macOS runner"))
     func nativeMountedImageFixture() async throws {
+        try InstallerUseCIFixtureGate.requireHostedRunner()
         let fixture = try InstallerMountFixtureCI()
         do {
             try fixture.createAndAttach()
             let data = try await InstallerDiskImageInventory.shared.read(deadline: ProcessInfo.processInfo.systemUptime + 15)
             let record = try fixture.record(in: data)
             let scoped = try plist(["images": [record]])
-            #expect(try InstallerUseNativeParsing.mountedIdentities(data: scoped) == [fixture.imageIdentity()])
+            let source = try fixture.imageIdentity()
+            try #require(InstallerUseNativeParsing.mountedIdentities(data: scoped) == [source])
             try await fixture.detachAndRemove()
+            try InstallerNativeFixtureEvidence.record(kind: "mounted-image", detail: [
+                "sourceDevice": String(source.device), "sourceInode": String(source.inode),
+                "result": "verified-attach-and-detach"
+            ])
         } catch {
             // Cleanup still verifies the newly observed source/device/marker.
             // On ambiguity the uniquely owned fixture is retained, never forced.
@@ -431,6 +448,7 @@ private final class InstallerMountFixtureCI {
 
     init() throws {
         guard Self.isEnabled else { throw InstallerUseReadError.unavailable("Mount fixtures require explicit ephemeral CI opt-in.") }
+        try InstallerUseCIFixtureGate.requireHostedRunner()
         let token = UUID().uuidString
         root = FileManager.default.temporaryDirectory.appendingPathComponent("MoeKit-owned-dmg-\(token)", isDirectory: true)
         content = root.appendingPathComponent("content", isDirectory: true)
@@ -573,8 +591,13 @@ private final class InstallerMountFixtureCI {
 
 private enum InstallerUseCIFixtureGate {
     static func enabled(_ flag: String) -> Bool {
+        ProcessInfo.processInfo.environment[flag] == "1"
+    }
+
+    static func requireHostedRunner() throws {
         let env = ProcessInfo.processInfo.environment
-        return env[flag] == "1" && env["GITHUB_ACTIONS"] == "true"
-            && env["RUNNER_ENVIRONMENT"] == "github-hosted"
+        guard env["GITHUB_ACTIONS"] == "true", env["RUNNER_ENVIRONMENT"] == "github-hosted" else {
+            throw InstallerUseReadError.unavailable("An opted-in native fixture requires a verified ephemeral GitHub-hosted runner; the fixture did not run.")
+        }
     }
 }

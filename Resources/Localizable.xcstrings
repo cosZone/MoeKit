@@ -4071,12 +4071,12 @@
         }
       }
     },
-    "Mole Space can import an existing JSON report. This preview cannot run CLI tools, clean files, uninstall apps or stop processes.": {
+    "Mole Space can import reports or analyze a folder with the supported official V1.57.0 analyzer after confirmation. Cleanup, uninstall and stopping other processes remain unavailable.": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mole 的「空间」可导入已有 JSON 报告。当前预览还不能运行 CLI 工具、清理文件、卸载应用或停止进程。"
+            "value": "Mole 的「空间」可导入报告，或经确认后使用受支持的官方 V1.57.0 分析器分析文件夹。清理、卸载和停止其他进程尚不可用。"
           }
         }
       }

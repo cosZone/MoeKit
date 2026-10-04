@@ -26,7 +26,7 @@ struct InstallerTrashEnvironment: Sendable {
     }
 }
 
-enum InstallerMutationCheckpoint: Equatable, Sendable { case beforeCapture, afterCapture, beforeTrash, afterTrash, beforeRestoreCapture, afterRestoreCapture, beforeRestore }
+enum InstallerMutationCheckpoint: Equatable, Sendable { case beforeCapture, afterCapture, beforeTrash, afterTrash, afterRollback, beforeRestoreCapture, afterRestoreCapture, beforeRestore }
 
 /// This actor owns all descriptors and one-use plans. There is no report-import,
 /// serialized-plan, batch, permanent-delete or broad Mole-command execution API.
@@ -194,6 +194,10 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
         let expectedSource = receipt.state == .trashed ? receipt.trashFile : receipt.payloadFile
         guard let expectedSource, identity == expectedSource, receipt.originalFile.matchesCaptured(identity), identity == (try InstallerFileAccess.snapshotAt(sourceParent.fd, sourceURL.lastPathComponent)) else { throw InstallerTrashFailure.changed }
         try await requireNoObservedUse(identity, path: sourceURL.path, excluding: [source.fd])
+        try parent.validate(); try sourceParent.validate()
+        guard identity == (try InstallerFileAccess.snapshot(source.fd)),
+              identity == (try InstallerFileAccess.snapshotAt(sourceParent.fd, sourceURL.lastPathComponent)) else { throw InstallerTrashFailure.changed }
+        try InstallerFileAccess.assertAbsent(parent, receipt.originalURL.lastPathComponent)
         try Task.checkCancellation()
         let now = Date()
         let display = InstallerRestorePlan(id: UUID(), receipt: receipt, sourceURL: sourceURL, context: context, preparedAt: now, expiresAt: now.addingTimeInterval(120))
@@ -226,6 +230,13 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
         do {
             receipt = receipt.advancing(to: .restoreCaptureIntent, payloadName: alreadyStaged ? "restore.dmg" : plan.display.sourceURL.lastPathComponent)
             try journal.append(receipt, operation: operation)
+            // The observation and durable intent both take time. Recheck the
+            // exact pre-rename snapshot (including ctime) immediately afterward.
+            try plan.parent.validate(); try plan.sourceParent.validate()
+            guard plan.sourceIdentity == (try InstallerFileAccess.snapshot(plan.source.fd)),
+                  plan.sourceIdentity == (try InstallerFileAccess.snapshotAt(plan.sourceParent.fd, plan.display.sourceURL.lastPathComponent)) else { throw InstallerTrashFailure.changed }
+            try InstallerFileAccess.assertAbsent(plan.parent, receipt.originalURL.lastPathComponent)
+            try Task.checkCancellation()
             if !alreadyStaged {
                 try checkpoint(.beforeRestoreCapture)
                 try InstallerFileAccess.exclusiveMove(from: plan.sourceParent, name: plan.display.sourceURL.lastPathComponent, to: operation, destinationName: "restore.dmg")
@@ -266,7 +277,7 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
                     return .init(receipt: retained, message: String(localized: "Restore stopped and the captured item was returned without replacing anything. Review recovery; a new restore is not automatic."), movedToTrash: false, requiresRecovery: true)
                 } catch { /* Keep every remaining object intact. */ }
             }
-            let retained = receipt.advancing(to: originalMoveStarted ? .uncertain : .retained, payloadName: "restore.dmg")
+            let retained = receipt.advancing(to: originalMoveStarted || !captured ? .uncertain : .retained, payloadName: captured && !originalMoveStarted ? "restore.dmg" : nil)
             try? journal.append(retained, operation: operation)
             return .init(receipt: retained, message: String(localized: "Restore could not be verified. Existing destinations were not overwritten; inspect the retained recovery location."), movedToTrash: false, requiresRecovery: true)
         }
@@ -282,6 +293,7 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
             try journal.append(intent, operation: operation); latest = intent
             try InstallerFileAccess.exclusiveMove(from: operation, name: payloadName, to: originalParent, destinationName: receipt.originalURL.lastPathComponent)
             returnedToOriginal = true
+            try checkpoint(.afterRollback)
             guard fsync(originalParent.fd) == 0, fsync(operation.fd) == 0 else { throw InstallerTrashFailure.journal }
             let rolledBack = latest.advancing(to: .rolledBack)
             try journal.append(rolledBack, operation: operation)

@@ -136,7 +136,9 @@ final class InstallerRecoveryJournal {
     func receipts() throws -> [InstallerRecoveryItem] {
         let names = try Self.names(root)
         let ids = names.filter { $0 != "operations.lock" }.compactMap(UUID.init(uuidString:))
-        guard ids.count <= Self.maximumOperations, ids.count == names.filter({ $0 != "operations.lock" }).count else { throw InstallerTrashFailure.journal }
+        guard ids.count <= Self.maximumOperations else { throw InstallerTrashFailure.journal }
+        // Non-operation entries (for example Finder metadata) confer no authority
+        // and cannot hide validated operation directories. Never open or remove them.
         return ids.map { id in
             let location = root.url.appendingPathComponent(id.uuidString)
             do {

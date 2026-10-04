@@ -24,6 +24,8 @@ jobs:
       TEST_RUNNER_MOEKIT_INSTALLER_TRASH_FIXTURE: '1'
       TEST_RUNNER_GITHUB_ACTIONS: 'true'
       TEST_RUNNER_RUNNER_ENVIRONMENT: github-hosted
+      TEST_RUNNER_MOEKIT_INSTALLER_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      TEST_RUNNER_MOEKIT_INSTALLER_EVIDENCE_DIR: ${{ github.workspace }}/InstallerFixtureEvidence
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -59,8 +61,10 @@ jobs:
           args=(-workspace MoeKit.xcworkspace -scheme MoeKit -configuration Debug
                 -destination 'platform=macOS' -derivedDataPath DerivedData
                 CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=)
+          mkdir -m 700 InstallerFixtureEvidence
           xcodebuild "${args[@]}" build-for-testing
-          xcodebuild "${args[@]}" test-without-building -testLanguage en -testRegion US -resultBundlePath TestResults.xcresult
+          xcodebuild "${args[@]}" test-without-building -testLanguage en -testRegion US -resultBundlePath TestResults.xcresult \
+            -skip-testing:MoeKitTests/InstallerUseEvidenceTests/nativeIdleCurrentUserCoverage
       - name: Verify actual idle installer-use coverage in isolation
         env:
           TEST_RUNNER_MOEKIT_INSTALLER_IDLE_FIXTURE: '1'
@@ -73,6 +77,7 @@ jobs:
             -parallel-testing-enabled NO \
             -only-testing:MoeKitTests/InstallerUseEvidenceTests/nativeIdleCurrentUserCoverage \
             -resultBundlePath InstallerIdleResults.xcresult
+          python3 Scripts/verify-installer-fixture-evidence.py --directory InstallerFixtureEvidence --source-sha "$SOURCE_SHA"
       - name: Render workspaces and first-use guidance in Simplified Chinese
         run: |
           set -euo pipefail
@@ -163,6 +168,7 @@ jobs:
             TestResults.xcresult
             CatalogConcurrencyResults.txt
             InstallerIdleResults.xcresult
+            InstallerFixtureEvidence/
             ChineseRenderResults.xcresult
           if-no-files-found: ignore
           retention-days: 14
@@ -182,6 +188,8 @@ jobs:
       TEST_RUNNER_MOEKIT_INSTALLER_TRASH_FIXTURE: '1'
       TEST_RUNNER_GITHUB_ACTIONS: 'true'
       TEST_RUNNER_RUNNER_ENVIRONMENT: github-hosted
+      TEST_RUNNER_MOEKIT_INSTALLER_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      TEST_RUNNER_MOEKIT_INSTALLER_EVIDENCE_DIR: ${{ github.workspace }}/InstallerFixtureEvidence
       INSTRUMENTATION: ${{ matrix.instrumentation }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -208,7 +216,8 @@ jobs:
           args=(-workspace MoeKit.xcworkspace -scheme MoeKit -configuration Release
                 -destination 'platform=macOS' -derivedDataPath DerivedDataRelease
                 ENABLE_TESTABILITY=YES CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=)
-          test_args=(test-without-building -testLanguage en -testRegion US -resultBundlePath ReleaseTestResults.xcresult)
+          test_args=(test-without-building -testLanguage en -testRegion US -resultBundlePath ReleaseTestResults.xcresult
+                     -skip-testing:MoeKitTests/InstallerUseEvidenceTests/nativeIdleCurrentUserCoverage)
           if [ "$INSTRUMENTATION" = address-sanitizer ]; then
             args+=(-enableAddressSanitizer YES)
             test_args+=(-only-testing:MoeKitTests/CatalogPersistenceTests
@@ -238,8 +247,12 @@ jobs:
               raise SystemExit(f"Release app and tests must stay optimized: {levels}")
           print(f"Verified Release optimization levels: {levels}")
           PY
+          mkdir -m 700 InstallerFixtureEvidence
           xcodebuild "${args[@]}" build-for-testing
           xcodebuild "${args[@]}" "${test_args[@]}"
+          if [ "$INSTRUMENTATION" = none ]; then
+            python3 Scripts/verify-installer-fixture-evidence.py --directory InstallerFixtureEvidence --source-sha "$SOURCE_SHA" --kinds native-trash mounted-image
+          fi
           xcrun xcresulttool get test-results summary --path ReleaseTestResults.xcresult > ReleaseTestSummary.json
           xcrun xcresulttool get test-results tests --path ReleaseTestResults.xcresult > ReleaseTestInventory.json
           python3 - <<'PYTHON'
@@ -277,5 +290,6 @@ jobs:
             ReleaseTestInventory.json
             CatalogConcurrencyResults.txt
             InstallerIdleResults.xcresult
+            InstallerFixtureEvidence/
           if-no-files-found: ignore
           retention-days: 14

@@ -7930,6 +7930,532 @@
           }
         }
       }
+    },
+    "A development build cannot be compared with a published release.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A development build cannot be compared with a published release."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法将开发构建与已发布版本比较。"
+          }
+        }
+      }
+    },
+    "A newer release is available: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A newer release is available: %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发现新版本：%@"
+          }
+        }
+      }
+    },
+    "All releases on GitHub": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All releases on GitHub"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看 GitHub 上的所有版本"
+          }
+        }
+      }
+    },
+    "App icons": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "App icons"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "应用图标"
+          }
+        }
+      }
+    },
+    "Both icons are hidden. Open MoeKit from Finder or Spotlight to return to the workspace and settings.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Both icons are hidden. Open MoeKit from Finder or Spotlight to return to the workspace and settings."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "两个图标均已隐藏。通过访达或聚焦搜索重新打开 MoeKit，即可返回工作区和设置。"
+          }
+        }
+      }
+    },
+    "Check for updates…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check for updates…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查更新…"
+          }
+        }
+      }
+    },
+    "Checked": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checked"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查时间"
+          }
+        }
+      }
+    },
+    "Checking GitHub…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checking GitHub…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在检查 GitHub…"
+          }
+        }
+      }
+    },
+    "Checks public GitHub releases only when requested. GitHub receives your IP address; no project paths, task records or credentials are sent.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checks public GitHub releases only when requested. GitHub receives your IP address; no project paths, task records or credentials are sent."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅在你主动检查时读取 GitHub 公开发布记录。GitHub 会收到你的 IP 地址，不会发送项目路径、任务记录或凭据。"
+          }
+        }
+      }
+    },
+    "Could not reach GitHub. Check your connection and try again.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not reach GitHub. Check your connection and try again."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法连接 GitHub。请检查网络连接后重试。"
+          }
+        }
+      }
+    },
+    "GitHub returned an unexpected response. Try again or open the releases page.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GitHub returned an unexpected response. Try again or open the releases page."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GitHub 返回了异常响应。请重试，或打开发布页面。"
+          }
+        }
+      }
+    },
+    "GitHub’s request limit was reached. Try again later or open the releases page.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GitHub’s request limit was reached. Try again later or open the releases page."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已达到 GitHub 请求次数限制。请稍后重试，或打开发布页面。"
+          }
+        }
+      }
+    },
+    "Include preview releases": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Include preview releases"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "包含预览版本"
+          }
+        }
+      }
+    },
+    "Installed release": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Installed release"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已安装版本"
+          }
+        }
+      }
+    },
+    "Latest published release: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Latest published release: %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最新已发布版本：%@"
+          }
+        }
+      }
+    },
+    "MoeKit updates": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MoeKit updates"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MoeKit 更新"
+          }
+        }
+      }
+    },
+    "No release newer than %@ was found in this channel.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No release newer than %@ was found in this channel."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此渠道未发现比 %@ 更新的版本。"
+          }
+        }
+      }
+    },
+    "No supported releases were found for this channel.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No supported releases were found for this channel."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此更新渠道暂无支持的发布版本。"
+          }
+        }
+      }
+    },
+    "Open MoeKit": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open MoeKit"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开 MoeKit"
+          }
+        }
+      }
+    },
+    "Quit MoeKit": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quit MoeKit"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "退出 MoeKit"
+          }
+        }
+      }
+    },
+    "Ready to check for a newer release.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ready to check for a newer release."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可以开始检查新版本。"
+          }
+        }
+      }
+    },
+    "Review newer releases and download them from GitHub. Automatic installation is not enabled.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review newer releases and download them from GitHub. Automatic installation is not enabled."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查新版本并从 GitHub 下载。尚未启用自动安装。"
+          }
+        }
+      }
+    },
+    "Settings…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Settings…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "设置…"
+          }
+        }
+      }
+    },
+    "Show Dock icon": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show Dock icon"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示 Dock 图标"
+          }
+        }
+      }
+    },
+    "Show menu bar icon": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show menu bar icon"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示菜单栏图标"
+          }
+        }
+      }
+    },
+    "The release list could not be checked completely. Open the releases page to review available versions.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The release list could not be checked completely. Open the releases page to review available versions."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法完整检查版本列表。请打开发布页面查看可用版本。"
+          }
+        }
+      }
+    },
+    "This development build has no published release identity.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This development build has no published release identity."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此开发构建没有已发布版本标识。"
+          }
+        }
+      }
+    },
+    "Update check cancelled.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Update check cancelled."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已取消检查更新。"
+          }
+        }
+      }
+    },
+    "Updates": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Updates"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更新"
+          }
+        }
+      }
+    },
+    "Updates are downloaded and installed manually from the release page. Automatic installation is not enabled.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Updates are downloaded and installed manually from the release page. Automatic installation is not enabled."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请在发布页面手动下载并安装更新。尚未启用自动安装。"
+          }
+        }
+      }
+    },
+    "View release and download": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "View release and download"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看版本并下载"
+          }
+        }
+      }
+    },
+    "Closing windows keeps MoeKit open. Some operations cancel when their view closes. Use Quit MoeKit to exit.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关闭窗口后 MoeKit 仍会运行。部分操作会在其视图关闭时取消。请选择“退出 MoeKit”结束应用。"
+          }
+        }
+      }
+    },
+    "Space supports reports and confirmed analysis. Native cache cleanup and exact-process stopping each require separate confirmation. Uninstall, maintenance and live status remain unavailable.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "空间分析支持报告导入和逐次确认的分析。原生缓存清理与精确进程停止均需单独确认。卸载、维护与实时状态尚未开放。"
+          }
+        }
+      }
+    },
+    "Your project list, pins and private recovery receipts are stored in MoeKit’s Application Support folder. Task records and imported reports last for the current session.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "项目列表、置顶状态和私有恢复凭据保存在 MoeKit 的 Application Support 文件夹。任务记录和导入报告仅保留在当前会话。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

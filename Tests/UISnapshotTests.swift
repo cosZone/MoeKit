@@ -125,6 +125,7 @@ final class UISnapshotTests: XCTestCase {
             : (rendersGuide ? AnyView(GettingStartedView(close: {})) : AnyView(WorkspaceView()))
         let root = content
             .environment(store)
+            .environment(AppVisibilityPreferences())
             .environment(\.colorScheme, colorScheme)
             .environment(\.locale, Locale.current)
             .frame(width: size.width, height: size.height)

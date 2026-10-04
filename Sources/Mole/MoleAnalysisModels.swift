@@ -58,7 +58,7 @@ enum MoleAnalysisFailure: Error, Equatable, LocalizedError, Sendable {
         case .quarantinedBinary: String(localized: "macOS quarantine is present on this analyzer. MoeKit will not remove it or bypass Gatekeeper.")
         case .changedSelection: String(localized: "The selected folder or analyzer changed. Choose them again and review a new analysis plan.")
         case .unsafePrivateDirectory: String(localized: "MoeKit could not establish its private analysis directory. No analysis was started.")
-        case .invalidReport: String(localized: "Mole returned an invalid or inconsistent report. It has not replaced the last result.")
+        case .invalidReport: String(localized: "Mole returned an invalid or inconsistent report. No new report was accepted.")
         case .outsideScope: String(localized: "The report contained paths outside the selected scope, or paths changed during validation. It was rejected.")
         case .unknownCoverage: String(localized: "The live report does not identify its scan coverage. It was rejected.")
         case .outputLimit: String(localized: "Analysis exceeded its output limit and was stopped. No complete report is available.")

@@ -6,6 +6,14 @@ import Testing
 
 @Suite("Mole descriptor and private-session boundaries")
 struct MoleAnalysisFilesTests {
+    @Test("Nonlocal, NUL and oversized selections are rejected before filesystem calls")
+    func malformedSelections() throws {
+        for url in [URL(string: "file://remote-host/tmp/fixture")!, URL(fileURLWithPath: "/tmp/a\0b"),
+                    URL(fileURLWithPath: "/" + String(repeating: "a", count: 4096))] {
+            #expect(throws: MoleAnalysisFailure.invalidSelection) { try MoleAnalysisFiles.validateLocalURL(url) }
+        }
+    }
+
     @Test("Non-following opens reject symbolic links and FIFOs without waiting")
     func specialFiles() throws {
         try fixture { base in
@@ -138,20 +146,38 @@ struct MoleOfficialFixtureTests {
         let bytes = Data(repeating: 65, count: 8192)
         try bytes.write(to: sentinel)
         let before = try FileManager.default.attributesOfItem(atPath: sentinel.path)
-        let unrelated = base.appendingPathComponent("existing-mole-cache")
-        try Data("existing cache stays".utf8).write(to: unrelated)
+        let unrelated = base.appendingPathComponent("unrelated-input-sentinel")
+        try Data("unrelated input stays".utf8).write(to: unrelated)
         let executor = MoleAnalysisExecutor(privateSessionParent: base.appendingPathComponent("private-sessions"))
         let plan = try await executor.prepare(executable: URL(fileURLWithPath: binary), directory: scope)
         let result = try await executor.run(plan)
         #expect(result.report.path == scope.path)
         #expect(result.report.coverage == .known)
-        #expect(result.report.entries.contains { $0.path == sentinel.path && ($0.measuredBytes ?? 0) > 0 })
+        #expect(result.report.entries.contains { $0.path == sentinel.path && $0.measuredBytes == Int64(bytes.count) })
         #expect(try Data(contentsOf: sentinel) == bytes)
         let after = try FileManager.default.attributesOfItem(atPath: sentinel.path)
         #expect(before[.systemFileNumber] as? NSNumber == after[.systemFileNumber] as? NSNumber)
         #expect(before[.modificationDate] as? Date == after[.modificationDate] as? Date)
-        #expect(try Data(contentsOf: unrelated) == Data("existing cache stays".utf8))
+        #expect(try Data(contentsOf: unrelated) == Data("unrelated input stays".utf8))
         #expect(try FileManager.default.contentsOfDirectory(atPath: plan.privateSessionParent.path).isEmpty)
+
+        // The same real upstream analyzer must preserve useful partial results
+        // when a synthetic direct child is not readable by the runner user.
+        let restricted = scope.appendingPathComponent("restricted")
+        try FileManager.default.createDirectory(at: restricted, withIntermediateDirectories: false)
+        try Data("do not change".utf8).write(to: restricted.appendingPathComponent("keep"))
+        #expect(chmod(restricted.path, 0o000) == 0)
+        defer { _ = chmod(restricted.path, 0o700) }
+        #expect(geteuid() != 0, "Permission-denial fixture requires an unprivileged runner")
+        let partialPlan = try await executor.prepare(executable: URL(fileURLWithPath: binary), directory: scope)
+        let partial = try await executor.run(partialPlan)
+        #expect(partial.report.coverage == .partial)
+        #expect(partial.report.entries.contains { $0.path == restricted.path && $0.coverage == .unavailable && $0.measuredBytes == nil })
+        #expect(partial.report.entries.contains { $0.path == sentinel.path && $0.measuredBytes == Int64(bytes.count) })
+        #expect(try Data(contentsOf: sentinel) == bytes)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: plan.privateSessionParent.path).isEmpty)
+        #expect(chmod(restricted.path, 0o700) == 0)
+        #expect(try Data(contentsOf: restricted.appendingPathComponent("keep")) == Data("do not change".utf8))
     }
 }
 

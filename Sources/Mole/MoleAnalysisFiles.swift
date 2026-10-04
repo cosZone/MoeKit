@@ -5,8 +5,15 @@ import Foundation
 /// Descriptor-based checks and session storage. These reduce path races; they do
 /// not defend against a malicious same-user process or confer an OS sandbox.
 enum MoleAnalysisFiles {
+    static func validateLocalURL(_ url: URL) throws {
+        guard url.isFileURL, url.host == nil || url.host == "" || url.host == "localhost",
+              url.query == nil, url.fragment == nil,
+              MoleLiveReportValidator.components(url.path) != nil else { throw MoleAnalysisFailure.invalidSelection }
+    }
+
     static func canonicalURL(_ url: URL) throws -> URL {
-        guard url.isFileURL, let resolved = realpath(url.path, nil) else { throw MoleAnalysisFailure.invalidSelection }
+        try validateLocalURL(url)
+        guard let resolved = realpath(url.path, nil) else { throw MoleAnalysisFailure.invalidSelection }
         defer { free(resolved) }
         return URL(fileURLWithPath: String(cString: resolved))
     }
@@ -35,7 +42,7 @@ enum MoleAnalysisFiles {
     static func identity(_ fd: Int32) throws -> MoleFileIdentity {
         var info = stat()
         guard fstat(fd, &info) == 0 else { throw MoleAnalysisFailure.changedSelection }
-        return MoleFileIdentity(device: UInt64(info.st_dev), inode: UInt64(info.st_ino))
+        return MoleFileIdentity(device: UInt64(truncatingIfNeeded: info.st_dev), inode: UInt64(info.st_ino))
     }
 
     static func verifyAnalyzer(_ fd: Int32, release: MoleAnalyzerRelease) throws -> MoleFileIdentity {
@@ -248,13 +255,13 @@ final class MolePrivateSession {
         guard !cleaned else { return }
         var info = stat()
         guard name.withCString({ fstatat(parentFD, $0, &info, AT_SYMLINK_NOFOLLOW) }) == 0,
-              UInt64(info.st_dev) == identity.device, UInt64(info.st_ino) == identity.inode,
+              UInt64(truncatingIfNeeded: info.st_dev) == identity.device, UInt64(info.st_ino) == identity.inode,
               info.st_mode & S_IFMT == S_IFDIR else { throw MoleAnalysisFailure.cleanupIncomplete }
         var remaining = 20_000
         try removeChildren(directoryFD, depth: 0, remaining: &remaining)
         var after = stat()
         guard name.withCString({ fstatat(parentFD, $0, &after, AT_SYMLINK_NOFOLLOW) }) == 0,
-              UInt64(after.st_dev) == identity.device, UInt64(after.st_ino) == identity.inode,
+              UInt64(truncatingIfNeeded: after.st_dev) == identity.device, UInt64(after.st_ino) == identity.inode,
               after.st_mode & S_IFMT == S_IFDIR,
               name.withCString({ unlinkat(parentFD, $0, AT_REMOVEDIR) }) == 0 else {
             throw MoleAnalysisFailure.cleanupIncomplete
@@ -279,13 +286,13 @@ final class MolePrivateSession {
             guard remaining >= 0 else { throw MoleAnalysisFailure.cleanupIncomplete }
             var before = stat()
             guard name.withCString({ fstatat(fd, $0, &before, AT_SYMLINK_NOFOLLOW) }) == 0,
-                  before.st_uid == geteuid(), UInt64(before.st_dev) == identity.device else { throw MoleAnalysisFailure.cleanupIncomplete }
+                  before.st_uid == geteuid(), UInt64(truncatingIfNeeded: before.st_dev) == identity.device else { throw MoleAnalysisFailure.cleanupIncomplete }
             if before.st_mode & S_IFMT == S_IFDIR {
                 let child = name.withCString { openat(fd, $0, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC) }
                 guard child >= 0 else { throw MoleAnalysisFailure.cleanupIncomplete }
                 defer { close(child) }
                 let childID = try MoleAnalysisFiles.identity(child)
-                guard childID.device == UInt64(before.st_dev), childID.inode == UInt64(before.st_ino) else {
+                guard childID.device == UInt64(truncatingIfNeeded: before.st_dev), childID.inode == UInt64(before.st_ino) else {
                     throw MoleAnalysisFailure.cleanupIncomplete
                 }
                 try removeChildren(child, depth: depth + 1, remaining: &remaining)

@@ -13,7 +13,8 @@ actor MoleAnalysisExecutor: MoleAnalysisExecuting {
     init(privateSessionParent: URL? = nil) { sessionParentOverride = privateSessionParent }
     func prepare(executable: URL, directory: URL) async throws -> MoleAnalysisPlan {
         try Task.checkCancellation()
-        guard executable.isFileURL, directory.isFileURL else { throw MoleAnalysisFailure.invalidSelection }
+        try MoleAnalysisFiles.validateLocalURL(executable)
+        try MoleAnalysisFiles.validateLocalURL(directory)
         // Reject final symlinks before resolving macOS ancestor aliases.
         for selection in [executable, directory] {
             var info = stat()

@@ -1,9 +1,22 @@
 import Foundation
+import Observation
 import Testing
 @testable import MoeKit
 
 @MainActor @Suite("Mole explicit analysis state machine")
 struct MoleAnalysisStoreTests {
+    @Test("Busy state participates in observation")
+    func busyObservation() async {
+        let store = MoleAnalysisStore(executor: AnalysisFixture())
+        store.selectExecutable(URL(fileURLWithPath: "/Analyzer"), ticket: store.selectionTicket()!)
+        store.selectDirectory(URL(fileURLWithPath: "/Selected"), ticket: store.selectionTicket()!)
+        let changed = MoleObservationFlag()
+        withObservationTracking { _ = store.isBusy } onChange: { changed.set() }
+        store.prepare()
+        #expect(changed.value)
+        await waitFor { !store.isBusy }
+    }
+
     @Test("Selections never execute; only the current confirmation can execute once")
     func confirmation() async throws {
         let executor = AnalysisFixture()
@@ -79,7 +92,9 @@ struct MoleAnalysisStoreTests {
         store.selectDirectory(URL(fileURLWithPath: "/Selected"), ticket: store.selectionTicket()!)
         store.prepare(); await waitFor { !store.isBusy }
         let plan = try #require(store.plan)
-        store.setDemoEnabled(true); store.setDemoEnabled(false)
+        store.setDemoEnabled(true)
+        #expect(store.executable == nil && store.directory == nil && store.result == nil)
+        store.setDemoEnabled(false)
         store.confirm(planID: plan.id)
         #expect(await executor.runCount == 0)
     }
@@ -129,4 +144,11 @@ private actor AnalysisFixture: MoleAnalysisExecuting {
         for _ in 0..<1000 { if continuation != nil { return }; await Task.yield() }
     }
     func releaseRun() { continuation?.resume(); continuation = nil }
+}
+
+private final class MoleObservationFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var stored = false
+    var value: Bool { lock.lock(); defer { lock.unlock() }; return stored }
+    func set() { lock.lock(); stored = true; lock.unlock() }
 }

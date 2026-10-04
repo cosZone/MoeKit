@@ -62,7 +62,7 @@ struct MoleAnalysisView: View {
                 Text("Mole runs with your normal user permissions, without an OS sandbox. The reviewed analysis command does not delete or change selected-folder content; incidental metadata reads may extend beyond it.")
                 Text("MoeKit will create a verified temporary analyzer copy and a fresh private cache/temp directory below the location shown here, then remove only that session after the process stops. Your existing Mole cache is not used.")
                 Text(plan.privateSessionParent.path).font(.caption.monospaced()).textSelection(.enabled)
-                Text("Limits: 120 seconds elapsed, 60 CPU seconds per process, 16 MB report and 64 KB diagnostics. Reports may be partial; sizes are not reclaimable space.")
+                Text("Analyzer limits: 120 seconds elapsed, 60 CPU seconds per process, 16 MB report and 64 KB diagnostics. Reports may be partial; sizes are not reclaimable space.")
                 Text("\(plan.release.version) · \(plan.release.architecture) · SHA-256 \(plan.release.sha256)").font(.caption.monospaced()).textSelection(.enabled)
                 HStack {
                     Button("Cancel") { analysis.dismissPlan() }

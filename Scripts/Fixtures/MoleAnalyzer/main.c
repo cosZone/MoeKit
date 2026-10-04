@@ -46,6 +46,10 @@ int main(int argc, char **argv) {
     for(int fd=3;fd<256;fd++) if(fcntl(fd,F_GETFD) != -1) return 7;
     if(getenv("MO_ANALYZE_PATH") || getenv("DYLD_INSERT_LIBRARIES") || getenv("MOLE_SOMETHING")) return 5;
     if(strcmp(getenv("PATH"),"/usr/bin:/bin")) return 6;
+    if(strstr(getenv("HOME"), "original-home")) return 8;
+    snprintf(path,sizeof(path),"%s/cache-created-by-synthetic-analyzer",getenv("HOME"));
+    file=fopen(path,"w"); if(!file)return 10;
+    fputs("private cache",file); fclose(file);
     printf("{\"scan_status\":\"complete\",\"overview\":false,\"path\":\"%s\",\"entries\":[],\"total_size\":0}\n",argv[2]);
     return 0;
 }

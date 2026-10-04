@@ -44,7 +44,7 @@ let project = Project(
             scripts: [.post(
                 script: """
                 set -eu
-                /usr/bin/ditto "${BUILT_PRODUCTS_DIR}/MoleAnalysisSupervisor" "${TARGET_BUILD_DIR}/${EXECUTABLE_FOLDER_PATH}/MoleAnalysisSupervisor"
+                /bin/cp -p "${BUILT_PRODUCTS_DIR}/MoleAnalysisSupervisor" "${TARGET_BUILD_DIR}/${EXECUTABLE_FOLDER_PATH}/MoleAnalysisSupervisor"
                 """,
                 name: "Embed verified Mole analysis supervisor",
                 inputPaths: ["$(BUILT_PRODUCTS_DIR)/MoleAnalysisSupervisor"],

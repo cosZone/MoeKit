@@ -33,7 +33,9 @@ class SupervisorTests(unittest.TestCase):
         self.run_tmp.cleanup()
     def start(self, mode="success", **kwargs):
         (self.scope / "mode").write_text(mode)
-        env = dict(os.environ, MO_ANALYZE_PATH="/must-not-inherit", MOLE_SOMETHING="ignored")
+        original_home = self.run_root / "original-home"
+        original_home.mkdir(exist_ok=True)
+        env = dict(os.environ, HOME=str(original_home), MO_ANALYZE_PATH="/must-not-inherit", MOLE_SOMETHING="ignored")
         return subprocess.Popen([str(self.supervisor), str(self.analyzer), str(self.scope), str(self.home)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env, **kwargs)
     def finish(self, proc, expected):
         # Keep stdin open while waiting: EOF intentionally cancels the supervisor.
@@ -45,6 +47,16 @@ class SupervisorTests(unittest.TestCase):
     def test_success_and_environment(self):
         out, _ = self.finish(self.start(), 0)
         self.assertEqual(json.loads(out)["path"], str(self.scope))
+    def test_original_home_cache_is_not_used(self):
+        cache=self.run_root / "original-home/.cache/mole"
+        cache.mkdir(parents=True)
+        marker=cache / "keep"
+        marker.write_bytes(b"original cache")
+        before=marker.stat()
+        self.finish(self.start(),0)
+        self.assertEqual(marker.read_bytes(),b"original cache")
+        self.assertEqual(marker.stat().st_ino,before.st_ino)
+        self.assertEqual(marker.stat().st_mtime_ns,before.st_mtime_ns)
     def test_nonzero_exit(self): self.finish(self.start("exit"), 73)
     def test_stdout_bound(self): self.finish(self.start("floodout"), 71)
     def test_stderr_bound(self): self.finish(self.start("flooderr"), 71)

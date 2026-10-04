@@ -62,6 +62,7 @@ jobs:
             -only-testing:MoeKitTests/UISnapshotTests/testGettingStartedWelcomeRenders \
             -only-testing:MoeKitTests/UISnapshotTests/testGettingStartedDestinationsRender \
             -only-testing:MoeKitTests/UISnapshotTests/testFirstUseWorkspacesRender \
+            -only-testing:MoeKitTests/ToolPreparationViewTests/testToolPreparationRenders \
             -resultBundlePath ChineseRenderResults.xcresult
       - name: Check SwiftUI bundle and smoke-launch explicit demo
         run: |
@@ -178,7 +179,9 @@ jobs:
             args+=(-enableAddressSanitizer YES)
             test_args+=(-only-testing:MoeKitTests/CatalogPersistenceTests
                         -only-testing:MoeKitTests/WorkspacePersistenceTests
-                        -only-testing:MoeKitTests/CatalogRecoveryLifetimeTests)
+                        -only-testing:MoeKitTests/CatalogRecoveryLifetimeTests
+                        -only-testing:MoeKitTests/ToolPreparationTests
+                        -only-testing:MoeKitTests/ToolPreparationStoreTests)
           fi
           xcodebuild -project MoeKit.xcodeproj -alltargets -configuration Release \
             ENABLE_TESTABILITY=YES CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= \

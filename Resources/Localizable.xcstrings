@@ -4230,6 +4230,336 @@
           }
         }
       }
+    },
+    "A regular file has executable permission bits. Its contents, tool identity and version have not been checked.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "找到带可执行权限位的普通文件，但未检查内容、工具身份或版本。"
+          }
+        }
+      }
+    },
+    "A symbolic link exists. Its target, tool identity and version have not been checked.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "找到符号链接，但未检查其目标、工具身份或版本。"
+          }
+        }
+      }
+    },
+    "Cancelling inspection…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在取消检查…"
+          }
+        }
+      }
+    },
+    "Check common locations": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查常见位置"
+          }
+        }
+      }
+    },
+    "Check file locations and find official installation instructions. Finding a file does not verify a working or trusted tool.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查文件位置并查看官方安装说明。找到文件并不代表工具可用或可信。"
+          }
+        }
+      }
+    },
+    "Choose a candidate file to inspect its metadata. It will not be run.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择候选文件以检查其元数据，不会运行该文件。"
+          }
+        }
+      }
+    },
+    "Choose a local, absolute file path without invalid characters.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请选择不含无效字符的本地绝对文件路径。"
+          }
+        }
+      }
+    },
+    "Copied": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已复制"
+          }
+        }
+      }
+    },
+    "Copy command": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复制命令"
+          }
+        }
+      }
+    },
+    "Copying only changes the clipboard. Running this command yourself can install dependencies, access the network and update Homebrew. Review the official instructions first.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复制仅更新剪贴板。你自行运行此命令可能安装依赖、访问网络并更新 Homebrew，请先查看官方说明。"
+          }
+        }
+      }
+    },
+    "Could not inspect": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法检查"
+          }
+        }
+      }
+    },
+    "Found · unverified": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已找到 · 未验证"
+          }
+        }
+      }
+    },
+    "If you already use Homebrew, its documented install command is:": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "如果你已在使用 Homebrew，官方文档中的安装命令为："
+          }
+        }
+      }
+    },
+    "Inspect another file…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查其他文件…"
+          }
+        }
+      }
+    },
+    "Inspect metadata": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查元数据"
+          }
+        }
+      }
+    },
+    "Inspecting file metadata…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在检查文件元数据…"
+          }
+        }
+      }
+    },
+    "Install or review manually": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手动安装或查看说明"
+          }
+        }
+      }
+    },
+    "Location checks": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "位置检查"
+          }
+        }
+      }
+    },
+    "Locations checked by this button": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此按钮检查的位置"
+          }
+        }
+      }
+    },
+    "Metadata could not be read. This does not mean the tool is missing.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法读取元数据，这不代表工具不存在。"
+          }
+        }
+      }
+    },
+    "Mole execution remains unavailable. Space can import a JSON report without installing or running Mole. No cleanup command is connected.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mole 执行尚未接入。空间页面无需安装或运行 Mole 即可导入 JSON 报告。清理命令尚未连接。"
+          }
+        }
+      }
+    },
+    "Not found at this path": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此路径未找到"
+          }
+        }
+      }
+    },
+    "Official installation instructions": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "官方安装说明"
+          }
+        }
+      }
+    },
+    "Only metadata is inspected. No version command, shell, installer or tool is started.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅读取文件元数据，不运行版本命令、Shell、安装程序或工具。"
+          }
+        }
+      }
+    },
+    "Other installation locations have not been checked.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚未检查其他安装位置。"
+          }
+        }
+      }
+    },
+    "Project discovery reads Git metadata without running Git. A file at /usr/bin/git may be an Apple launcher; it does not prove Command Line Tools are installed. Git status execution remains unavailable.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "项目发现直接读取 Git 元数据，不运行 Git。/usr/bin/git 可能是 Apple 启动器，存在此文件不代表已安装命令行工具。Git 状态执行尚未接入。"
+          }
+        }
+      }
+    },
+    "The inspection did not finish. No tool was run.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查未完成，没有运行任何工具。"
+          }
+        }
+      }
+    },
+    "This location is not a regular file or a symbolic link.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此位置不是普通文件或符号链接。"
+          }
+        }
+      }
+    },
+    "This regular file has no executable permission bits.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此普通文件没有可执行权限位。"
+          }
+        }
+      }
+    },
+    "Tool inspection is disabled in Demo. No example installation is shown.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "示例模式下不检查工具，也不会展示虚构的安装结果。"
+          }
+        }
+      }
+    },
+    "Tool preparation": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工具准备"
+          }
+        }
+      }
+    },
+    "Tool preparation…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工具准备…"
+          }
+        }
+      }
+    },
+    "Unsupported candidate": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不支持的候选文件"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

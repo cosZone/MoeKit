@@ -46,6 +46,15 @@ struct MoeKitApp: App {
         .restorationBehavior(.disabled)
         .defaultLaunchBehavior(.suppressed)
 
+        Window("Tool preparation", id: "tool-preparation") {
+            ToolPreparationView(isDemoEnabled: store.isDemoEnabled)
+        }
+        .defaultSize(width: 680, height: 720)
+        .windowResizability(.contentMinSize)
+        .defaultPosition(.center)
+        .restorationBehavior(.disabled)
+        .defaultLaunchBehavior(.suppressed)
+
         Window("About MoeKit", id: "about") {
             AboutWindowView()
         }

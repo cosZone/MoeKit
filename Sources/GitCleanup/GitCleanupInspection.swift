@@ -27,6 +27,7 @@ final class GitCleanupCapture {
         }
     }
     func collect(_ directory: InstallerDirectoryAnchor, prefix: String = "", skip: Set<String> = []) throws {
+        defer { withExtendedLifetime(directory) {} }
         try Task.checkCancellation()
         guard prefix.split(separator: "/").count < 48 else { throw GitCleanupFailure.budget }
         try directory.validate()
@@ -60,6 +61,7 @@ final class GitCleanupCapture {
             case UInt32(S_IFREG):
                 guard snapshot.links == 1, snapshot.bytes >= 0, snapshot.bytes <= 64 * 1_024 * 1_024 else { throw GitCleanupFailure.budget }
                 let file = try InstallerFileDescriptor(parent: directory, name: name)
+                defer { withExtendedLifetime(file) {} }
                 try InstallerFileAccess.rejectMutationGrantingACL(file.fd)
                 try InstallerFileAccess.rejectCloudAttributes(file.fd)
                 let data = try BoundedRegularFileReader.read(descriptor: file.fd, maximumBytes: 64 * 1_024 * 1_024)
@@ -334,6 +336,7 @@ enum GitCleanupInspection {
     }
     static func read(_ parent: InstallerDirectoryAnchor, _ name: String, maximum: Int) throws -> Data {
         let file = try InstallerFileDescriptor(parent: parent, name: name)
+        defer { withExtendedLifetime(file) {} }
         let result = try BoundedRegularFileReader.read(descriptor: file.fd, maximumBytes: maximum)
         try parent.validate(); return result
     }

@@ -214,6 +214,7 @@ actor NativeGitCleanupExecutor {
             destination = parent; name = parts.last!
             try destination.validateTrustedMutationAncestry()
             let retainedBranch = try InstallerFileDescriptor(parent: recovery, name: payload)
+            defer { withExtendedLifetime(retainedBranch) {} }
             try InstallerFileAccess.rejectMutationGrantingACL(retainedBranch.fd)
             guard receipt.destinationParentIdentity.matchesDirectory(try InstallerFileAccess.snapshot(destination.fd)) else { throw GitCleanupFailure.changed }
             try InstallerFileAccess.assertAbsent(destination, name)

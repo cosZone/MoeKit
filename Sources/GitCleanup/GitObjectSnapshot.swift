@@ -85,6 +85,7 @@ final class GitObjectSnapshot {
             try privateRoot.validate(); try InstallerFileAccess.validatePrivate(privateRoot.fd, directory: true)
         }
         let executable = try InstallerFileDescriptor(parent: privateRoot, name: "git")
+        defer { withExtendedLifetime(executable) {} }
         let expected = try InstallerFileAccess.snapshot(executable.fd)
         guard expected.mode & UInt32(S_IFMT) == UInt32(S_IFREG), expected.uid == geteuid(), expected.mode & 0o777 == 0o700,
               expected.links == 1, expected.flags == 0 else { throw GitCleanupFailure.helper }

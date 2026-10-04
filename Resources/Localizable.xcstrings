@@ -3890,6 +3890,346 @@
           }
         }
       }
+    },
+    "Add a project folder or discover Git repositories in folders you choose.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加一个项目文件夹，或在指定位置发现 Git 仓库。"
+          }
+        }
+      }
+    },
+    "After discovery, Tasks shows progress, cancellation and actual results. Git working-tree changes are not checked yet.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发现任务的进度、取消状态和实际结果会显示在「任务」中。目前还不检查 Git 工作区的修改。"
+          }
+        }
+      }
+    },
+    "Back": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "返回"
+          }
+        }
+      }
+    },
+    "Before you start": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "开始前先了解"
+          }
+        }
+      }
+    },
+    "Choose Add project for one folder, or Discover in folder to find Git repositories and review what to import. Only selected folders are read; no project files are changed.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用「添加项目」选择单个文件夹，或用「在文件夹中发现」查找 Git 仓库并复查要导入的项目。只读取所选文件夹，不修改项目文件。"
+          }
+        }
+      }
+    },
+    "Choose Import report to open an existing Mole analyze --json file. MoeKit reads only that file; it does not run Mole or scan the paths in the report. Report sizes are not reclaimable space.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点击「导入报告」打开已有的 Mole analyze --json 文件。MoeKit 只读取该文件，不运行 Mole，也不扫描报告中的路径。报告大小不等于可回收空间。"
+          }
+        }
+      }
+    },
+    "Choose Start scan in the toolbar to read current-user executable names and paths, working directories and TCP listening endpoints. No command arguments, environment variables or process signals. Nothing is scanned automatically.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点击工具栏的「开始扫描」，读取当前用户的可执行文件名称和路径、工作目录、TCP 监听地址与端口。不读取命令参数或环境变量，不发送进程信号，也不会自动扫描。"
+          }
+        }
+      }
+    },
+    "Choose a first step and learn what this preview can read and do.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择第一步，了解当前预览能读取什么、能做什么。"
+          }
+        }
+      }
+    },
+    "Demo uses built-in examples. Entering Demo does not scan folders or processes, import reports, or replace your saved projects. Processes & Ports has no Demo scan.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "示例模式使用内置数据。进入时不会扫描文件夹或进程、导入报告，也不会替换已保存的项目。「进程与端口」没有示例扫描。"
+          }
+        }
+      }
+    },
+    "Explore Projects, Tools and Tasks. The Demo banner stays visible; use Exit demo whenever you want to return to your own data.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "浏览「项目」「工具」和「任务」。示例模式会一直显示提示；随时点「退出示例」返回自己的数据。"
+          }
+        }
+      }
+    },
+    "Find your current user’s processes and TCP listening ports with a read-only snapshot.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "通过只读快照，查看当前用户的进程和 TCP 监听端口。"
+          }
+        }
+      }
+    },
+    "Getting started": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上手引导"
+          }
+        }
+      }
+    },
+    "Getting started…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上手引导…"
+          }
+        }
+      }
+    },
+    "Go to Processes & Ports": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "前往进程与端口"
+          }
+        }
+      }
+    },
+    "Go to Projects": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "前往项目"
+          }
+        }
+      }
+    },
+    "In Processes & Ports, choose Start scan when you’re ready. Select a row to see its identity, ports and project-association evidence.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "进入「进程与端口」后，准备好再点「开始扫描」。选择一行即可查看进程身份、端口和项目关联依据。"
+          }
+        }
+      }
+    },
+    "In Projects, choose Add project for one folder, or Discover in folder to find Git repositories. Review discovery results before importing.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "进入「项目」后，用「添加项目」选择单个文件夹，或用「在文件夹中发现」查找 Git 仓库。发现后先复查，再导入。"
+          }
+        }
+      }
+    },
+    "Look around with examples": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "先看看示例"
+          }
+        }
+      }
+    },
+    "Mole Space can import an existing JSON report. This preview cannot run CLI tools, clean files, uninstall apps or stop processes.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mole 的「空间」可导入已有 JSON 报告。当前预览还不能运行 CLI 工具、清理文件、卸载应用或停止进程。"
+          }
+        }
+      }
+    },
+    "Open Space": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开空间"
+          }
+        }
+      }
+    },
+    "Open getting started": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开上手引导"
+          }
+        }
+      }
+    },
+    "Organize my projects": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "整理我的项目"
+          }
+        }
+      }
+    },
+    "Quick guide": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上手引导"
+          }
+        }
+      }
+    },
+    "Reading starts only after you choose a folder. Discovery is bounded and read-only. Project paths, names and pins are saved locally; project files are not changed.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "只有选定文件夹后才开始读取。发现范围有限且只读；项目路径、名称和置顶信息保存在本机，不修改项目文件。"
+          }
+        }
+      }
+    },
+    "See processes and ports": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看进程与端口"
+          }
+        }
+      }
+    },
+    "Skip for now": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暂时跳过"
+          }
+        }
+      }
+    },
+    "This button opens the workspace. It does not start a scan or ask for folder access.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下面的按钮只打开对应页面，不会开始扫描或请求文件夹访问。"
+          }
+        }
+      }
+    },
+    "Try example projects, task results and a Mole report before using your own data.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "先体验示例项目、任务结果和 Mole 报告，再使用自己的数据。"
+          }
+        }
+      }
+    },
+    "Welcome to MoeKit": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "欢迎使用 MoeKit"
+          }
+        }
+      }
+    },
+    "What would you like to do first?": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "想先做什么？"
+          }
+        }
+      }
+    },
+    "You can reopen this guide from Help or Settings.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "之后可从「帮助」或「设置」重新打开引导。"
+          }
+        }
+      }
+    },
+    "Your first step": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "第一步怎么做"
+          }
+        }
+      }
+    },
+    "Your projects, tools and task results, together.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "把项目、工具和任务结果放在一起。"
+          }
+        }
+      }
+    },
+    "A snapshot is read only when you choose Start scan or Refresh: current-user executable names and paths, working directories, and TCP listening endpoints. Command arguments and environment variables are not read. No process signals are sent.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "只有点击「开始扫描」或「刷新」才读取快照：当前用户的可执行文件名称和路径、工作目录、TCP 监听地址与端口。不读取命令参数或环境变量，不向进程发送信号。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

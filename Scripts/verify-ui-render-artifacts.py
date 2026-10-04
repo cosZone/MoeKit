@@ -70,12 +70,19 @@ def verify(directory: Path, language: str) -> int:
         scenarios += ["demo-mole-space", "demo-processes-unavailable"]
     elif language != "zh-Hans":
         raise ValueError("Unsupported render language")
+    scenarios += ["first-use-projects", "first-use-processes", "first-use-tasks", "first-use-mole-space"]
     expected = {
         f"{scenario}-{language}-{appearance}-{width}x{height}": (width, height)
         for scenario in scenarios
         for appearance in ("light", "dark")
         for width, height in ((960, 620), (1280, 800))
     }
+    expected.update({
+        f"getting-started-{page}-{language}-{appearance}-{width}x{height}": (width, height)
+        for page in ("welcome", "projects", "processes", "demo")
+        for appearance in ("light", "dark")
+        for width, height in ((520, 480), (620, 580))
+    })
     manifest = json.loads((directory / "manifest.json").read_text())
     images, scopes = {}, {}
     for test in manifest:

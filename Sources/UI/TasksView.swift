@@ -31,7 +31,7 @@ struct TasksView: View {
                 }
                 .tableStyle(.inset(alternatesRowBackgrounds: true))
                 .accessibilityLabel("Tasks")
-                .frame(minHeight: 200)
+                .frame(maxWidth: .infinity, minHeight: 200)
                 .overlay {
                     if store.filteredTasks.isEmpty {
                         ContentUnavailableView {
@@ -40,16 +40,20 @@ struct TasksView: View {
                             Text(store.displayedTasks.isEmpty ? "Discovery and process scans appear here with their actual results." : "Try a different search or task filter.")
                         } actions: {
                             if store.hasTaskFilters { Button("Clear filters") { store.clearTaskFilters() } }
+                            else if store.displayedTasks.isEmpty {
+                                Button("Go to Projects") { store.openGettingStartedGoal(.projects) }
+                                Button("Go to Processes & Ports") { store.openGettingStartedGoal(.processes) }
+                            }
                         }
                     }
                 }
                 if let task = store.selectedTask {
-                    TaskDetailView(task: task).id(task.id).frame(minHeight: 180, idealHeight: 240, maxHeight: 450)
+                    TaskDetailView(task: task).id(task.id).frame(maxWidth: .infinity, minHeight: 180, idealHeight: 240, maxHeight: 450)
                 } else {
                     ContentUnavailableView("Select a task", systemImage: "list.bullet.rectangle", description: Text("Select a visible record to inspect its result and diagnostics."))
-                        .frame(minHeight: 180, idealHeight: 240, maxHeight: 450)
+                        .frame(maxWidth: .infinity, minHeight: 180, idealHeight: 240, maxHeight: 450)
                 }
-            }
+            }.frame(maxWidth: .infinity, maxHeight: .infinity)
             StatusBar(leading: String(localized: "\(store.filteredTasks.count) records"),
                       trailing: store.isDemoEnabled ? String(localized: "Example data") : String(localized: "Task records are kept for this session"))
         }

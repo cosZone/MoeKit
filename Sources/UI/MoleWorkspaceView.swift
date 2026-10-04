@@ -18,7 +18,7 @@ struct MoleWorkspaceView: View {
                 } description: {
                     Text(store.selectedCapability.readiness.explanation ?? String(localized: "This capability is not connected yet."))
                 } actions: {
-                    Button("Run", systemImage: "play") {}.disabled(true)
+                    Button("Open Space", systemImage: "internaldrive") { store.selectedCapability = .space }
                 }
                 StatusBar(leading: String(localized: "No process has been started"), trailing: "Mole")
             }
@@ -135,7 +135,7 @@ private struct MoleSpaceView: View {
                         ContentUnavailableView {
                             Label(store.isImporting ? "Importing report…" : (hasReport ? "No matching entries" : "Explore a Mole space report"), systemImage: store.isImporting ? "hourglass" : "internaldrive")
                         } description: {
-                            Text(store.isImporting ? "Reading the selected JSON report. No CLI is running and no reported files are changed." : (hasReport ? "Try a different search. Empty results do not prove an empty disk." : "Import an existing analyze --json report. CLI scanning will be connected in a later milestone."))
+                            Text(store.isImporting ? "Reading the selected JSON report. No CLI is running and no reported files are changed." : (hasReport ? "Try a different search. Empty results do not prove an empty disk." : "Choose Import report to open an existing Mole analyze --json file. MoeKit reads only that file; it does not run Mole or scan the paths in the report. Report sizes are not reclaimable space."))
                         } actions: {
                             if !hasReport && !store.isImporting {
                                 Button("Import report…") { store.chooseMoleReport() }.disabled(store.isDemoEnabled || store.isImporting)

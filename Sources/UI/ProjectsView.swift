@@ -80,11 +80,12 @@ struct ProjectsView: View {
                     ContentUnavailableView {
                         Label(store.isScanning ? "Discovering projects…" : (store.displayedProjects.isEmpty ? "Your projects, in one place" : "No matching projects"), systemImage: store.isScanning ? "hourglass" : "folder")
                     } description: {
-                        Text(store.isScanning ? "Reading only the folders you selected. You can cancel discovery at any time." : (store.displayedProjects.isEmpty ? "Add a folder or discover Git repositories in a location you choose." : "Try a different search or filter."))
+                        Text(store.isScanning ? "Reading only the folders you selected. You can cancel discovery at any time." : (store.displayedProjects.isEmpty ? "Choose Add project for one folder, or Discover in folder to find Git repositories and review what to import. Only selected folders are read; no project files are changed." : "Try a different search or filter."))
                     } actions: {
                         if !store.isScanning && store.displayedProjects.isEmpty {
                             Button("Add project…") { store.chooseProject(scanChildren: false) }.disabled(store.isDemoEnabled)
-                            Button("Explore demo") { store.isDemoEnabled = true }
+                            Button("Discover in folder…") { store.chooseProject(scanChildren: true) }.disabled(store.isDemoEnabled)
+                            GettingStartedButton()
                         } else if !store.isScanning && store.hasProjectFilters {
                             Button("Clear filters") { store.clearProjectFilters() }
                         }

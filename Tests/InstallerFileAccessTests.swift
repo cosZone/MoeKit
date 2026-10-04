@@ -40,7 +40,7 @@ struct InstallerFileAccessTests {
         #expect(acl_get_entry(acl, Int32(ACL_FIRST_ENTRY.rawValue), &entry) == -1)
         #expect(errno == EINVAL)
         // Use the public text parser for a fixture-only harmless deny ACL.
-        let nonempty = try #require(acl_from_text("!#acl 1\nuser:FFFFEEEE-DDDD-CCCC-BBBB-AAAA00000000:0:deny:delete\n"))
+        let nonempty = try #require(acl_from_text("!#acl 1\ngroup:ABCDEFAB-CDEF-ABCD-EFAB-CDEF0000000C:::deny:delete\n"))
         defer { acl_free(UnsafeMutableRawPointer(nonempty)) }
         try #require(acl_set_fd_np(directory.fd, nonempty, ACL_TYPE_EXTENDED) == 0)
         #expect(throws: InstallerTrashFailure.unsafeRecovery) { try InstallerFileAccess.validatePrivate(directory.fd, directory: true) }

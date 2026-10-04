@@ -71,8 +71,11 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
         let catalog = try catalogSnapshot(protecting: selection)
         let parent = try InstallerDirectoryAnchor.open(environment.downloads)
         try validateParent(parent)
+        let namedBeforeOpen = try InstallerFileAccess.snapshotAt(parent.fd, selection.lastPathComponent)
+        try InstallerFileAccess.validateRegular(namedBeforeOpen)
         let file = try InstallerFileDescriptor(parent: parent, name: selection.lastPathComponent)
         let identity = try InstallerFileAccess.snapshot(file.fd)
+        guard namedBeforeOpen == identity else { throw InstallerTrashFailure.changed }
         try validateFile(file.fd, identity: identity, url: selection)
         guard identity.device == parent.identity.device,
               identity == (try InstallerFileAccess.snapshotAt(parent.fd, selection.lastPathComponent)) else { throw InstallerTrashFailure.changed }
@@ -197,10 +200,13 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
             sourceURL = receipt.operationURL.appendingPathComponent(name)
         }
         let sourceParent = try InstallerDirectoryAnchor.open(sourceURL.deletingLastPathComponent())
+        let expectedSource = receipt.state == .trashed ? receipt.trashFile : receipt.payloadFile
+        guard let expectedSource,
+              expectedSource == (try InstallerFileAccess.snapshotAt(sourceParent.fd, sourceURL.lastPathComponent)) else { throw InstallerTrashFailure.changed }
+        try InstallerFileAccess.validateRegular(expectedSource)
         let source = try InstallerFileDescriptor(parent: sourceParent, name: sourceURL.lastPathComponent)
         let identity = try InstallerFileAccess.snapshot(source.fd)
-        let expectedSource = receipt.state == .trashed ? receipt.trashFile : receipt.payloadFile
-        guard let expectedSource, identity == expectedSource, receipt.originalFile.matchesCaptured(identity), identity == (try InstallerFileAccess.snapshotAt(sourceParent.fd, sourceURL.lastPathComponent)) else { throw InstallerTrashFailure.changed }
+        guard identity == expectedSource, receipt.originalFile.matchesCaptured(identity), identity == (try InstallerFileAccess.snapshotAt(sourceParent.fd, sourceURL.lastPathComponent)) else { throw InstallerTrashFailure.changed }
         try await requireNoObservedUse(identity, path: sourceURL.path, excluding: [source.fd])
         try parent.validate(); try sourceParent.validate()
         guard identity == (try InstallerFileAccess.snapshot(source.fd)),
@@ -340,7 +346,8 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
     }
     private func validateParent(_ parent: InstallerDirectoryAnchor) throws {
         try parent.validate(); try parent.rejectGitAncestors()
-        guard parent.identity.uid == geteuid(), parent.identity.mode & 0o022 == 0 else { throw InstallerTrashFailure.unsupported }
+        guard parent.identity.uid == geteuid(), parent.identity.mode & 0o022 == 0,
+              parent.identity.device == parent.parent?.identity.device else { throw InstallerTrashFailure.unsupported }
         if environment.enforceLocalVolume { try InstallerFileAccess.validateVolume(parent.fd, url: parent.url) }
         try InstallerFileAccess.rejectCloudAttributes(parent.fd)
     }
@@ -367,6 +374,8 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
         guard url.deletingLastPathComponent().path == environment.trash.path else { throw InstallerTrashFailure.changed }
         let parent = try InstallerDirectoryAnchor.open(environment.trash)
         guard parent.identity.uid == geteuid(), parent.identity.device == expected.device else { throw InstallerTrashFailure.changed }
+        let named = try InstallerFileAccess.snapshotAt(parent.fd, url.lastPathComponent)
+        guard expected.matchesCaptured(named), exact == nil || exact == named else { throw InstallerTrashFailure.changed }
         let file = try InstallerFileDescriptor(parent: parent, name: url.lastPathComponent)
         let actual = try InstallerFileAccess.snapshot(file.fd)
         guard expected.matchesCaptured(actual), exact == nil || exact == actual, actual == (try InstallerFileAccess.snapshotAt(parent.fd, url.lastPathComponent)) else { throw InstallerTrashFailure.changed }

@@ -40,6 +40,19 @@ struct InstallerTrashStoreTests {
         #expect(await executor.moveCount == 0)
     }
 
+    @Test("Directory URL trailing-slash spelling does not reject an exact live Downloads path")
+    func directoryURLSpelling() async throws {
+        let executor = TrashFixture()
+        let store = InstallerTrashStore(executor: executor, downloadsURL: downloads)
+        let plain = URL(fileURLWithPath: downloads.path, isDirectory: false)
+        #expect(plain.path == downloads.path)
+        store.updateContext(liveAnalysisID: UUID(), result: try reportResult(directory: plain),
+                            isDemoEnabled: false, protectedPaths: [], catalogIsKnown: true)
+        store.select(path: selected); store.prepare(); await settle(store)
+        #expect(store.plan != nil)
+        #expect(await executor.prepareCount == 1)
+    }
+
     @Test("Attestation, exact pending UUID, expiry and one-use consumption gate mutation")
     func exactConfirmation() async throws {
         let executor = TrashFixture()

@@ -23,7 +23,9 @@ enum InstallerUseEvidence: Equatable, Sendable {
     case noUseObserved
     case unavailable(reason: String)
 
-    static let scopeDescription = String(localized: "Checks current-user open file descriptors and fileports, and attached disk images. Memory mappings, system processes, and other users' use are not verified. This observation is not proof that the file is unused.")
+    static let attachedImageLimitation = String(localized: "Eject all attached disk images manually, then check again. This version only supports a complete empty disk-image inventory; it cannot rule out use from another attached image.")
+
+    static let scopeDescription = String(localized: "Requires all disk images to be ejected and checks current-user open file descriptors and fileports. Memory mappings, system processes, and other users' use are not verified. This observation is not proof that the file is unused.")
 }
 
 protocol InstallerUseEvidenceProviding: Sendable {
@@ -99,8 +101,8 @@ actor NativeInstallerUseEvidenceProvider: InstallerUseEvidenceProviding {
             // Our own helper's expected creation/exit never becomes PID churn.
             let mountedBefore = try await system.mountedImages(deadline: deadline)
             try check(deadline)
-            if mountedBefore.contains(target.identity) {
-                return .observedUse(reason: String(localized: "This disk image is attached. Eject it before moving its source file."))
+            guard mountedBefore.isEmpty else {
+                return .unavailable(reason: InstallerUseEvidence.attachedImageLimitation)
             }
             let before = try pidSet(system.processes(maximum: maximumProcesses))
             guard before.contains(system.observerPID) else {
@@ -195,11 +197,8 @@ actor NativeInstallerUseEvidenceProvider: InstallerUseEvidenceProviding {
             }
             let mountedAfter = try await system.mountedImages(deadline: deadline)
             try check(deadline)
-            if mountedAfter.contains(target.identity) {
-                return .observedUse(reason: String(localized: "This disk image became attached during the observation."))
-            }
-            guard mountedBefore == mountedAfter else {
-                throw InstallerUseReadError.unavailable(String(localized: "Attached disk images changed during the observation. Check again."))
+            guard mountedAfter.isEmpty else {
+                return .unavailable(reason: InstallerUseEvidence.attachedImageLimitation)
             }
             return .noUseObserved
         } catch InstallerUseReadError.unavailable(let reason) {
@@ -329,7 +328,8 @@ struct NativeInstallerUseSystem: InstallerUseSystemReading {
 
     func mountedImages(deadline: TimeInterval) async throws -> Set<InstallerUseFileIdentity> {
         let data = try await InstallerDiskImageInventory.shared.read(deadline: deadline)
-        return try InstallerUseNativeParsing.mountedIdentities(data: data)
+        try InstallerUseNativeParsing.requireEmptyMountedInventory(data: data)
+        return []
     }
 
     private func nativeCount(bytes: Int32, error: Int32, stride: Int, maximum: Int, pid: Int32, stage: String) throws -> Int {
@@ -375,67 +375,23 @@ enum InstallerUseNativeParsing {
         return .init(device: UInt64(UInt32(bitPattern: info.st_dev)), inode: UInt64(info.st_ino))
     }
 
-    static func mountedIdentities(
-        data: Data,
-        resolve: (String, Data) throws -> InstallerUseFileIdentity = resolveMountedImage
-    ) throws -> Set<InstallerUseFileIdentity> {
-        guard data.count <= InstallerDiskImageInventory.maximumOutput,
+    /// Modern hdiutil records need not include an original-source alias or
+    /// identity. This supported subset accepts ONLY a complete empty inventory.
+    /// Every nonempty record blocks, including apparently unrelated images.
+    /// Path matching must never be used to manufacture negative mount evidence.
+    static func requireEmptyMountedInventory(data: Data) throws {
+        guard !data.isEmpty, data.count <= InstallerDiskImageInventory.maximumOutput,
               let root = try PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any],
-              let images = root["images"] as? [[String: Any]], images.count <= 256 else { throw mountUnavailable() }
-        var result = Set<InstallerUseFileIdentity>()
-        for image in images {
-            guard let path = image["image-path"] as? String, path.hasPrefix("/"), !path.utf8.contains(0),
-                  let alias = image["image-alias"] as? Data, !alias.isEmpty, alias.count <= 65_536 else {
-                throw mountUnavailable()
-            }
-            result.insert(try resolve(path, alias))
-            if let shadow = image["shadow-path"] as? String, !shadow.isEmpty, shadow != "<none>" {
-                // hdiutil has no equivalent original-identity alias for a shadow
-                // file. Cannot establish a complete negative inventory for it.
-                throw mountUnavailable()
-            }
-            if image["shadow-path"] != nil && !(image["shadow-path"] is String) { throw mountUnavailable() }
+              let images = root["images"] as? [[String: Any]] else { throw mountUnavailable() }
+        guard images.isEmpty else {
+            throw InstallerUseReadError.unavailable(InstallerUseEvidence.attachedImageLimitation)
         }
-        return result
     }
 
-    static func resolveMountedImage(path: String, alias: Data) throws -> InstallerUseFileIdentity {
-        guard let bookmark = CFURLCreateBookmarkDataFromAliasRecord(kCFAllocatorDefault, alias as CFData)?.takeRetainedValue() else {
-            throw mountUnavailable("alias conversion")
-        }
-        let bookmarkData = bookmark as Data
-        // Aliases/bookmarks may fall back to a replacement at the old path.
-        // Require the embedded original resource identity to agree with the
-        // resolved file, rather than trusting path existence alone.
-        let keys: Set<URLResourceKey> = [.fileResourceIdentifierKey, .volumeIdentifierKey]
-        guard let original = NSURL.resourceValues(forKeys: Array(keys), fromBookmarkData: bookmarkData),
-              let originalFile = original[.fileResourceIdentifierKey] as? NSObject,
-              let originalVolume = original[.volumeIdentifierKey] as? NSObject else { throw mountUnavailable("original alias resource identifiers") }
-        var stale = false
-        let resolved = try URL(resolvingBookmarkData: bookmarkData,
-                               options: [.withoutUI, .withoutMounting],
-                               relativeTo: nil, bookmarkDataIsStale: &stale)
-        guard resolved.isFileURL else { throw mountUnavailable("resolved source is not a file") }
-        // Resolving a bookmark may carry cached resource values. Query a fresh
-        // path URL and bracket those reads with native identities, so an old
-        // bookmark cache cannot vouch for a replacement at the old pathname.
-        let fresh = URL(fileURLWithPath: resolved.path)
-        let before = try identity(at: fresh)
-        let actual = try fresh.resourceValues(forKeys: keys)
-        guard let actualFile = actual.fileResourceIdentifier as? NSObject,
-              let actualVolume = actual.volumeIdentifier as? NSObject,
-              originalFile.isEqual(actualFile), originalVolume.isEqual(actualVolume) else { throw mountUnavailable("original and live resource identifiers disagree") }
-        let identity = try identity(at: fresh)
-        guard before == identity else { throw mountUnavailable("source changed while reading identity") }
-        // A stale recorded path is never ignored; a moved alias can resolve
-        // by identity, but replacement/missing source paths block absence.
-        guard identity == (try self.identity(at: URL(fileURLWithPath: path))) else { throw mountUnavailable("recorded path and alias source disagree") }
-        return identity
+    private static func mountUnavailable() -> InstallerUseReadError {
+        .unavailable(String(localized: "The disk-image inventory is incomplete or unreadable. Eject disk images manually and check again; no file was moved."))
     }
 
-    private static func mountUnavailable(_ detail: String = "incomplete image inventory") -> InstallerUseReadError {
-        .unavailable(String(localized: "Attached disk-image source identities could not be completely verified (\(detail)). Eject disk images and check again."))
-    }
 }
 
 /// Only this fixed, read-only system invocation is permitted here. Apple DTS

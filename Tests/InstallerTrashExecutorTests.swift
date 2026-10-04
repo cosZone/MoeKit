@@ -330,17 +330,30 @@ struct InstallerTrashExecutorTests {
         let f = try InstallerFixture(), sink = InstallerFixtureSink(f.trash)
         let executor = f.executor(sink: sink) { point in
             if point == .beforeCapture {
-                let fd = open(f.recovery.deletingLastPathComponent().appendingPathComponent("projects.json.lock").path, O_RDWR | O_NOFOLLOW)
-                try #require(fd >= 0)
-                defer { close(fd) }
-                errno = 0
-                try #require(flock(fd, LOCK_EX | LOCK_NB) != 0)
-                try #require(errno == EWOULDBLOCK || errno == EAGAIN)
+                #expect(throws: CatalogPersistence.CatalogError.writerBusy) {
+                    try CatalogWriteCoordinator.withExclusiveAccess(at: f.recovery.deletingLastPathComponent()) { _ in
+                        Issue.record("A catalog writer unexpectedly entered during a native file operation")
+                    }
+                }
             }
         }
         let plan = try await executor.prepare(selection: f.source, scope: f.scope)
         let result = try await executor.moveToTrash(planID: plan.id, scope: plan.scope)
         #expect(result.movedToTrash); #expect(sink.callCount == 1)
+    }
+    @Test("Changed disk catalog also invalidates an already confirmed restore plan")
+    func externalCatalogChangeBeforeRestore() async throws {
+        let f = try InstallerFixture(), executor = f.executor()
+        let plan = try await executor.prepare(selection: f.source, scope: f.scope)
+        let moved = try await executor.moveToTrash(planID: plan.id, scope: plan.scope)
+        let destination = try #require(moved.receipt?.trashURL)
+        let context = f.context
+        let restore = try await executor.prepareRestore(receiptID: plan.id, context: context)
+        let catalog = CatalogPersistence(directory: f.recovery.deletingLastPathComponent())
+        _ = try catalog.load(); try catalog.save([])
+        await #expect(throws: InstallerTrashFailure.changed) { try await executor.restore(planID: restore.id, context: context) }
+        #expect(try Data(contentsOf: destination) == f.marker)
+        #expect(!FileManager.default.fileExists(atPath: f.source.path))
     }
     @Test("Actual macOS Trash API and receipt restore only on owned CI fixture",
           .enabled(if: ProcessInfo.processInfo.environment["MOEKIT_INSTALLER_TRASH_FIXTURE"] == "1"))

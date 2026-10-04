@@ -25,6 +25,8 @@ for kind in args.kinds:
     record = json.loads(path.read_text())
     assert record['schema'] == 1 and record['kind'] == kind and record['sourceSHA'] == args.source_sha
     assert record['detail']['result'] == expected[kind]
+    if kind == 'mounted-image':
+        assert record['detail']['observedRefusal'] == 'true'
     for key in ('sourceDevice', 'sourceInode'):
         assert record['detail'][key].isdigit() and int(record['detail'][key]) > 0
     print(f'Verified actual {kind} fixture for {args.source_sha}')

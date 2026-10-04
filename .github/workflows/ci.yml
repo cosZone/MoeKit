@@ -65,20 +65,20 @@ jobs:
           mkdir -m 700 InstallerFixtureEvidence
           xcodebuild "${args[@]}" build-for-testing
           xcodebuild "${args[@]}" test-without-building -testLanguage en -testRegion US -resultBundlePath TestResults.xcresult \
-            -skip-testing:MoeKitTests/InstallerUseEvidenceTests/nativeIdleCurrentUserCoverage
+            '-skip-testing:MoeKitTests/InstallerUseEvidenceTests/nativeIdleCurrentUserCoverage()'
       - name: Verify actual idle installer-use coverage in isolation
         if: ${{ always() && !cancelled() }}
         env:
           TEST_RUNNER_MOEKIT_INSTALLER_IDLE_FIXTURE: '1'
         run: |
           set -euo pipefail
-          test -d DerivedData/Build/Products/Debug/MoeKitTests.xctest
+          test -d DerivedData/Build/Products/Debug/MoeKit.app/Contents/PlugIns/MoeKitTests.xctest
           xcodebuild -workspace MoeKit.xcworkspace -scheme MoeKit -configuration Debug \
             -destination 'platform=macOS' -derivedDataPath DerivedData \
             CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= \
             test-without-building -testLanguage en -testRegion US \
             -parallel-testing-enabled NO \
-            -only-testing:MoeKitTests/InstallerUseEvidenceTests/nativeIdleCurrentUserCoverage \
+            '-only-testing:MoeKitTests/InstallerUseEvidenceTests/nativeIdleCurrentUserCoverage()' \
             -resultBundlePath InstallerIdleResults.xcresult
           python3 Scripts/verify-installer-fixture-evidence.py --directory InstallerFixtureEvidence --source-sha "$SOURCE_SHA"
       - name: Render workspaces and first-use guidance in Simplified Chinese
@@ -220,7 +220,7 @@ jobs:
                 -destination 'platform=macOS' -derivedDataPath DerivedDataRelease
                 ENABLE_TESTABILITY=YES CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=)
           test_args=(test-without-building -testLanguage en -testRegion US -resultBundlePath ReleaseTestResults.xcresult
-                     -skip-testing:MoeKitTests/InstallerUseEvidenceTests/nativeIdleCurrentUserCoverage)
+                     '-skip-testing:MoeKitTests/InstallerUseEvidenceTests/nativeIdleCurrentUserCoverage()')
           if [ "$INSTRUMENTATION" = address-sanitizer ]; then
             args+=(-enableAddressSanitizer YES)
             test_args+=(-only-testing:MoeKitTests/CatalogPersistenceTests
@@ -235,7 +235,11 @@ jobs:
                         -only-testing:MoeKitTests/ToolPreparationStoreTests
                         -only-testing:MoeKitTests/MoleAnalysisModelsTests
                         -only-testing:MoeKitTests/MoleAnalysisFilesTests
-                        -only-testing:MoeKitTests/MoleAnalysisStoreTests)
+                        -only-testing:MoeKitTests/MoleAnalysisStoreTests
+                        -only-testing:MoeKitTests/InstallerFileAccessTests
+                        -only-testing:MoeKitTests/InstallerTrashExecutorTests
+                        -only-testing:MoeKitTests/InstallerUseEvidenceTests
+                        -only-testing:MoeKitTests/InstallerTrashStoreTests)
           fi
           xcodebuild -project MoeKit.xcodeproj -alltargets -configuration Release \
             ENABLE_TESTABILITY=YES CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= \
@@ -268,7 +272,8 @@ jobs:
                       "AnchoredDirectoryTests", "RepositoryScannerTests", "BoundedRegularFileReaderTests",
                       "CatalogWriteCoordinatorTests", "WorkspaceOperationPrivacyTests",
                       "ToolPreparationTests", "ToolPreparationStoreTests",
-                      "MoleAnalysisModelsTests", "MoleAnalysisFilesTests", "MoleAnalysisStoreTests")
+                      "MoleAnalysisModelsTests", "MoleAnalysisFilesTests", "MoleAnalysisStoreTests",
+                      "InstallerFileAccessTests", "InstallerTrashExecutorTests", "InstallerUseEvidenceTests", "InstallerTrashStoreTests")
           if summary.get("passedTests", 0) < 27 or summary.get("failedTests") != 0 or summary.get("skippedTests") != 0:
               raise SystemExit(f"Optimized catalog tests must execute and pass without skips: {summary}")
           if any(suite not in inventory for suite in required):

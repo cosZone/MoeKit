@@ -33,7 +33,7 @@ struct InstallerCatalogSnapshot: Equatable {
         guard exists == 0 else { throw InstallerTrashFailure.protected }
         let file = try InstallerFileDescriptor(parent: app, name: CatalogWriteCoordinator.catalogName)
         let before = try InstallerFileAccess.snapshot(file.fd)
-        guard before.mode & UInt32(S_IFMT) == UInt32(S_IFREG), before.uid == geteuid(), before.links == 1,
+        guard before.mode & UInt32(S_IFMT) == UInt32(S_IFREG), before.uid == geteuid(), before.links == 1, before.mode & 0o022 == 0,
               before.bytes >= 0, before.bytes <= CatalogPersistence.maximumBytes else { throw InstallerTrashFailure.protected }
         let data = try BoundedRegularFileReader.read(descriptor: file.fd, maximumBytes: CatalogPersistence.maximumBytes)
         guard before == (try InstallerFileAccess.snapshot(file.fd)), before == (try InstallerFileAccess.snapshotAt(app.fd, CatalogWriteCoordinator.catalogName)) else {
@@ -62,6 +62,7 @@ final class InstallerCatalogLease {
             guard flock(descriptor, LOCK_SH | LOCK_NB) == 0 else { throw InstallerTrashFailure.busy }
             let saved = try InstallerFileAccess.snapshot(descriptor)
             guard saved == (try InstallerFileAccess.snapshotAt(app.fd, CatalogWriteCoordinator.lockName)) else { throw InstallerTrashFailure.changed }
+            guard fsync(descriptor) == 0, fsync(app.fd) == 0 else { throw InstallerTrashFailure.journal }
             fd = descriptor; identity = saved
         } catch { close(descriptor); throw error }
     }

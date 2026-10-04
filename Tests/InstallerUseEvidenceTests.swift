@@ -46,17 +46,17 @@ struct InstallerUseEvidenceTests {
         #expect(isObserved(await NativeInstallerUseEvidenceProvider(system: fixture).evidence(for: target)))
     }
 
-    @Test("Mounted source matches inode and device rather than pathname")
+    @Test("Any nonempty mounted inventory blocks before process reads")
     func mountBlocks() async {
         let fixture = InstallerUseFixture(images: [[.init(device: 7, inode: 81)]])
-        #expect(isObserved(await NativeInstallerUseEvidenceProvider(system: fixture).evidence(for: target)))
+        #expect(isUnavailable(await NativeInstallerUseEvidenceProvider(system: fixture).evidence(for: target)))
         #expect(fixture.processListCalls == 0)
     }
 
-    @Test("A target attached during the observation blocks")
+    @Test("Any image attached during the observation blocks")
     func secondMountBlocks() async {
         let fixture = InstallerUseFixture(images: [[], [.init(device: 7, inode: 81)]])
-        #expect(isObserved(await NativeInstallerUseEvidenceProvider(system: fixture).evidence(for: target)))
+        #expect(isUnavailable(await NativeInstallerUseEvidenceProvider(system: fixture).evidence(for: target)))
     }
 
     @Test("Changing unrelated mounted inventory is unavailable")
@@ -166,38 +166,25 @@ struct InstallerUseEvidenceTests {
 
     @Test("Empty image inventory is supported; malformed and incomplete records block")
     func mountParsing() throws {
-        #expect(try InstallerUseNativeParsing.mountedIdentities(data: plist(["images": []])) == [])
+        try InstallerUseNativeParsing.requireEmptyMountedInventory(data: plist(["images": []]))
         let invalid: [[String: Any]] = [[:], ["images": "wrong"], ["images": [["image-path": "/fixture/a.dmg"]]],
             ["images": [["image-path": "relative", "image-alias": Data([1])]]],
             ["images": [["image-path": "/fixture/a.dmg", "image-alias": Data()]]]]
         for object in invalid {
-            #expect(throws: (any Error).self) { try InstallerUseNativeParsing.mountedIdentities(data: plist(object)) }
+            #expect(throws: (any Error).self) { try InstallerUseNativeParsing.requireEmptyMountedInventory(data: plist(object)) }
         }
-        #expect(throws: (any Error).self) { try InstallerUseNativeParsing.mountedIdentities(data: Data([0xFF])) }
+        #expect(throws: (any Error).self) { try InstallerUseNativeParsing.requireEmptyMountedInventory(data: Data([0xFF])) }
     }
 
-    @Test("Every mounted source requires original-identity resolution; shadows remain unknown")
-    func mountIdentityResolution() throws {
-        let record: [String: Any] = ["image-path": "/fixture/a.dmg", "image-alias": Data([1]), "shadow-path": "<none>"]
-        var observedPath: String?
-        var observedAlias: Data?
-        let identities = try InstallerUseNativeParsing.mountedIdentities(data: plist(["images": [record]]), resolve: { path, alias in
-            observedPath = path
-            observedAlias = alias
-            return .init(device: 7, inode: 81)
-        })
-        #expect(observedPath == "/fixture/a.dmg")
-        #expect(observedAlias == Data([1]))
-        #expect(identities == [.init(device: 7, inode: 81)])
-        #expect(throws: InstallerUseReadError.self) {
-            try InstallerUseNativeParsing.mountedIdentities(data: plist(["images": [record]]), resolve: { _, _ in
-                throw InstallerUseReadError.unavailable("The source was replaced or moved.")
-            })
-        }
-        var shadow = record
-        shadow["shadow-path"] = "/fixture/shadow"
-        #expect(throws: InstallerUseReadError.self) {
-            try InstallerUseNativeParsing.mountedIdentities(data: plist(["images": [shadow]]), resolve: { _, _ in .init(device: 7, inode: 81) })
+    @Test("Every nonempty image inventory blocks without source-path exceptions")
+    func nonemptyMountInventoryAlwaysBlocks() throws {
+        let records: [[String: Any]] = [[:], ["image-path": "/fixture/unrelated.dmg"],
+            ["image-path": "/fixture/a.dmg", "image-alias": Data([1])],
+            ["image-path": "/fixture/a.dmg", "shadow-path": "/fixture/shadow"]]
+        for record in records {
+            #expect(throws: InstallerUseReadError.self) {
+                try InstallerUseNativeParsing.requireEmptyMountedInventory(data: plist(["images": [record]]))
+            }
         }
     }
 
@@ -285,7 +272,7 @@ struct InstallerUseEvidenceTests {
         Issue.record("Real current-user file-use coverage never completed within 25 seconds; source activation remains blocked. Last cause: \(latest)")
     }
 
-    @Test("CI-only owned DMG attachment uses the real hdiutil alias identity",
+    @Test("CI-only owned DMG attachment verifies production refusal and safe fixture detach",
           .enabled(if: InstallerMountFixtureCI.isEnabled,
                    "Requires explicit opt-in on a secret-free ephemeral GitHub-hosted macOS runner"))
     func nativeMountedImageFixture() async throws {
@@ -294,14 +281,18 @@ struct InstallerUseEvidenceTests {
         do {
             try fixture.createAndAttach()
             let data = try await InstallerDiskImageInventory.shared.read(deadline: ProcessInfo.processInfo.systemUptime + 15)
-            let record = try fixture.record(in: data)
-            let scoped = try plist(["images": [record]])
+            _ = try fixture.record(in: data)
             let source = try fixture.imageIdentity()
-            try #require(InstallerUseNativeParsing.mountedIdentities(data: scoped) == [source])
+            #expect(throws: InstallerUseReadError.self) {
+                try InstallerUseNativeParsing.requireEmptyMountedInventory(data: data)
+            }
+            let provider = NativeInstallerUseEvidenceProvider()
+            let refusal = await provider.evidence(for: try fixture.useTarget())
+            try #require(refusal == .unavailable(reason: InstallerUseEvidence.attachedImageLimitation))
             try await fixture.detachAndRemove()
             try InstallerNativeFixtureEvidence.record(kind: "mounted-image", detail: [
                 "sourceDevice": String(source.device), "sourceInode": String(source.inode),
-                "result": "verified-attach-and-detach"
+                "result": "verified-attach-and-detach", "observedRefusal": "true"
             ])
         } catch {
             // Cleanup still verifies the newly observed source/device/marker.
@@ -444,6 +435,9 @@ private final class InstallerMountFixtureCI {
     private let volume: String
     private var disk: String?
     private var createdImageIdentity: InstallerUseFileIdentity?
+    private var sourceAnchor: InstallerDirectoryAnchor?
+    private var retainedSource: InstallerFileDescriptor?
+    private var sourceSnapshot: InstallerFileSnapshot?
     private var cleaned = false
 
     init() throws {
@@ -470,7 +464,16 @@ private final class InstallerMountFixtureCI {
             throw InstallerUseReadError.unavailable("Unexpected fixture member before image creation; retain it.")
         }
         _ = try run(["create", "-srcfolder", content.path, "-volname", volume, "-format", "UDZO", image.path])
-        createdImageIdentity = try InstallerUseNativeParsing.identity(at: image)
+        let anchor = try InstallerDirectoryAnchor.open(root)
+        let retained = try InstallerFileDescriptor(parent: anchor, name: image.lastPathComponent)
+        let snapshot = try InstallerFileAccess.snapshot(retained.fd)
+        guard snapshot == (try InstallerFileAccess.snapshotAt(anchor.fd, image.lastPathComponent)) else {
+            throw InstallerUseReadError.unavailable("The owned source changed before its retention handle was established.")
+        }
+        sourceAnchor = anchor
+        retainedSource = retained
+        sourceSnapshot = snapshot
+        createdImageIdentity = .init(device: snapshot.device, inode: snapshot.inode)
         try verifyOwnedContent()
         _ = try imageIdentity()
         let response = try run(["attach", "-readonly", "-nobrowse", "-noautoopen", "-plist", image.path])
@@ -482,9 +485,22 @@ private final class InstallerMountFixtureCI {
         disk = wholeDisk
     }
 
+    func useTarget() throws -> InstallerUseTarget {
+        let identity = try imageIdentity()
+        guard let retainedSource else { throw InstallerUseReadError.unavailable("The owned source handle is missing.") }
+        return .init(device: identity.device, inode: identity.inode, path: image.path,
+                     observerRetainedFileDescriptors: [retainedSource.fd])
+    }
+
     func imageIdentity() throws -> InstallerUseFileIdentity {
         var info = stat()
-        guard lstat(image.path, &info) == 0, (info.st_mode & S_IFMT) == S_IFREG,
+        guard let sourceAnchor, let retainedSource, let sourceSnapshot else {
+            throw InstallerUseReadError.unavailable("The owned source retention snapshot is missing.")
+        }
+        try sourceAnchor.validate()
+        guard sourceSnapshot == (try InstallerFileAccess.snapshot(retainedSource.fd)),
+              sourceSnapshot == (try InstallerFileAccess.snapshotAt(sourceAnchor.fd, image.lastPathComponent)),
+              lstat(image.path, &info) == 0, (info.st_mode & S_IFMT) == S_IFREG,
               info.st_nlink == 1, info.st_uid == geteuid(),
               let expected = createdImageIdentity,
               expected == (try InstallerUseNativeParsing.identity(at: image)) else {
@@ -513,13 +529,15 @@ private final class InstallerMountFixtureCI {
             let candidateAliasType = candidateAlias.map { String(reflecting: type(of: $0)) } ?? "missing"
             throw InstallerUseReadError.unavailable("Owned mount selection failed: images=\(images.count), physicalPathMatches=\(matches.count), capturedDeviceMatches=\(deviceMatches.count), candidateAliasType=\(candidateAliasType).")
         }
-        guard let alias = match["image-alias"] as? Data,
-              let reportedPath = match["image-path"] as? String else {
-            let aliasType = match["image-alias"].map { String(reflecting: type(of: $0)) } ?? "missing"
-            throw InstallerUseReadError.unavailable("The owned image record has an unsupported alias value type: \(aliasType).")
-        }
-        guard try InstallerUseNativeParsing.resolveMountedImage(path: reportedPath, alias: alias) == imageIdentity() else {
-            throw InstallerUseReadError.unavailable("The owned mount alias resolved to a different source device/inode.")
+        // Fixture-only provenance: the source was created by this test and
+        // pinned before attach. Production must never infer an arbitrary
+        // mounted source's original identity from its reported path.
+        guard let reportedPath = match["image-path"] as? String,
+              try InstallerUseNativeParsing.identity(at: URL(fileURLWithPath: reportedPath)) == imageIdentity() else {
+            let shape = match.keys.sorted().prefix(48).map { key in
+                "\(key):\(String(reflecting: type(of: match[key]!)))"
+            }.joined(separator: "; ")
+            throw InstallerUseReadError.unavailable("The owned fixture source path/held identity disagrees. Owned-record shape: \(shape)")
         }
         return match
     }
@@ -537,8 +555,10 @@ private final class InstallerMountFixtureCI {
                   try Data(contentsOf: URL(fileURLWithPath: mount).appendingPathComponent(marker.lastPathComponent)) == markerBytes else {
                 throw InstallerUseReadError.unavailable("The fresh image/device/volume marker disagrees; retain the fixture.")
             }
+            _ = try imageIdentity()
             _ = try run(["detach", disk]) // Never -force, never an unverified/reused device.
             self.disk = nil
+            try await verifyFixtureDetached(returnedDevice: disk)
         } else if createdImageIdentity != nil {
             // An ambiguous attach can leave an unrecorded device. A newly read
             // inventory must show that this exact fixture source is not attached.
@@ -563,6 +583,25 @@ private final class InstallerMountFixtureCI {
             throw InstallerUseReadError.unavailable("Retain fixture after exact-member cleanup failed.")
         }
         cleaned = true
+    }
+
+    private func verifyFixtureDetached(returnedDevice: String) async throws {
+        let data = try await InstallerDiskImageInventory.shared.read(deadline: ProcessInfo.processInfo.systemUptime + 15)
+        guard let inventory = try PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any],
+              let images = inventory["images"] as? [[String: Any]] else {
+            throw InstallerUseReadError.unavailable("The fixture detach result could not be read; retain the source.")
+        }
+        for record in images {
+            guard let path = record["image-path"] as? String,
+                  let entities = record["system-entities"] as? [[String: Any]] else {
+                throw InstallerUseReadError.unavailable("An incomplete image record prevents fixture detach verification.")
+            }
+            guard URL(fileURLWithPath: path).resolvingSymlinksInPath().path != image.path,
+                  !entities.contains(where: { ($0["dev-entry"] as? String) == returnedDevice }) else {
+                throw InstallerUseReadError.unavailable("The fixture source/device is still attached; retain it.")
+            }
+        }
+        _ = try imageIdentity()
     }
 
     private func verifyOwnedContent() throws {

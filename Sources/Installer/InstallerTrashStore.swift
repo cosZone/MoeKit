@@ -63,7 +63,7 @@ final class InstallerTrashStore {
         self.catalogIsKnown = catalogIsKnown
         self.liveAnalysisID = nil; liveDirectory = nil; entryPaths = []; eligibleEntries = []
         guard !isDemoEnabled, let liveAnalysisID, let result, let downloadsURL,
-              result.directory == downloadsURL, result.report.path == downloadsURL.path,
+              result.directory.path == downloadsURL.path, result.report.path == downloadsURL.path,
               !result.report.overview, result.report.coverage == .known || result.report.coverage == .partial else { return }
         self.liveAnalysisID = liveAnalysisID
         liveDirectory = result.directory
@@ -99,7 +99,7 @@ final class InstallerTrashStore {
                 guard let self else { await executor.discardPlans(); return }
                 guard self.generation == expectedGeneration, self.currentScope == scope,
                       self.selectedPath == selectedPath, prepared.scope == scope,
-                      prepared.originalURL.path == selectedPath, prepared.downloadsURL == self.downloadsURL,
+                      prepared.originalURL.path == selectedPath, prepared.downloadsURL.path == self.downloadsURL?.path,
                       prepared.expiresAt > self.now() else {
                     await executor.discardPlans(); self.finish(request); return
                 }

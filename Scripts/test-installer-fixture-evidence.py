@@ -19,7 +19,7 @@ class EvidenceTests(unittest.TestCase):
         for kind, result in self.records.items():
             path = self.root / f'{kind}.json'
             path.write_text(json.dumps({'schema': 1, 'kind': kind, 'sourceSHA': SHA,
-                'detail': {'result': result, 'sourceDevice': '12', 'sourceInode': '34'}}))
+                'detail': {'result': result, 'sourceDevice': '12', 'sourceInode': '34', 'observedRefusal': 'true'}}))
             path.chmod(0o600)
     def tearDown(self):
         self.owned.cleanup()

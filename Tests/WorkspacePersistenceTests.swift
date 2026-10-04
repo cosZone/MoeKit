@@ -114,7 +114,8 @@ struct WorkspacePersistenceTests {
             store.togglePin(project.id)
             #expect(store.errorMessage == CatalogPersistence.CatalogError.writerBusy.errorDescription)
             #expect(store.projects.first?.isPinned == true)
-            #expect(try Data(contentsOf: file) == original)
+            let savedWhileBusy = try Data(contentsOf: file)
+            #expect(savedWhileBusy == original)
         }
         store.isDemoEnabled = true
         #expect(store.errorMessage == nil)

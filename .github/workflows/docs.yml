@@ -43,11 +43,13 @@ jobs:
         run: |
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
           npm ci
+      - name: Audit dependencies with reviewed development-only exception
+        run: npm run audit:dependencies
       - name: Lint, typecheck, content tests and production build
         run: npm run check
       - name: Build production container (no publication)
         run: docker build --tag moekit-docs:ci .
-      - name: Verify container health, pages and Chinese search
+      - name: Verify container health, pages and search validation
         run: |
           set -euo pipefail
           docker run --detach --name moekit-docs-ci -p 127.0.0.1:3000:3000 moekit-docs:ci
@@ -58,3 +60,8 @@ jobs:
           done
           npm run smoke
           test "$(docker exec moekit-docs-ci id -u)" != '0'
+          test -z "$(docker exec moekit-docs-ci find node_modules -type d \( -name braces -o -name micromatch -o -name fast-glob -o -name eslint-config-next -o -name eslint-plugin-next \))"
+          docker logs moekit-docs-ci > "$RUNNER_TEMP/moekit-docs-server.log" 2>&1
+          if grep -E '(Error|TypeError|RangeError):|failed to search' "$RUNNER_TEMP/moekit-docs-server.log"; then
+            exit 1
+          fi

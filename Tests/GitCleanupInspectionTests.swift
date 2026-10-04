@@ -77,7 +77,7 @@ struct GitCleanupInspectionTests {
         }
     }
 
-    @Test("The isolated helper accepts the Apple Git security baseline or a newer supported version", arguments: [
+    @Test("The isolated helper accepts the Apple Git supported version floor or a newer supported version", arguments: [
         "git version 2.39.5 (Apple Git-154)\n", "git version 2.39.6 (Apple Git-154)\n",
         "git version 2.40.0 (Apple Git-155)\n", "git version 2.50.1 (Apple Git-160)\n"
     ])

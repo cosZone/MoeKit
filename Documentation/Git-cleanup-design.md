@@ -20,7 +20,7 @@
 - 有界 TREE cache 可跳过，但 tree OID 重新计算；拒绝其它 index 扩展、assume-valid、skip-worktree、split／sparse index、冲突、symlink、gitlink／submodule
 - 配置 includes、filter、extensions、partial clone、非默认内容转换、额外属性、shallow、alternates、replace、grafts、reftable、未知状态不支持
 - 目标不得是主 worktree、保护分支、被锁定目标；有 staged／modified／untracked／ignored 文件、额外空目录、独有提交或嵌套目录清单项目时拒绝
-- 删除目标若同时出现在 packed-refs 中也拒绝，避免 loose ref 移走后旧 packed 值重新出现；不会为一个分支重写全部 packed-refs
+- 删除目标若同时出现在 packed-refs 中也拒绝，避免 loose ref 移走后旧 packed 值重新出现；不会为一个分支重写全部 packed-refs；base 分支的 loose-ref 父目录也必须存在，以便加锁，不会自动重建 packed-only 的目录
 - 所有登记的 HEAD 都必须可识别。当前分支、其它 worktree 检出的分支和损坏登记均受保护
 - 每次目录 capture 最多 20,000 个条目、48 层、单文件 64 MiB；工作树／元数据各 64 MiB，对象库 256 MiB；单次 capture 的协作式预算 30 秒
 

@@ -272,6 +272,13 @@ enum GitCleanupInspection {
         let branchParts = try branchComponents(request.branch)
         var branchParent = try common.child("refs").child("heads")
         for name in branchParts.dropLast() { branchParent = try branchParent.child(name) }
+        // A packed-only nested base may have no loose parent directory. Do not
+        // offer a plan that would need unconfirmed namespace creation for its lock.
+        do {
+            var baseParent = try common.child("refs").child("heads")
+            for component in try branchComponents(request.baseBranch).dropLast() { baseParent = try baseParent.child(component) }
+            try baseParent.validateTrustedMutationAncestry()
+        } catch { throw GitCleanupFailure.unsupported }
         let finalAdmin = GitCleanupCapture()
         try finalAdmin.collect(common, skip: ["objects", "hooks", "logs", "moekit-recovery"])
         guard finalAdmin.fingerprint == admin.fingerprint else { throw GitCleanupFailure.changed }

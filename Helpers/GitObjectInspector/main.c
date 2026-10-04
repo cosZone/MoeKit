@@ -1,5 +1,8 @@
 // Original MoeKit Git object inspector. Only config-free private snapshots.
 // Fixed version provenance and two object-only operations; no live repository execution.
+#ifdef __APPLE__
+#define _DARWIN_C_SOURCE 1
+#endif
 #define _POSIX_C_SOURCE 200809L
 #include <dirent.h>
 #include <errno.h>

@@ -346,7 +346,11 @@ jobs:
                         -only-testing:MoeKitTests/InstallerFileAccessTests
                         -only-testing:MoeKitTests/InstallerTrashExecutorTests
                         -only-testing:MoeKitTests/InstallerUseEvidenceTests
-                        -only-testing:MoeKitTests/InstallerTrashStoreTests)
+                        -only-testing:MoeKitTests/InstallerTrashStoreTests
+                        -only-testing:MoeKitTests/GitPlainIndexTests
+                        -only-testing:MoeKitTests/GitCleanupInspectionTests
+                        -only-testing:MoeKitTests/GitCleanupAuthorityTests
+                        -only-testing:MoeKitTests/GitCleanupExecutorTests)
           fi
           xcodebuild -project MoeKit.xcodeproj -alltargets -configuration Release \
             ENABLE_TESTABILITY=YES CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= \
@@ -380,7 +384,8 @@ jobs:
                       "CatalogWriteCoordinatorTests", "WorkspaceOperationPrivacyTests",
                       "ToolPreparationTests", "ToolPreparationStoreTests",
                       "MoleAnalysisModelsTests", "MoleAnalysisFilesTests", "MoleAnalysisStoreTests",
-                      "InstallerFileAccessTests", "InstallerTrashExecutorTests", "InstallerUseEvidenceTests", "InstallerTrashStoreTests")
+                      "InstallerFileAccessTests", "InstallerTrashExecutorTests", "InstallerUseEvidenceTests", "InstallerTrashStoreTests",
+                      "GitPlainIndexTests", "GitCleanupInspectionTests", "GitCleanupAuthorityTests", "GitCleanupExecutorTests")
           if summary.get("passedTests", 0) < 27 or summary.get("failedTests") != 0 or summary.get("skippedTests") != 0:
               raise SystemExit(f"Optimized catalog tests must execute and pass without skips: {summary}")
           if any(suite not in inventory for suite in required):

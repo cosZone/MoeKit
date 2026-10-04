@@ -11,6 +11,7 @@ final class WorkspaceStore {
     var selectedToolID = MoleModule.id
     let processes = ProcessInventoryStore()
     let moleAnalysis: MoleAnalysisStore
+    let installerTrash: InstallerTrashStore
     let toolPreparation: ToolPreparationStore
     let gettingStarted: GettingStartedState
     var projectSearch = "" { didSet { reconcileProjectSelection() } }
@@ -44,11 +45,13 @@ final class WorkspaceStore {
             toolSearch = ""
         }
     }
-    var projects: [ProjectRecord] = [] { didSet { reconcileProjectSelection() } }
+    var projects: [ProjectRecord] = [] {
+        didSet { reconcileProjectSelection(); refreshInstallerTrashContext() }
+    }
     var tasks: [TaskRecord] = [] { didSet { reconcileTaskSelection() } }
     var pendingDiscovery: RepositoryScanResult?
     var importSelection: Set<String> = []
-    var importedReport: MoleAnalyzeReport?
+    var importedReport: MoleAnalyzeReport? { didSet { moleAnalysis.invalidateLiveResult() } }
     var importedAt: Date?
     var errorMessage: String?
     private(set) var scanProgress: RepositoryScanProgress?
@@ -71,13 +74,15 @@ final class WorkspaceStore {
          scanner: any WorkspaceRepositoryScanning = RepositoryScanner(),
          reportImporter: any WorkspaceReportImporting = MoleReportImporter(),
          toolPreparation: ToolPreparationStore? = nil,
-         moleAnalysis: MoleAnalysisStore? = nil) {
+         moleAnalysis: MoleAnalysisStore? = nil,
+         installerTrash: InstallerTrashStore? = nil) {
         self.isDemoEnabled = isDemoEnabled
         self.persistence = persistence
         self.gettingStarted = gettingStarted
         self.scanner = scanner
         self.reportImporter = reportImporter
         self.moleAnalysis = moleAnalysis ?? MoleAnalysisStore()
+        self.installerTrash = installerTrash ?? InstallerTrashStore()
         // Construct the MainActor model in this initializer, not in a nested
         // actor-isolated default argument inside SwiftUI State initialization.
         let preparation = toolPreparation ?? ToolPreparationStore()
@@ -85,12 +90,27 @@ final class WorkspaceStore {
         self.moleAnalysis.setDemoEnabled(isDemoEnabled)
         preparation.setDemoEnabled(isDemoEnabled)
         processes.onEvent = { [weak self] event in self?.recordProcessEvent(event) }
+        self.moleAnalysis.onContextChange = { [weak self] in self?.refreshInstallerTrashContext() }
+        self.installerTrash.onMutationOutcome = { [weak self] in self?.moleAnalysis.invalidateLiveResult() }
         do { projects = try persistence.load() }
         catch {
             catalogIsWritable = false
             catalogWarning = String(localized: "The project catalog could not be read. Existing data was not replaced.")
             errorMessage = isDemoEnabled ? nil : catalogWarning
         }
+        refreshInstallerTrashContext()
+    }
+
+    private func refreshInstallerTrashContext() {
+        let paths = projects.flatMap { project -> [String] in
+            var paths = [project.path]
+            if let metadata = project.gitMetadata {
+                paths += [metadata.gitDirectoryPath, metadata.commonDirectoryPath]
+            }
+            return paths
+        }
+        installerTrash.updateContext(liveAnalysisID: moleAnalysis.liveResultID, result: moleAnalysis.result,
+            isDemoEnabled: isDemoEnabled, protectedPaths: Array(Set(paths)).sorted(), catalogIsKnown: catalogIsWritable)
     }
 
     var canNavigateFromGettingStarted: Bool {
@@ -391,6 +411,7 @@ final class WorkspaceStore {
     @discardableResult
     func startMoleReportImport(_ url: URL) -> Task<Void, Never>? {
         guard !isDemoEnabled, !isImporting else { return nil }
+        moleAnalysis.invalidateLiveResult()
         let id = UUID()
         activeImportID = id
         isImporting = true

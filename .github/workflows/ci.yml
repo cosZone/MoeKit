@@ -14,6 +14,37 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  installer-idle-probe:
+    name: Native idle-use evidence (positive or verified refusal)
+    runs-on: macos-15-intel
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+      MOEKIT_INSTALLER_IDLE_PROBE: '1'
+      MOEKIT_INSTALLER_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      MOEKIT_INSTALLER_EVIDENCE_DIR: ${{ github.workspace }}/InstallerIdleEvidence
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Verify actual current eligibility or explicit source-bound unsupported evidence
+        run: python3 Scripts/run-installer-idle-probe.py
+      - name: Preserve exact-commit idle-use proof and diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: native-idle-use-${{ env.SOURCE_SHA }}
+          path: |
+            InstallerIdleEvidence/
+            InstallerIdleProbe.log
+            InstallerIdleInvocation.json
+          if-no-files-found: ignore
+          retention-days: 14
+
   universal-archive:
     name: Unsigned universal archive
     runs-on: macos-15
@@ -102,6 +133,12 @@ jobs:
     env:
       SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+      TEST_RUNNER_MOEKIT_INSTALLER_MOUNT_FIXTURE: '1'
+      TEST_RUNNER_MOEKIT_INSTALLER_TRASH_FIXTURE: '1'
+      TEST_RUNNER_GITHUB_ACTIONS: 'true'
+      TEST_RUNNER_RUNNER_ENVIRONMENT: github-hosted
+      TEST_RUNNER_MOEKIT_INSTALLER_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      TEST_RUNNER_MOEKIT_INSTALLER_EVIDENCE_DIR: ${{ github.workspace }}/InstallerFixtureEvidence
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
@@ -117,6 +154,8 @@ jobs:
           python3 Scripts/test-preview-release.py
           python3 Scripts/test-ui-render-artifacts.py
           python3 Scripts/test-mole-supervisor.py
+          python3 Scripts/test-installer-fixture-evidence.py
+          python3 Scripts/test-installer-conditional-evidence.py
           xcodebuild -version
           xcodebuild -help > XcodeHelp.txt 2>&1
           grep -F -- '-testLanguage' XcodeHelp.txt
@@ -137,8 +176,12 @@ jobs:
           args=(-workspace MoeKit.xcworkspace -scheme MoeKit -configuration Debug
                 -destination 'platform=macOS' -derivedDataPath DerivedData
                 CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=)
+          mkdir -m 700 InstallerFixtureEvidence
           xcodebuild "${args[@]}" build-for-testing
-          xcodebuild "${args[@]}" test-without-building -testLanguage en -testRegion US -resultBundlePath TestResults.xcresult
+          xcodebuild "${args[@]}" test-without-building -testLanguage en -testRegion US -resultBundlePath TestResults.xcresult \
+            '-skip-testing:MoeKitTests/InstallerUseEvidenceTests/nativeIdleCurrentUserCoverage()'
+      - name: Verify affirmative native installer fixture evidence
+        run: python3 Scripts/verify-installer-fixture-evidence.py --directory InstallerFixtureEvidence --source-sha "$SOURCE_SHA" --kinds native-trash mounted-image live-mole
       - name: Render workspaces and first-use guidance in Simplified Chinese
         run: |
           set -euo pipefail
@@ -154,6 +197,7 @@ jobs:
             -only-testing:MoeKitTests/UISnapshotTests/testSettingsModeGuidanceRenders \
             -only-testing:MoeKitTests/ToolPreparationViewTests/testToolPreparationRenders \
             -only-testing:MoeKitTests/MoleAnalysisViewTests/testAnalysisSheetRenders \
+            -only-testing:MoeKitTests/InstallerTrashViewTests/testInstallerConfirmationRenders \
             -resultBundlePath ChineseRenderResults.xcresult
       - name: Check SwiftUI bundle and smoke-launch explicit demo
         run: |
@@ -228,6 +272,8 @@ jobs:
           path: |
             TestResults.xcresult
             CatalogConcurrencyResults.txt
+            InstallerIdleResults.xcresult
+            InstallerFixtureEvidence/
             ChineseRenderResults.xcresult
           if-no-files-found: ignore
           retention-days: 14
@@ -243,6 +289,12 @@ jobs:
     env:
       SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+      TEST_RUNNER_MOEKIT_INSTALLER_MOUNT_FIXTURE: '1'
+      TEST_RUNNER_MOEKIT_INSTALLER_TRASH_FIXTURE: '1'
+      TEST_RUNNER_GITHUB_ACTIONS: 'true'
+      TEST_RUNNER_RUNNER_ENVIRONMENT: github-hosted
+      TEST_RUNNER_MOEKIT_INSTALLER_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      TEST_RUNNER_MOEKIT_INSTALLER_EVIDENCE_DIR: ${{ github.workspace }}/InstallerFixtureEvidence
       INSTRUMENTATION: ${{ matrix.instrumentation }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -269,7 +321,8 @@ jobs:
           args=(-workspace MoeKit.xcworkspace -scheme MoeKit -configuration Release
                 -destination 'platform=macOS' -derivedDataPath DerivedDataRelease
                 ENABLE_TESTABILITY=YES CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=)
-          test_args=(test-without-building -testLanguage en -testRegion US -resultBundlePath ReleaseTestResults.xcresult)
+          test_args=(test-without-building -testLanguage en -testRegion US -resultBundlePath ReleaseTestResults.xcresult
+                     '-skip-testing:MoeKitTests/InstallerUseEvidenceTests/nativeIdleCurrentUserCoverage()')
           if [ "$INSTRUMENTATION" = address-sanitizer ]; then
             args+=(-enableAddressSanitizer YES)
             test_args+=(-only-testing:MoeKitTests/CatalogPersistenceTests
@@ -284,7 +337,11 @@ jobs:
                         -only-testing:MoeKitTests/ToolPreparationStoreTests
                         -only-testing:MoeKitTests/MoleAnalysisModelsTests
                         -only-testing:MoeKitTests/MoleAnalysisFilesTests
-                        -only-testing:MoeKitTests/MoleAnalysisStoreTests)
+                        -only-testing:MoeKitTests/MoleAnalysisStoreTests
+                        -only-testing:MoeKitTests/InstallerFileAccessTests
+                        -only-testing:MoeKitTests/InstallerTrashExecutorTests
+                        -only-testing:MoeKitTests/InstallerUseEvidenceTests
+                        -only-testing:MoeKitTests/InstallerTrashStoreTests)
           fi
           xcodebuild -project MoeKit.xcodeproj -alltargets -configuration Release \
             ENABLE_TESTABILITY=YES CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= \
@@ -299,8 +356,12 @@ jobs:
               raise SystemExit(f"Release app and tests must stay optimized: {levels}")
           print(f"Verified Release optimization levels: {levels}")
           PY
+          mkdir -m 700 InstallerFixtureEvidence
           xcodebuild "${args[@]}" build-for-testing
           xcodebuild "${args[@]}" "${test_args[@]}"
+          if [ "$INSTRUMENTATION" = none ]; then
+            python3 Scripts/verify-installer-fixture-evidence.py --directory InstallerFixtureEvidence --source-sha "$SOURCE_SHA" --kinds native-trash mounted-image live-mole
+          fi
           xcrun xcresulttool get test-results summary --path ReleaseTestResults.xcresult > ReleaseTestSummary.json
           xcrun xcresulttool get test-results tests --path ReleaseTestResults.xcresult > ReleaseTestInventory.json
           python3 - <<'PYTHON'
@@ -313,7 +374,8 @@ jobs:
                       "AnchoredDirectoryTests", "RepositoryScannerTests", "BoundedRegularFileReaderTests",
                       "CatalogWriteCoordinatorTests", "WorkspaceOperationPrivacyTests",
                       "ToolPreparationTests", "ToolPreparationStoreTests",
-                      "MoleAnalysisModelsTests", "MoleAnalysisFilesTests", "MoleAnalysisStoreTests")
+                      "MoleAnalysisModelsTests", "MoleAnalysisFilesTests", "MoleAnalysisStoreTests",
+                      "InstallerFileAccessTests", "InstallerTrashExecutorTests", "InstallerUseEvidenceTests", "InstallerTrashStoreTests")
           if summary.get("passedTests", 0) < 27 or summary.get("failedTests") != 0 or summary.get("skippedTests") != 0:
               raise SystemExit(f"Optimized catalog tests must execute and pass without skips: {summary}")
           if any(suite not in inventory for suite in required):
@@ -337,5 +399,7 @@ jobs:
             ReleaseTestSummary.json
             ReleaseTestInventory.json
             CatalogConcurrencyResults.txt
+            InstallerIdleResults.xcresult
+            InstallerFixtureEvidence/
           if-no-files-found: ignore
           retention-days: 14

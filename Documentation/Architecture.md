@@ -37,7 +37,7 @@
 
 ## Mole：报告导入与实际分析
 
-导入和实际执行是分开的入口。`MoleAnalysisStore` 管理会话内选择、准备、逐次确认、运行、取消和结果；模式边界由 `WorkspaceStore` 同步失效，不依赖视图刷新。`MoleAnalysisExecutor` 只校验并临时复制精确官方分析器，固定 JSON argv、私有 HOME/cache/temp 和系统 helper PATH。原生 supervisor 负责输出/时间/CPU 限制及本次拥有的进程生命周期。没有 OS 沙箱或任意 CLI 接口，清理仍关闭。详见 [Mole 执行设计](Mole-analysis-execution-design.md)。
+导入和实际执行是分开的入口。`MoleAnalysisStore` 管理会话内选择、准备、逐次确认、运行、取消和结果；模式边界由 `WorkspaceStore` 同步失效，不依赖视图刷新。`MoleAnalysisExecutor` 只校验并临时复制精确官方分析器，固定 JSON argv、私有 HOME/cache/temp 和系统 helper PATH。原生 supervisor 负责输出/时间/CPU 限制及本次拥有的进程生命周期。没有 OS 沙箱或任意 CLI 接口，Mole 清理命令仍关闭；下述原生单文件操作是独立适配器。详见 [Mole 执行设计](Mole-analysis-execution-design.md)。
 
 ### 报告导入
 
@@ -66,3 +66,11 @@ Swift Testing 测试覆盖扫描边界、取消、异常元数据、模块注册
 ## 工具准备
 
 `ToolPreparationStore` 管理本次会话的主动元数据检查，`NativeToolCandidateInspector` 在独立 actor 中对固定数量的明确路径使用 `lstat`。不打开文件内容，不跟随末端符号链接，不运行版本探测、不查找 PATH；存在可执行权限位也不授予执行能力。取消保留任务所有权直至读取结束，Demo 切换丢弃旧结果；文件选择后仍复核模式与请求代次。[完整边界](Tool-preparation.md)。
+
+## 下载磁盘映像：原生废纸篓与恢复
+
+`InstallerTrashStore` 默认连接已审查的原生执行器，但初始化只保留依赖，不扫描、不读恢复记录、不创建目录／锁／日志，也不移动文件。入口仅来自当前成功真实 Mole Downloads 分析的直属 `.dmg` 行；报告只是选择提示，文件、父目录、ACL、受保护项目、同设备、当前用户 FD/fileport 与完整空映像清单都由原生适配器重新检查。
+
+不可变一次性方案与分析／模式／目录代次绑定，显示精确转义路径和写入影响，要求结束使用声明及明确确认。排他重命名到私有持久暂存区后再次核对对象，才调用 macOS Trash；它不是 Mole 清理能力，也不释放废纸篓中的空间。每个命名空间变更先持久记录意图，失败不盲目重试或覆盖，保留恢复数据。恢复原路径需要新的复查与确认；关闭、切换 Demo、导入或过期均不能重放方案。
+
+检查不证明全局未使用，也无法原子地抵抗恶意同用户路径替换。连接着任何磁盘映像（包括系统管理的映像）时保持不可用；只能由用户自行推出其打开的映像，不能要求触碰系统映像。没有自动推出、永久删除、批量清理或自动恢复。验证范围及 source-bound CI 的当前环境不支持结果见 [设计与验证](Installer-trash-design.md)。

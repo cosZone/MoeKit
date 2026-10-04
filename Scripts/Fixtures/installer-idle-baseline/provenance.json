@@ -1,0 +1,17 @@
+{
+  "schema": 1,
+  "repository": "cosZone/MoeKit",
+  "sourceSHA": "bffd9235d07b79f62533ce631dbb44390389c52d",
+  "runID": 37206181809,
+  "jobID": 111447725620,
+  "artifactID": 11304509105,
+  "archiveSHA256": "e89b6f6dfb2dd251fbbd5417d9120b04008edb992978e898acb63ba7153543cb",
+  "providerGitBlob": "ce458ca68eef3e9912bcd59fddf0442ed17b2560",
+  "providerSHA256": "a719b3074d80ba5bd432bf7a16e890960a72049c0f6e262ecb8253e470c21a32",
+  "priorHarnessSHA256": "52dbfa03f4c4bff46d697d75b4180b24255fe1f7d09ed7d816d99e4f288e8a31",
+  "priorWorkflowSHA256": "641f4b600ee44bb74c33530664b9e36bdf72415d746af124878ae3be42fdb9cc",
+  "sourceURL": "https://github.com/cosZone/MoeKit/commit/bffd9235d07b79f62533ce631dbb44390389c52d",
+  "jobURL": "https://github.com/cosZone/MoeKit/actions/runs/37206181809/job/111447725620",
+  "artifactURL": "https://github.com/cosZone/MoeKit/actions/runs/37206181809/artifacts/11304509105",
+  "compilerContractSHA256": "ffbe72889ee2fa07498938dc8282f82e07a7260147a673b0a08aefcd78196fd8"
+}

@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "runner": "macos-15-intel",
+  "architecture": "x86_64",
+  "osMajor": "15",
+  "hostedRunner": "github-hosted",
+  "developerDirectory": "/Applications/Xcode_16.4.app/Contents/Developer",
+  "compiler": "swiftc",
+  "arguments": [
+    "-swift-version",
+    "6",
+    "-parse-as-library",
+    "-target",
+    "x86_64-apple-macosx15.0",
+    "Sources/Installer/InstallerUseEvidence.swift",
+    "Scripts/InstallerIdleProbe.swift",
+    "-framework",
+    "OpenDirectory",
+    "-o",
+    "<owned-output>"
+  ]
+}

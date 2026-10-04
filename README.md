@@ -9,6 +9,7 @@ Swift 6 · SwiftUI / AppKit · macOS 15+ · Tuist 4.148.3 · SPM
 已经写入源码：
 - **Projects**：原生表格、搜索与排序、项目详情 inspector、置顶项目、Finder 定位；多根目录只读发现 Git 项目，复查筛选后导入/刷新；验证 worktree 关系后分组，展示带时间的分支/锁元数据和不可执行的清理安全复查
 - **Tools**：Mole 的 Space / Clean / Apps / Maintenance / Status 工作区；Space 可导入 Mole analyze JSON，也可选择已安装的官方 V1.57.0 直接分析器与单个文件夹，复查确认后实际分析；Processes & Ports 可由用户主动读取当前用户进程和 TCP 监听端口，按工作目录展示项目关联
+- **下载磁盘映像**：从本机 Downloads 当前真实 Mole 分析中选择一个常规 `.dmg`，独立复查路径、大小和影响，确认已结束使用后移到 macOS 原生废纸篓；私有凭据支持另行确认的原路径恢复，不覆盖已有目标、不清空废纸篓
 - **Processes & Ports**：原生密集表格、身份与关联证据、部分读取提示、项目相关进程入口，以及不可执行的精确选择停止计划预览；不读取命令参数/环境变量，不自动扫描或发送进程信号
 - **工具准备**：从 Settings 或 Mole 打开，主动检查固定常见位置或自选文件的元数据，区分未检查、该路径未找到、找到但未验证、不支持与无法读取；提供官方安装说明和复制命令，不安装、不探测版本、不运行 CLI
 - **Tasks**：本次会话的发现任务、取消、状态与底部结果详情；可展开 Diagnostics
@@ -16,11 +17,13 @@ Swift 6 · SwiftUI / AppKit · macOS 15+ · Tuist 4.148.3 · SPM
 - 可跳过、可重开的上手引导：项目整理、进程查看或示例体验；先说明范围，再由用户主动选择文件夹或开始扫描
 - 原生 NavigationSplitView、Table、工具栏与 SF Symbols；自定义应用图标
 
-尚未实现：任意 CLI 执行、停止/强制停止其他进程、清理、卸载、维护、实时系统指标、提权、第三方插件加载及持久任务历史。导入报告不运行 Mole，报告数值不等于可回收空间。
+尚未实现：任意 CLI 执行、停止/强制停止其他进程、广域 Mole 清理、卸载、维护、实时系统指标、提权、第三方插件加载及持久任务历史。导入报告不运行 Mole，报告数值不等于可回收空间。
 
-**实际 Mole 分析的边界：** 目前只支持匹配精确 SHA-256 的 V1.57.0 官方发布分析器，常见官方脚本安装位置为 `~/.config/mole/bin/analyze-go`；Homebrew 与自编译版本暂不匹配该校验。工具准备页提供精确受支持文件的手动下载链接与复制命令，校验大小和 SHA-256 后才添加执行权限；详见 [工具准备](Documentation/Tool-preparation.md)。每次分析前显示范围及私有临时副本/缓存写入并要求确认，可取消，失败或未知覆盖不冒充成功。工具以普通用户权限运行，没有 OS 沙箱；没有自动安装、更新、提权或目标清理。详见 [执行设计与验证](Documentation/Mole-analysis-execution-design.md)。本节描述当前源码，具体构建/测试以对应提交 CI 为准。
+**实际 Mole 分析的边界：** 目前只支持匹配精确 SHA-256 的 V1.57.0 官方发布分析器，常见官方脚本安装位置为 `~/.config/mole/bin/analyze-go`；Homebrew 与自编译版本暂不匹配该校验。工具准备页提供精确受支持文件的手动下载链接与复制命令，校验大小和 SHA-256 后才添加执行权限；详见 [工具准备](Documentation/Tool-preparation.md)。每次分析前显示范围及私有临时副本/缓存写入并要求确认，可取消，失败或未知覆盖不冒充成功。工具以普通用户权限运行，没有 OS 沙箱；没有自动安装、更新、提权；Mole 分析本身不执行目标清理。详见 [执行设计与验证](Documentation/Mole-analysis-execution-design.md)。本节描述当前源码，具体构建/测试以对应提交 CI 为准。
 
-新版分析器下载指引属于 preview.6 之后的源码改动，尚未包含在下方已发布安装包中。
+**原生废纸篓的边界：** 仅支持本地内置 APFS 上、Downloads 直属的单个常规 `.dmg`；导入 JSON、Demo、`.pkg`、链接、云占位、项目与 worktree 不能授权。必须取得完整且为空的磁盘映像清单；只可自行推出自己打开的映像，不要触碰系统管理的映像，系统映像仍存在时此操作不可用。当前用户文件描述符／fileport 检查不等于全局未使用证明，无法覆盖所有内存映射、系统服务和其他用户。每次操作及恢复都重新复查并确认，移入废纸篓不会释放占用空间；不确定结果保留数据并停止。详见 [设计与恢复边界](Documentation/Installer-trash-design.md)。
+
+新版分析器下载指引和原生单个 `.dmg` 操作属于 preview.6 之后的源码改动，尚未包含在下方已发布安装包中。
 
 **预览验证记录：** `0.1.0-preview.6` 的精确源码 [`2050435`](https://github.com/cosZone/MoeKit/commit/20504353f96aaa135c1ba1eaa551301e8d3eb008) 已在 [发布运行](https://github.com/cosZone/MoeKit/actions/runs/37201568085) 通过 327 项 Release Swift 测试、10 项渲染 XCTest 方法与 89 项发布辅助测试，包含官方分析器的真实合成目录测试。主 App 与原创监督辅助程序均已完成双架构签名验证，DMG／ZIP 内容和公开下载校验一致。同源码 [Native CI](https://github.com/cosZone/MoeKit/actions/runs/37201095817) 还通过定向 ASan、监督辅助程序和通用归档检查。完整窗口、键盘、VoiceOver、双架构实机与真实目录权限仍需手动验收。
 

@@ -74,7 +74,7 @@ for path in catalogs:
 
 sources = sorted((ROOT / "Sources").rglob("*.swift"))
 require(bool(sources), "No Swift app sources found")
-# Process creation has one reviewed fixed-code adapter; shell and all other
+# Process creation has reviewed fixed-code analysis and read-only disk-image adapters; shell and all other
 # execution entry points remain forbidden. The supervisor is audited separately.
 for path in sources:
     text = path.read_text()
@@ -83,10 +83,26 @@ for path in sources:
                     r"(?<![.\w])system\s*\(", r"\b(?:Darwin|Glibc)\.system\s*\(",
                     r'"/bin/(?:sh|bash|zsh)"', r"\bAuthorizationExecuteWithPrivileges\b",
                     r"\b(?:kill|killpg|raise|proc_signal|proc_signal_with_audittoken)\s*\("):
-        allowed_adapter = (path.relative_to(ROOT).as_posix() == "Sources/Mole/MoleAnalysisExecutor.swift"
+        allowed_adapter = (path.relative_to(ROOT).as_posix() in {"Sources/Mole/MoleAnalysisExecutor.swift", "Sources/Installer/InstallerUseEvidence.swift"}
                            and pattern == r"\b(?:Process|NSTask|NSAppleScript)\s*\("
                            and not re.search(r"\b(?:NSTask|NSAppleScript)\s*\(", text))
         require(allowed_adapter or not re.search(pattern, text), f"Execution API outside reviewed adapter: {path.relative_to(ROOT)} ({pattern})")
+
+installer_sources = list((ROOT / "Sources/Installer").glob("*.swift"))
+for path in installer_sources:
+    text = path.read_text()
+    for pattern in (r"\b(?:unlink|unlinkat|rmdir|chmod|fchmod|chown|fchown)\s*\(",
+                    r"\.removeItem\s*\(", r"\.moveItem\s*\(", r"\brenameat\s*\(",
+                    r'"(?:clean|purge|uninstall)"'):
+        require(not re.search(pattern, text), f"Installer must retain data with exclusive moves only: {path.relative_to(ROOT)} ({pattern})")
+helper = ROOT / "Sources/Installer/InstallerUseEvidence.swift"
+if helper.is_file():
+    text = helper.read_text()
+    require(text.count("Process()") == 1, "Installer evidence has one fixed read-only helper")
+    require('process.executableURL = URL(fileURLWithPath: "/usr/bin/hdiutil")' in text,
+            "Installer evidence must use the fixed system helper")
+    require('process.arguments = ["info", "-plist"]' in text,
+            "Installer evidence must use the fixed read-only inventory argv")
 
 process_sources = list((ROOT / "Sources/Processes").glob("*.swift"))
 process_sources += [ROOT / "Sources/Services/NativeProcessInventoryProvider.swift"]

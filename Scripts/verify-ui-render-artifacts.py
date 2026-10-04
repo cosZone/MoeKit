@@ -48,7 +48,11 @@ def png_dimensions(data: bytes) -> tuple[int, int]:
     channels = {0: 1, 2: 3, 4: 2, 6: 4}.get(color)
     if not channels or depth not in (8, 16) or compression or filtering or interlace:
         raise ValueError("Unsupported AppKit PNG format")
-    if not 0 < width <= 2560 or not 0 < height <= 1600:
+    # Existing views reach 2560×1600 at 2× backing. Installer confirmation
+    # reaches 1440×3200; increasing height alone would also admit a much larger
+    # 2560×3200 raster. Keep width, height AND pixel area bounded before inflate.
+    # verify() still accepts only each scenario's exact 1× or 2× dimensions.
+    if not 0 < width <= 2560 or not 0 < height <= 3200 or width * height > 1440 * 3200:
         raise ValueError("Unexpected bitmap dimensions")
     row_bytes = width * channels * (depth // 8)
     expected_bytes = (row_bytes + 1) * height
@@ -100,6 +104,16 @@ def verify(directory: Path, language: str) -> int:
         for appearance in ("light", "dark")
         for width, height in ((720, 560), (900, 800))
     })
+    expected.update({
+        f"installer-{scenario}-{language}-{appearance}-720x1600": (720, 1600)
+        for scenario in ("disabled", "trash-confirmation", "restore-confirmation", "incomplete-recovery")
+        for appearance in ("light", "dark")
+    })
+    expected.update({
+        f"installer-{scenario}-compact-{language}-{appearance}-720x560": (720, 560)
+        for scenario in ("trash-confirmation", "restore-confirmation")
+        for appearance in ("light", "dark")
+    })
     manifest = json.loads((directory / "manifest.json").read_text())
     images, scopes = {}, {}
     for test in manifest:
@@ -140,6 +154,22 @@ def verify(directory: Path, language: str) -> int:
         if name.startswith("tool-preparation-"):
             required.add(f"Download copy title: {'复制下载命令' if language == 'zh-Hans' else 'Copy download command'}")
             required.add(f"Tool candidate title: {'已找到 · 未验证' if language == 'zh-Hans' else 'Found · unverified'}")
+        if name.startswith("installer-"):
+            required.update({
+                f"Trash action title: {'将此文件移到废纸篓' if language == 'zh-Hans' else 'Move this file to Trash'}",
+                f"Restore action title: {'恢复到原路径' if language == 'zh-Hans' else 'Restore to original path'}",
+                f"Attestation title: {'我已完成此磁盘映像的安装和使用' if language == 'zh-Hans' else 'I have finished installing and using this disk image'}",
+                f"Unknown recovery title: {'恢复记录不可用；结果未知' if language == 'zh-Hans' else 'Recovery record unavailable; outcome unknown'}",
+                "Mutation calls: 0",
+                "Evidence source: public SwiftUI bounds anchors on displayed views",
+                "Scope: owned installer view with synthetic paths and receipts only.",
+            })
+            if "-compact-" in name:
+                required.update({
+                    "Capture mode: compact confirmation controls after explicit scroll",
+                    "Scrollable content exceeds viewport: true",
+                    "Scrolled confirmation/cancel inside capture: 2",
+                })
         if not required.issubset(lines):
             raise ValueError(f"Missing runtime localization/size evidence: {name}")
         locale_prefix = "zh" if language == "zh-Hans" else "en"

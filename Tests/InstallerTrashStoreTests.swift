@@ -264,6 +264,54 @@ struct InstallerTrashStoreTests {
         #expect(await executor.restoreCount == 0)
     }
 
+    @Test("A fresh listing revokes vanished receipts without inferring an outcome or trusting their old Reveal paths")
+    func vanishedRecoveryRecord() async throws {
+        let executor = TrashFixture()
+        var revealed: URL?
+        let store = InstallerTrashStore(executor: executor, downloadsURL: downloads, revealLocation: { revealed = $0 })
+        try context(store); store.loadRecovery(); await settle(store)
+        let previous = try #require(store.recoveryItems.first)
+        store.prepareRestore(receiptID: previous.id); await settle(store)
+        let stalePlan = try #require(store.restorePlan)
+        await executor.setRecoveryPresent(false)
+        store.loadRecovery(); await settle(store)
+        #expect(store.recoveryItems.count == 1 && store.receipts.isEmpty)
+        let missing = try #require(store.recoveryItems.first)
+        #expect(missing.id == previous.id && missing.operationURL == previous.operationURL)
+        #expect(missing.receipt == nil && missing.issue != nil)
+        #expect(store.restorePlan == nil)
+        store.confirmRestore(planID: stalePlan.id)
+        store.prepareRestore(receiptID: previous.id)
+        #expect(await executor.prepareRestoreCount == 1)
+        #expect(await executor.restoreCount == 0)
+        store.reveal(receiptID: previous.id); await settle(store)
+        #expect(revealed == nil && store.errorMessage == InstallerTrashFailure.unsafeRecovery.errorDescription)
+        #expect(await executor.revealCount == 1)
+        // Only a subsequent validated listing can restore the review affordance.
+        await executor.setRecoveryPresent(true)
+        store.loadRecovery(); await settle(store)
+        #expect(store.receipts.count == 1 && store.restorePlan == nil)
+        store.confirmRestore(planID: stalePlan.id)
+        #expect(await executor.restoreCount == 0)
+    }
+
+    @Test("A vanished recovery record does not erase the actual completed mutation receipt")
+    func vanishedRecoveryPreservesSessionOutcome() async throws {
+        let executor = TrashFixture()
+        let store = InstallerTrashStore(executor: executor, downloadsURL: downloads)
+        try context(store); store.select(path: selected); store.prepare(); await settle(store)
+        let plan = try #require(store.plan)
+        store.attestInstallationFinished(true, planID: plan.id); store.confirm(planID: plan.id); await settle(store)
+        let outcomeReceipt = try #require(store.lastOutcome?.receipt)
+        await executor.setRecoveryPresent(false)
+        store.loadRecovery(); await settle(store)
+        #expect(store.lastOutcome?.receipt == outcomeReceipt)
+        #expect(store.recoveryItems.count == 1 && store.recoveryItems.first?.receipt == nil)
+        #expect(store.receipts.isEmpty)
+        store.prepareRestore(receiptID: outcomeReceipt.id)
+        #expect(await executor.prepareRestoreCount == 0)
+    }
+
     @Test("Recovery works without live analysis and binds the fresh project protection context")
     func recoveryWithoutLiveAnalysis() async throws {
         let executor = TrashFixture()
@@ -356,6 +404,8 @@ private actor TrashFixture: InstallerTrashExecuting {
     private let receiptID = UUID()
     private let incompleteID = UUID()
     private var pendingPlans: Set<UUID> = []
+    private var recoveryPresent = true
+    func setRecoveryPresent(_ present: Bool) { recoveryPresent = present }
     init(holdPrepare: Bool = false, holdMove: Bool = false, holdRestore: Bool = false, includeIncomplete: Bool = false) {
         self.holdPrepare = holdPrepare; self.holdMove = holdMove; self.holdRestore = holdRestore; self.includeIncomplete = includeIncomplete
     }
@@ -376,6 +426,7 @@ private actor TrashFixture: InstallerTrashExecuting {
     }
     func recoveryReceipts() async throws -> [InstallerRecoveryItem] {
         recoveryCount += 1
+        guard recoveryPresent else { return [] }
         let receipt = receipt(.trashed)
         var items = [InstallerRecoveryItem(id: receipt.id, operationURL: receipt.operationURL, receipt: receipt, issue: nil)]
         if includeIncomplete {
@@ -385,6 +436,7 @@ private actor TrashFixture: InstallerTrashExecuting {
     }
     func validatedRecoveryLocation(receiptID: UUID) async throws -> URL {
         revealCount += 1
+        guard recoveryPresent else { throw InstallerTrashFailure.unsafeRecovery }
         if includeIncomplete, receiptID == incompleteID { return URL(fileURLWithPath: "/Synthetic/Recovery/\(incompleteID)") }
         guard receiptID == self.receiptID else { throw InstallerTrashFailure.unsafeRecovery }
         return receipt(.trashed).trashURL!

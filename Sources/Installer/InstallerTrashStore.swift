@@ -156,7 +156,16 @@ final class InstallerTrashStore {
                 try Task.checkCancellation()
                 guard let self else { return }
                 if self.generation == expectedGeneration, !self.isDemoEnabled {
-                    // Keep mutation outcomes already received in this session.
+                    // This is a complete successful listing, not an additive
+                    // feed. Keep history visible, but revoke a vanished
+                    // operation's stale receipt and restore affordance. Absence
+                    // does not establish whether its file moved or was removed.
+                    let currentIDs = Set(loaded.map(\.id))
+                    for index in self.recoveryItems.indices where !currentIDs.contains(self.recoveryItems[index].id) {
+                        let previous = self.recoveryItems[index]
+                        self.recoveryItems[index] = InstallerRecoveryItem(id: previous.id, operationURL: previous.operationURL,
+                            receipt: nil, issue: String(localized: "Recovery record unavailable; outcome unknown"))
+                    }
                     for item in loaded { self.merge(item) }
                     self.hasReadRecovery = true
                 }

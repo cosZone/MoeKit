@@ -19,7 +19,7 @@ struct InstallerTrashView: View {
                 } else if !store.catalogIsKnown {
                     Text("A readable project catalog is required before a file operation can be prepared.").foregroundStyle(.orange)
                 }
-                Text("This first version requires all disk images to be ejected. Eject them yourself before review; MoeKit never ejects images.")
+                Text("This version requires a complete, empty disk-image inventory. You may eject images you opened yourself, then check again. Leave system-managed images alone; they can keep this action unavailable. MoeKit does not classify or eject images.")
                     .font(.caption).foregroundStyle(.secondary)
                 if let selected = store.selectedPath {
                     path("Selected file", selected)
@@ -101,9 +101,9 @@ struct InstallerTrashView: View {
             path("First recovery record", plan.recoveryURL.appendingPathComponent("000000.json").path)
             Text("The private MoeKit and InstallerRecovery parent directories and shared operations.lock and projects.json.lock files may also be created. The lock only coordinates cooperating MoeKit instances; it does not lock out other applications.")
             Text("After confirmation, MoeKit creates this private operation directory and numbered JSON recovery records inside it. These records persist and disclose the original path only in this private journal. Closing this plan does not create them.")
-            Text("No disk images may be attached. Eject disk images yourself before reviewing this operation; MoeKit will never eject them for you.")
+            Text("This version accepts only a complete, empty disk-image inventory. Eject only images you opened yourself. Do not eject system-managed images; an inventory containing them remains unsupported. MoeKit cannot classify images for you and never ejects them.")
             Text("No open descriptor or fileport use observed in the checked current-user processes").font(.headline)
-            Text("Checks cover current-user vnode file descriptors and fileports, plus a complete, empty attached-disk-image inventory. Any attached image blocks this first version. Memory mappings, other users, system services and files opened after the check are not exhaustively observable. This is not proof that the image is globally unused.")
+            Text("Checks cover current-user vnode file descriptors and fileports, plus a complete, empty disk-image inventory. Any attached image, including a system-managed image, keeps this operation unavailable; MoeKit does not classify images. Memory mappings, other users, system services and files opened after the check are not exhaustively observable. This is not proof that the image is globally unused.")
             Text("A same-user race can temporarily move a replacement before a mismatch is detected. The native Trash API uses a path. This operation is designed for ordinary cooperative local use, not malicious same-user interference.")
                 .font(.caption).foregroundStyle(.secondary)
             Toggle("I have finished installing and using this disk image", isOn: Binding(

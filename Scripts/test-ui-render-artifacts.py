@@ -2,6 +2,7 @@
 """Synthetic-only checks for the render artifact verifier."""
 
 import binascii
+import functools
 import importlib.util
 import json
 from pathlib import Path
@@ -15,6 +16,7 @@ module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 
 
+@functools.lru_cache(maxsize=24)
 def png(width, height):
     def chunk(kind, data):
         return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", binascii.crc32(kind + data) & 0xffffffff)
@@ -33,6 +35,7 @@ class RenderArtifactTests(unittest.TestCase):
         scenarios += ["settings-real", "settings-demo"]
         scenarios += ["tool-preparation-" + state for state in ("unchecked", "observed", "demo", "mole-guidance", "git-guidance", "mole-command")]
         scenarios += ["mole-analysis-" + state for state in ("initial", "confirmation", "partial", "failure")]
+        scenarios += ["installer-" + state for state in ("disabled", "trash-confirmation", "restore-confirmation", "incomplete-recovery")]
         attachments = []
         for scenario in scenarios:
             sizes = ((520, 600),) if scenario.startswith("settings-") else (((520, 480), (620, 580)) if scenario.startswith("getting-started-") else ((960, 620), (1280, 800)))
@@ -40,6 +43,8 @@ class RenderArtifactTests(unittest.TestCase):
                 sizes = ((580, 520), (680, 720))
             if scenario.startswith("mole-analysis-"):
                 sizes = ((720, 560), (900, 800))
+            if scenario.startswith("installer-"):
+                sizes = ((720, 1600),)
             for appearance in ("light", "dark"):
                 for width, height in sizes:
                     name = f"{scenario}-{language}-{appearance}-{width}x{height}"
@@ -51,6 +56,13 @@ class RenderArtifactTests(unittest.TestCase):
                         with (root / text).open("a") as stream:
                             stream.write(f"Download copy title: {'复制下载命令' if language == 'zh-Hans' else 'Copy download command'}\n")
                             stream.write(f"Tool candidate title: {'已找到 · 未验证' if language == 'zh-Hans' else 'Found · unverified'}\n")
+                    if scenario.startswith("installer-"):
+                        with (root / text).open("a") as stream:
+                            stream.write(f"Trash action title: {'将此文件移到废纸篓' if language == 'zh-Hans' else 'Move this file to Trash'}\n")
+                            stream.write(f"Restore action title: {'恢复到原路径' if language == 'zh-Hans' else 'Restore to original path'}\n")
+                            stream.write(f"Attestation title: {'我已完成此磁盘映像的安装和使用' if language == 'zh-Hans' else 'I have finished installing and using this disk image'}\n")
+                            stream.write(f"Unknown recovery title: {'恢复记录不可用；结果未知' if language == 'zh-Hans' else 'Recovery record unavailable; outcome unknown'}\n")
+                            stream.write("Mutation calls: 0\nScope: owned installer view with synthetic paths and receipts only.\n")
                     attachments.extend([
                         {"exportedFileName": image, "suggestedHumanReadableName": name + "_0_UUID.png"},
                         {"exportedFileName": text, "suggestedHumanReadableName": name + "-scope_0_UUID.txt"},
@@ -60,7 +72,7 @@ class RenderArtifactTests(unittest.TestCase):
         return manifest
 
     def test_complete_english_and_chinese(self):
-        for language, count in [("en", 92), ("zh-Hans", 84)]:
+        for language, count in [("en", 100), ("zh-Hans", 92)]:
             with self.subTest(language=language), tempfile.TemporaryDirectory() as path:
                 root = Path(path)
                 self.fixture(root, language)
@@ -81,8 +93,78 @@ class RenderArtifactTests(unittest.TestCase):
             manifest = self.fixture(root, "zh-Hans")
             manifest[0]["attachments"].pop()
             (root / "manifest.json").write_text(json.dumps(manifest))
-            with self.assertRaisesRegex(ValueError, "Expected 84"):
+            with self.assertRaisesRegex(ValueError, "Expected 92"):
                 module.verify(root, "zh-Hans")
+
+    def test_rejects_missing_installer_image_or_scope(self):
+        for language, count in (("en", 100), ("zh-Hans", 92)):
+            for suffix in (".png", ".txt"):
+                with self.subTest(language=language, suffix=suffix), tempfile.TemporaryDirectory() as path:
+                    root = Path(path)
+                    manifest = self.fixture(root, language)
+                    attachments = manifest[0]["attachments"]
+                    target = next(item for item in attachments if item["exportedFileName"].startswith("installer-trash-confirmation-") and item["exportedFileName"].endswith(suffix))
+                    attachments.remove(target)
+                    (root / "manifest.json").write_text(json.dumps(manifest))
+                    with self.assertRaisesRegex(ValueError, f"Expected {count}"):
+                        module.verify(root, language)
+
+    def test_accepts_installer_retina_bitmap_for_every_scenario(self):
+        for language, count in (("en", 100), ("zh-Hans", 92)):
+            with self.subTest(language=language), tempfile.TemporaryDirectory() as path:
+                root = Path(path)
+                manifest = self.fixture(root, language)
+                captures = [item for item in manifest[0]["attachments"] if item["exportedFileName"].startswith("installer-") and item["exportedFileName"].endswith(".png")]
+                self.assertEqual(len(captures), 8)
+                for item in captures:
+                    (root / item["exportedFileName"]).write_bytes(png(1440, 3200))
+                self.assertEqual(module.verify(root, language), count)
+
+    def test_rejects_installer_localization_fallback(self):
+        titles = (
+            ("Trash action title: 将此文件移到废纸篓", "Trash action title: Move this file to Trash"),
+            ("Restore action title: 恢复到原路径", "Restore action title: Restore to original path"),
+            ("Attestation title: 我已完成此磁盘映像的安装和使用", "Attestation title: I have finished installing and using this disk image"),
+            ("Unknown recovery title: 恢复记录不可用；结果未知", "Unknown recovery title: Recovery record unavailable; outcome unknown"),
+        )
+        for localized, fallback in titles:
+            with self.subTest(title=localized), tempfile.TemporaryDirectory() as path:
+                root = Path(path)
+                manifest = self.fixture(root, "zh-Hans")
+                target = next(item for item in manifest[0]["attachments"] if item["exportedFileName"].startswith("installer-") and item["exportedFileName"].endswith(".txt"))
+                text = root / target["exportedFileName"]
+                text.write_text(text.read_text().replace(localized, fallback))
+                with self.assertRaisesRegex(ValueError, "localization"):
+                    module.verify(root, "zh-Hans")
+
+    def test_rejects_installer_mutation_or_missing_scope_declaration(self):
+        for before, after in (("Mutation calls: 0", "Mutation calls: 1"),
+                              ("Scope: owned installer view with synthetic paths and receipts only.", "")):
+            with self.subTest(before=before), tempfile.TemporaryDirectory() as path:
+                root = Path(path)
+                manifest = self.fixture(root, "en")
+                target = next(item for item in manifest[0]["attachments"] if item["exportedFileName"].startswith("installer-") and item["exportedFileName"].endswith(".txt"))
+                text = root / target["exportedFileName"]
+                text.write_text(text.read_text().replace(before, after))
+                with self.assertRaisesRegex(ValueError, "localization"):
+                    module.verify(root, "en")
+
+    def test_rejects_installer_point_size_or_mixed_retina_scale(self):
+        for dimensions in ((720, 1599), (720, 3200), (1440, 1600)):
+            with self.subTest(dimensions=dimensions), tempfile.TemporaryDirectory() as path:
+                root = Path(path)
+                manifest = self.fixture(root, "en")
+                target = next(item for item in manifest[0]["attachments"] if item["exportedFileName"].startswith("installer-") and item["exportedFileName"].endswith(".png"))
+                (root / target["exportedFileName"]).write_bytes(png(*dimensions))
+                with self.assertRaisesRegex(ValueError, "dimensions"):
+                    module.verify(root, "en")
+
+    def test_png_dimension_bound_does_not_expand_to_full_width_and_height(self):
+        self.assertEqual(module.png_dimensions(png(2560, 1600)), (2560, 1600))
+        self.assertEqual(module.png_dimensions(png(1440, 3200)), (1440, 3200))
+        for dimensions in ((2560, 3200), (1441, 3200), (1440, 3201), (2561, 1600)):
+            with self.subTest(dimensions=dimensions), self.assertRaisesRegex(ValueError, "dimensions"):
+                module.png_dimensions(png(*dimensions))
 
     def test_rejects_wrong_dimensions(self):
         with tempfile.TemporaryDirectory() as path:

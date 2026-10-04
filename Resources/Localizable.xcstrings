@@ -5171,26 +5171,6 @@
         }
       }
     },
-    "Eject all attached disk images manually, then check again. This version only supports a complete empty disk-image inventory; it cannot rule out use from another attached image.": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "请手动推出所有已连接的磁盘映像，然后重新检查。此版本仅支持完整且为空的磁盘映像清单，无法排除通过其他已连接映像使用该文件的情况。"
-          }
-        }
-      }
-    },
-    "Requires all disk images to be ejected and checks current-user open file descriptors and fileports. Memory mappings, system processes, and other users' use are not verified. This observation is not proof that the file is unused.": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "要求先推出所有磁盘映像，并检查当前用户打开的文件描述符和 fileport 文件端口。不会验证内存映射、系统进程及其他用户的使用情况。此次观察不能证明文件未被使用。"
-          }
-        }
-      }
-    },
     "The file-use observation request is invalid.": {
       "localizations": {
         "zh-Hans": {
@@ -5411,16 +5391,6 @@
         }
       }
     },
-    "The disk-image inventory is incomplete or unreadable. Eject disk images manually and check again; no file was moved.": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "磁盘映像清单不完整或无法读取。请手动推出磁盘映像后重新检查；未移动任何文件。"
-          }
-        }
-      }
-    },
     "The disk-image inventory is still pending. Check again after it finishes.": {
       "localizations": {
         "zh-Hans": {
@@ -5627,16 +5597,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "准备文件操作前，需要可读取的项目目录记录。"
-          }
-        }
-      }
-    },
-    "This first version requires all disk images to be ejected. Eject them yourself before review; MoeKit never ejects images.": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "此功能首版要求先推出所有磁盘映像。请在查看方案前自行推出；MoeKit 从不代为推出映像。"
           }
         }
       }
@@ -5921,32 +5881,12 @@
         }
       }
     },
-    "No disk images may be attached. Eject disk images yourself before reviewing this operation; MoeKit will never eject them for you.": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "不得连接任何磁盘映像。查看此操作方案前，请自行推出所有磁盘映像；MoeKit 绝不会代为推出。"
-          }
-        }
-      }
-    },
     "No open descriptor or fileport use observed in the checked current-user processes": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
             "value": "在已检查的当前用户进程中，未观察到通过打开的文件描述符或 fileport 文件端口使用此文件"
-          }
-        }
-      }
-    },
-    "Checks cover current-user vnode file descriptors and fileports, plus a complete, empty attached-disk-image inventory. Any attached image blocks this first version. Memory mappings, other users, system services and files opened after the check are not exhaustively observable. This is not proof that the image is globally unused.": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "检查涵盖当前用户的 vnode 文件描述符和 fileport 文件端口，并要求完整的已连接磁盘映像清单为空。此功能首版遇到任何已连接映像都会阻止操作。无法穷尽观察内存映射、其他用户、系统服务及检查后才打开文件的情况。因此，这不能证明该映像在整个系统中均未被使用。"
           }
         }
       }
@@ -6447,6 +6387,66 @@
           "stringUnit": {
             "state": "translated",
             "value": "复制下载命令"
+          }
+        }
+      }
+    },
+    "This version requires a complete, empty disk-image inventory. You may eject images you opened yourself, then check again. Leave system-managed images alone; they can keep this action unavailable. MoeKit does not classify or eject images.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此版本要求完整的磁盘映像清单为空。你可以推出自己打开的映像，然后重新检查。请勿处理系统管理的映像；它们的存在可能使此操作持续不可用。MoeKit 不会对映像进行分类或代为推出。"
+          }
+        }
+      }
+    },
+    "This version accepts only a complete, empty disk-image inventory. Eject only images you opened yourself. Do not eject system-managed images; an inventory containing them remains unsupported. MoeKit cannot classify images for you and never ejects them.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此版本仅接受完整且为空的磁盘映像清单。请仅推出你自己打开的映像。不要推出系统管理的映像；包含这类映像的清单仍不受支持。MoeKit 无法代你判断映像类别，也绝不会代为推出。"
+          }
+        }
+      }
+    },
+    "Checks cover current-user vnode file descriptors and fileports, plus a complete, empty disk-image inventory. Any attached image, including a system-managed image, keeps this operation unavailable; MoeKit does not classify images. Memory mappings, other users, system services and files opened after the check are not exhaustively observable. This is not proof that the image is globally unused.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查涵盖当前用户的 vnode 文件描述符和 fileport 文件端口，并要求完整的磁盘映像清单为空。任何已连接映像（包括系统管理的映像）都会使此操作不可用；MoeKit 不会对映像进行分类。无法穷尽观察内存映射、其他用户、系统服务及检查后才打开文件的情况。这不能证明该映像在整个系统中均未被使用。"
+          }
+        }
+      }
+    },
+    "This version requires a complete, empty disk-image inventory and cannot rule out use through any attached image. Eject only images you opened yourself, then check again. Leave system-managed images alone; their presence can keep this action unavailable. MoeKit does not classify or eject images.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此版本要求完整的磁盘映像清单为空，无法排除通过任何已连接映像使用文件的情况。请仅推出你自己打开的映像，然后重新检查。请勿处理系统管理的映像；它们的存在可能使此操作持续不可用。MoeKit 不会对映像进行分类或代为推出。"
+          }
+        }
+      }
+    },
+    "Requires a complete, empty disk-image inventory and checks current-user open file descriptors and fileports. Only eject images you opened yourself; leave system-managed images alone. MoeKit does not classify images, so unsupported system inventory can keep this action unavailable. Memory mappings, system processes, and other users' use are not verified. This observation is not proof that the file is unused.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "要求完整的磁盘映像清单为空，并检查当前用户打开的文件描述符和 fileport 文件端口。请仅推出你自己打开的映像，不要处理系统管理的映像。MoeKit 不会对映像进行分类，因此不受支持的系统映像清单可能使此操作持续不可用。不会验证内存映射、系统进程及其他用户的使用情况。此次观察不能证明文件未被使用。"
+          }
+        }
+      }
+    },
+    "The disk-image inventory is incomplete or unreadable; no file was moved. You may eject images you opened yourself and check again, but leave system-managed images alone. MoeKit does not classify or eject images; unsupported system inventory can keep this action unavailable.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "磁盘映像清单不完整或无法读取；未移动任何文件。你可以推出自己打开的映像后重新检查，但请勿处理系统管理的映像。MoeKit 不会对映像进行分类或代为推出；不受支持的系统映像清单可能使此操作持续不可用。"
           }
         }
       }

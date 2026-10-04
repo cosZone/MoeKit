@@ -51,18 +51,53 @@ final class InstallerTrashViewTests: XCTestCase {
                 window.isReleasedWhenClosed = false; window.appearance = appearance; window.contentView = hosting
                 defer { window.contentView = nil; window.close() }
                 for _ in 0..<5 { hosting.layoutSubtreeIfNeeded(); try await Task.sleep(for: .milliseconds(50)); window.setContentSize(size) }
+                XCTAssertEqual(hosting.bounds.size, size)
+                resetScrollOrigins(in: hosting)
                 let bitmap = try XCTUnwrap(hosting.bitmapImageRepForCachingDisplay(in: hosting.bounds))
                 appearance.performAsCurrentDrawingAppearance { hosting.cacheDisplay(in: hosting.bounds, to: bitmap) }
                 let png = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
                 let attachment = XCTAttachment(data: png, uniformTypeIdentifier: "public.png")
-                attachment.name = "installer-\(scenario)-\(language)-\(dark ? "dark" : "light")-720x1600.png"
+                let name = "installer-\(scenario)-\(language)-\(dark ? "dark" : "light")-720x1600"
+                attachment.name = name + ".png"
                 attachment.lifetime = .keepAlways; add(attachment)
                 XCTAssertGreaterThan(png.count, 1000)
                 XCTAssertFalse(store.isBusy)
                 let mutationCount = await executor.mutationCount
                 XCTAssertEqual(mutationCount, 0)
+                let metadata = XCTAttachment(string: """
+                Content size: \(Int(size.width)) × \(Int(size.height)) points
+                Process locale: \(Locale.current.identifier)
+                Bundle language: \(language)
+                Projects title: \(WorkspaceSection.projects.title)
+                Partial-result title: \(TaskStatus.partial.title)
+                Trash action title: \(String(localized: "Move this file to Trash"))
+                Restore action title: \(String(localized: "Restore to original path"))
+                Attestation title: \(String(localized: "I have finished installing and using this disk image"))
+                Unknown recovery title: \(String(localized: "Recovery record unavailable; outcome unknown"))
+                Mutation calls: \(mutationCount)
+                Scope: owned installer view with synthetic paths and receipts only.
+                Scenario: \(scenario). No native executor, process inspection, disk-image inventory or real file moves.
+                The scroll container keeps controls reachable beyond the captured viewport.
+                These images are review evidence, not native interaction, keyboard or accessibility acceptance.
+                """)
+                metadata.name = name + "-scope.txt"
+                metadata.lifetime = .keepAlways; add(metadata)
             }
         }
+    }
+
+    /// An initially focused action button can cause an AppKit scroll view to
+    /// retain an offset while the synthetic window grows to its capture size.
+    /// Capture the first viewport consistently; this is test setup, not a claim
+    /// about keyboard navigation in the application.
+    @MainActor private func resetScrollOrigins(in view: NSView) {
+        if let scroll = view as? NSScrollView, let document = scroll.documentView {
+            let y = document.isFlipped ? document.frame.minY
+                : max(document.frame.minY, document.frame.maxY - scroll.contentView.bounds.height)
+            scroll.contentView.scroll(to: NSPoint(x: document.frame.minX, y: y))
+            scroll.reflectScrolledClipView(scroll.contentView)
+        }
+        for child in view.subviews { resetScrollOrigins(in: child) }
     }
 
     /// Runs in the existing zh-Hans render invocation. Assertions catch a
@@ -74,10 +109,12 @@ final class InstallerTrashViewTests: XCTestCase {
         XCTAssertEqual(String(localized: "I have finished installing and using this disk image"), "我已完成此磁盘映像的安装和使用")
         XCTAssertEqual(String(localized: "Recovery record unavailable; outcome unknown"), "恢复记录不可用；结果未知")
         XCTAssertEqual(String(localized: "The destination already exists. MoeKit will not replace it."), "目标位置已存在条目。MoeKit 不会将其替换。")
-        XCTAssertEqual(String(localized: "This first version requires all disk images to be ejected. Eject them yourself before review; MoeKit never ejects images."),
-                       "此功能首版要求先推出所有磁盘映像。请在查看方案前自行推出；MoeKit 从不代为推出映像。")
+        XCTAssertEqual(String(localized: "This version requires a complete, empty disk-image inventory. You may eject images you opened yourself, then check again. Leave system-managed images alone; they can keep this action unavailable. MoeKit does not classify or eject images."),
+                       "此版本要求完整的磁盘映像清单为空。你可以推出自己打开的映像，然后重新检查。请勿处理系统管理的映像；它们的存在可能使此操作持续不可用。MoeKit 不会对映像进行分类或代为推出。")
+        XCTAssertEqual(InstallerUseEvidence.attachedImageLimitation, "此版本要求完整的磁盘映像清单为空，无法排除通过任何已连接映像使用文件的情况。请仅推出你自己打开的映像，然后重新检查。请勿处理系统管理的映像；它们的存在可能使此操作持续不可用。MoeKit 不会对映像进行分类或代为推出。")
         let size = "4 KB", bytes: Int64 = 4096
-        XCTAssertEqual(String(localized: "1 file · \(size) (\(bytes) bytes)"), "1 个文件 · 4 KB（4096 字节）")
+        let localizedBytes = bytes.formatted(.number.locale(Locale.current))
+        XCTAssertEqual(String(localized: "1 file · \(size) (\(bytes) bytes)"), "1 个文件 · 4 KB（\(localizedBytes) 字节）")
         let receipt = "synthetic-receipt", sequence = 3
         XCTAssertEqual(String(localized: "Receipt \(receipt) · record \(sequence)"), "凭据 synthetic-receipt · 第 3 条记录")
         let pid: Int32 = 17, code: Int32 = 13, stage = "PROC_PIDINFO"

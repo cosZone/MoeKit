@@ -40,7 +40,7 @@ jobs:
           build_dir=$(mktemp -d "$RUNNER_TEMP/MoeKit-idle-probe.XXXXXX")
           swiftc -swift-version 6 -parse-as-library -target x86_64-apple-macosx15.0 \
             Sources/Installer/InstallerUseEvidence.swift Scripts/InstallerIdleProbe.swift \
-            -o "$build_dir/moekit-installer-idle-probe"
+            -framework OpenDirectory -o "$build_dir/moekit-installer-idle-probe"
           "$build_dir/moekit-installer-idle-probe" | tee InstallerIdleProbe.log
           python3 Scripts/verify-installer-fixture-evidence.py --directory InstallerIdleEvidence --source-sha "$SOURCE_SHA" --kinds idle-use
       - name: Preserve exact-commit idle-use proof and diagnostics

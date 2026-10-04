@@ -23,9 +23,17 @@ enum InstallerUseEvidence: Equatable, Sendable {
     case noUseObserved
     case unavailable(reason: String)
 
-    static let attachedImageLimitation = String(localized: "Eject all attached disk images manually, then check again. This version only supports a complete empty disk-image inventory; it cannot rule out use from another attached image.")
+    static let attachedImageLimitation = String(localized: "This version requires a complete, empty disk-image inventory and cannot rule out use through any attached image. Eject only images you opened yourself, then check again. Leave system-managed images alone; their presence can keep this action unavailable. MoeKit does not classify or eject images.")
 
-    static let scopeDescription = String(localized: "Requires all disk images to be ejected and checks current-user open file descriptors and fileports. Memory mappings, system processes, and other users' use are not verified. This observation is not proof that the file is unused.")
+    static let scopeDescription = String(localized: "Requires a complete, empty disk-image inventory and checks current-user open file descriptors and fileports. Only eject images you opened yourself; leave system-managed images alone. MoeKit does not classify images, so unsupported system inventory can keep this action unavailable. Memory mappings, system processes, and other users' use are not verified. This observation is not proof that the file is unused.")
+}
+
+/// Diagnostic-only handle scope. No case represents overall installer eligibility:
+/// mounted images, memory mappings, system processes and other users are excluded.
+enum InstallerCurrentUserHandleDiagnostic: Equatable, Sendable {
+    case observedHandleUse(reason: String)
+    case noHandleUseObserved
+    case unavailable(reason: String)
 }
 
 protocol InstallerUseEvidenceProviding: Sendable {
@@ -86,12 +94,7 @@ actor NativeInstallerUseEvidenceProvider: InstallerUseEvidenceProviding {
     }
 
     func evidence(for target: InstallerUseTarget) async -> InstallerUseEvidence {
-        guard (1...16_384).contains(maximumProcesses),
-              (1...65_536).contains(maximumHandles),
-              maximumDuration.isFinite, maximumDuration > 0, maximumDuration <= 30,
-              target.inode != 0, target.device <= UInt64(UInt32.max),
-              target.path.hasPrefix("/"), !target.path.utf8.contains(0),
-              target.observerRetainedFileDescriptors.allSatisfy({ $0 >= 0 }) else {
+        guard isValidRequest(target) else {
             return .unavailable(reason: String(localized: "The file-use observation request is invalid."))
         }
         let deadline = system.now() + maximumDuration
@@ -104,96 +107,10 @@ actor NativeInstallerUseEvidenceProvider: InstallerUseEvidenceProviding {
             guard mountedBefore.isEmpty else {
                 return .unavailable(reason: InstallerUseEvidence.attachedImageLimitation)
             }
-            let before = try pidSet(system.processes(maximum: maximumProcesses))
-            guard before.contains(system.observerPID) else {
-                throw InstallerUseReadError.unavailable(String(localized: "The current-user process list is incomplete."))
-            }
-            var identities: [Int32: InstallerUseProcessIdentity] = [:]
-            // Inspect self first; other open self FDs must not be hidden by the
-            // one retained observation handle excluded below.
-            let ordered = before.sorted { a, b in
-                let aIsObserver = a == system.observerPID, bIsObserver = b == system.observerPID
-                if aIsObserver != bIsObserver { return aIsObserver }
-                return a < b
-            }
-            for pid in ordered {
-                try check(deadline)
-                let identity = try verifiedIdentity(pid: pid)
-                identities[pid] = identity
-                if !identity.isZombie {
-                    let fds = try handleSet(system.descriptors(pid: pid, maximum: maximumHandles))
-                    let ports = try handleSet(system.fileports(pid: pid, maximum: maximumHandles))
-                    var descriptorIdentities: [UInt32: InstallerUseFileIdentity] = [:]
-                    var portIdentities: [UInt32: InstallerUseFileIdentity] = [:]
-                    for fd in fds where fd.isVnode {
-                        try check(deadline)
-                        guard let descriptor = Int32(exactly: fd.number) else {
-                            throw InstallerUseReadError.unavailable(String(localized: "An open-file descriptor could not be validated."))
-                        }
-                        let file = try system.descriptorIdentity(pid: pid, descriptor: descriptor)
-                        descriptorIdentities[fd.number] = file
-                        if file == target.identity {
-                            if pid == system.observerPID && target.observerRetainedFileDescriptors.contains(descriptor) { continue }
-                            return .observedUse(reason: String(localized: "A current-user process has this file open."))
-                        }
-                        // A claimed retained target descriptor that was reused
-                        // must block, even when its new identity is unrelated.
-                        if pid == system.observerPID && target.observerRetainedFileDescriptors.contains(descriptor) {
-                            throw InstallerUseReadError.unavailable(String(localized: "The retained observation handle changed."))
-                        }
-                    }
-                    for port in ports where port.isVnode {
-                        try check(deadline)
-                        let file = try system.fileportIdentity(pid: pid, port: port.number)
-                        portIdentities[port.number] = file
-                        if file == target.identity {
-                            return .observedUse(reason: String(localized: "A current-user process retains a fileport for this file."))
-                        }
-                    }
-                    try check(deadline)
-                    guard fds == (try handleSet(system.descriptors(pid: pid, maximum: maximumHandles))),
-                          ports == (try handleSet(system.fileports(pid: pid, maximum: maximumHandles))) else {
-                        throw InstallerUseReadError.unavailable(String(localized: "Open-file handles changed during the observation. Check again."))
-                    }
-                    // Same handle number/type does not establish same vnode:
-                    // close/reopen and fileport-name reuse must also be checked.
-                    for (number, expected) in descriptorIdentities {
-                        try check(deadline)
-                        let actual = try system.descriptorIdentity(pid: pid, descriptor: Int32(number))
-                        guard actual == expected else {
-                            throw InstallerUseReadError.unavailable(String(localized: "An open-file descriptor changed its file identity. Check again."))
-                        }
-                    }
-                    for (number, expected) in portIdentities {
-                        try check(deadline)
-                        let actual = try system.fileportIdentity(pid: pid, port: number)
-                        guard actual == expected else {
-                            throw InstallerUseReadError.unavailable(String(localized: "A fileport changed its file identity. Check again."))
-                        }
-                    }
-                    if pid == system.observerPID {
-                        let observed = Set(fds.filter(\.isVnode).compactMap { Int32(exactly: $0.number) })
-                        guard target.observerRetainedFileDescriptors.isSubset(of: observed) else {
-                            throw InstallerUseReadError.unavailable(String(localized: "A retained observation handle is no longer present."))
-                        }
-                    }
-                }
-                try check(deadline)
-                guard identity == (try verifiedIdentity(pid: pid)) else {
-                    throw InstallerUseReadError.unavailable(String(localized: "A process changed identity during the observation. Check again."))
-                }
-            }
-            try check(deadline)
-            guard before == (try pidSet(system.processes(maximum: maximumProcesses))) else {
-                throw InstallerUseReadError.unavailable(String(localized: "The current-user process list changed. Check again."))
-            }
-            // Revalidate all identities again: a PID could have been reused
-            // after its row completed but before the second list was captured.
-            for pid in ordered {
-                try check(deadline)
-                guard identities[pid] == (try verifiedIdentity(pid: pid)) else {
-                    throw InstallerUseReadError.unavailable(String(localized: "A process exited or changed identity. Check again."))
-                }
+            switch try observeCurrentUserHandles(for: target, deadline: deadline) {
+            case .observedHandleUse(let reason): return .observedUse(reason: reason)
+            case .noHandleUseObserved: break
+            case .unavailable(let reason): return .unavailable(reason: reason)
             }
             let mountedAfter = try await system.mountedImages(deadline: deadline)
             try check(deadline)
@@ -208,6 +125,129 @@ actor NativeInstallerUseEvidenceProvider: InstallerUseEvidenceProviding {
         } catch {
             return .unavailable(reason: String(localized: "File-use evidence could not be completely read in the stated scope."))
         }
+    }
+
+    /// Uses exactly the production handle scanner, without manufacturing an
+    /// empty mount inventory or returning the full provider's evidence type.
+    func currentUserHandleDiagnostic(for target: InstallerUseTarget) -> InstallerCurrentUserHandleDiagnostic {
+        guard isValidRequest(target) else {
+            return .unavailable(reason: String(localized: "The file-use observation request is invalid."))
+        }
+        let deadline = system.now() + maximumDuration
+        do {
+            try check(deadline)
+            return try observeCurrentUserHandles(for: target, deadline: deadline)
+        } catch InstallerUseReadError.unavailable(let reason) {
+            return .unavailable(reason: reason)
+        } catch is CancellationError {
+            return .unavailable(reason: String(localized: "The file-use observation was cancelled."))
+        } catch {
+            return .unavailable(reason: String(localized: "File-use evidence could not be completely read in the stated scope."))
+        }
+    }
+
+    private func isValidRequest(_ target: InstallerUseTarget) -> Bool {
+        (1...16_384).contains(maximumProcesses) &&
+            (1...65_536).contains(maximumHandles) &&
+            maximumDuration.isFinite && maximumDuration > 0 && maximumDuration <= 30 &&
+            target.inode != 0 && target.device <= UInt64(UInt32.max) &&
+            target.path.hasPrefix("/") && !target.path.utf8.contains(0) &&
+            target.observerRetainedFileDescriptors.allSatisfy({ $0 >= 0 })
+    }
+
+    private func observeCurrentUserHandles(for target: InstallerUseTarget, deadline: TimeInterval) throws -> InstallerCurrentUserHandleDiagnostic {
+        let before = try pidSet(system.processes(maximum: maximumProcesses))
+        guard before.contains(system.observerPID) else {
+            throw InstallerUseReadError.unavailable(String(localized: "The current-user process list is incomplete."))
+        }
+        var identities: [Int32: InstallerUseProcessIdentity] = [:]
+        // Inspect self first; other open self FDs must not be hidden by the
+        // one retained observation handle excluded below.
+        let ordered = before.sorted { a, b in
+            let aIsObserver = a == system.observerPID, bIsObserver = b == system.observerPID
+            if aIsObserver != bIsObserver { return aIsObserver }
+            return a < b
+        }
+        for pid in ordered {
+            try check(deadline)
+            let identity = try verifiedIdentity(pid: pid)
+            identities[pid] = identity
+            if !identity.isZombie {
+                let fds = try handleSet(system.descriptors(pid: pid, maximum: maximumHandles))
+                let ports = try handleSet(system.fileports(pid: pid, maximum: maximumHandles))
+                var descriptorIdentities: [UInt32: InstallerUseFileIdentity] = [:]
+                var portIdentities: [UInt32: InstallerUseFileIdentity] = [:]
+                for fd in fds where fd.isVnode {
+                    try check(deadline)
+                    guard let descriptor = Int32(exactly: fd.number) else {
+                        throw InstallerUseReadError.unavailable(String(localized: "An open-file descriptor could not be validated."))
+                    }
+                    let file = try system.descriptorIdentity(pid: pid, descriptor: descriptor)
+                    descriptorIdentities[fd.number] = file
+                    if file == target.identity {
+                        if pid == system.observerPID && target.observerRetainedFileDescriptors.contains(descriptor) { continue }
+                        return .observedHandleUse(reason: String(localized: "A current-user process has this file open."))
+                    }
+                    // A claimed retained target descriptor that was reused
+                    // must block, even when its new identity is unrelated.
+                    if pid == system.observerPID && target.observerRetainedFileDescriptors.contains(descriptor) {
+                        throw InstallerUseReadError.unavailable(String(localized: "The retained observation handle changed."))
+                    }
+                }
+                for port in ports where port.isVnode {
+                    try check(deadline)
+                    let file = try system.fileportIdentity(pid: pid, port: port.number)
+                    portIdentities[port.number] = file
+                    if file == target.identity {
+                        return .observedHandleUse(reason: String(localized: "A current-user process retains a fileport for this file."))
+                    }
+                }
+                try check(deadline)
+                guard fds == (try handleSet(system.descriptors(pid: pid, maximum: maximumHandles))),
+                      ports == (try handleSet(system.fileports(pid: pid, maximum: maximumHandles))) else {
+                    throw InstallerUseReadError.unavailable(String(localized: "Open-file handles changed during the observation. Check again."))
+                }
+                // Same handle number/type does not establish same vnode:
+                // close/reopen and fileport-name reuse must also be checked.
+                for (number, expected) in descriptorIdentities {
+                    try check(deadline)
+                    let actual = try system.descriptorIdentity(pid: pid, descriptor: Int32(number))
+                    guard actual == expected else {
+                        throw InstallerUseReadError.unavailable(String(localized: "An open-file descriptor changed its file identity. Check again."))
+                    }
+                }
+                for (number, expected) in portIdentities {
+                    try check(deadline)
+                    let actual = try system.fileportIdentity(pid: pid, port: number)
+                    guard actual == expected else {
+                        throw InstallerUseReadError.unavailable(String(localized: "A fileport changed its file identity. Check again."))
+                    }
+                }
+                if pid == system.observerPID {
+                    let observed = Set(fds.filter(\.isVnode).compactMap { Int32(exactly: $0.number) })
+                    guard target.observerRetainedFileDescriptors.isSubset(of: observed) else {
+                        throw InstallerUseReadError.unavailable(String(localized: "A retained observation handle is no longer present."))
+                    }
+                }
+            }
+            try check(deadline)
+            guard identity == (try verifiedIdentity(pid: pid)) else {
+                throw InstallerUseReadError.unavailable(String(localized: "A process changed identity during the observation. Check again."))
+            }
+        }
+        try check(deadline)
+        guard before == (try pidSet(system.processes(maximum: maximumProcesses))) else {
+            throw InstallerUseReadError.unavailable(String(localized: "The current-user process list changed. Check again."))
+        }
+        // Revalidate all identities again: a PID could have been reused
+        // after its row completed but before the second list was captured.
+        for pid in ordered {
+            try check(deadline)
+            guard identities[pid] == (try verifiedIdentity(pid: pid)) else {
+                throw InstallerUseReadError.unavailable(String(localized: "A process exited or changed identity. Check again."))
+            }
+        }
+        return .noHandleUseObserved
     }
 
     private func verifiedIdentity(pid: Int32) throws -> InstallerUseProcessIdentity {
@@ -389,7 +429,7 @@ enum InstallerUseNativeParsing {
     }
 
     private static func mountUnavailable() -> InstallerUseReadError {
-        .unavailable(String(localized: "The disk-image inventory is incomplete or unreadable. Eject disk images manually and check again; no file was moved."))
+        .unavailable(String(localized: "The disk-image inventory is incomplete or unreadable; no file was moved. You may eject images you opened yourself and check again, but leave system-managed images alone. MoeKit does not classify or eject images; unsupported system inventory can keep this action unavailable."))
     }
 
 }

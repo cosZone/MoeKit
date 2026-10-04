@@ -19,6 +19,34 @@ struct InstallerUseEvidenceTests {
         #expect(!InstallerUseEvidence.scopeDescription.isEmpty)
     }
 
+    @Test("A separately typed handle-only diagnostic never grants mounted-image eligibility")
+    func handleDiagnosticIsNotFullEligibility() async {
+        let fixture = InstallerUseFixture(images: [[.init(device: 7, inode: 99)]])
+        let provider = NativeInstallerUseEvidenceProvider(system: fixture)
+        let diagnostic: InstallerCurrentUserHandleDiagnostic = await provider.currentUserHandleDiagnostic(for: target)
+        #expect(diagnostic == .noHandleUseObserved)
+        #expect(fixture.processListCalls == 2)
+        #expect(fixture.identityCalls == 3)
+        #expect(fixture.imageCalls == 0)
+        let fullEvidence: InstallerUseEvidence = await provider.evidence(for: target)
+        #expect(fullEvidence == .unavailable(reason: InstallerUseEvidence.attachedImageLimitation))
+        #expect(fixture.processListCalls == 2)
+        #expect(fixture.imageCalls == 1)
+    }
+
+    @Test("Handle diagnostics share duplicate detection and keep permission failure unknown")
+    func handleDiagnosticPositiveAndUnknown() async {
+        let duplicate = InstallerUseFixture(descriptorLists: [[.init(number: 4, isVnode: true), .init(number: 5, isVnode: true)]],
+                                            failure: "mounts")
+        let positive = await NativeInstallerUseEvidenceProvider(system: duplicate).currentUserHandleDiagnostic(for: target)
+        if case .observedHandleUse = positive {} else { Issue.record("The handle diagnostic missed the unexcluded duplicate.") }
+        #expect(duplicate.imageCalls == 0)
+        let denied = InstallerUseFixture(failure: "descriptors")
+        let unknown = await NativeInstallerUseEvidenceProvider(system: denied).currentUserHandleDiagnostic(for: target)
+        if case .unavailable = unknown {} else { Issue.record("The handle diagnostic converted a read failure into absence.") }
+        #expect(denied.imageCalls == 0)
+    }
+
     @Test("Exclude one retained target FD, never the entire observer process")
     func anotherSelfDescriptorBlocks() async {
         let fixture = InstallerUseFixture(descriptorLists: [[.init(number: 4, isVnode: true), .init(number: 5, isVnode: true)]])

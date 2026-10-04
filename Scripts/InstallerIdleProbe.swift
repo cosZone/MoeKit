@@ -1,5 +1,7 @@
 import Darwin
+import Dispatch
 import Foundation
+import OpenDirectory
 
 /// Standalone, opt-in hosted-CI acceptance probe. Compile this file together
 /// with the unchanged production InstallerUseEvidence.swift, without AppKit,
@@ -24,6 +26,7 @@ enum InstallerIdleProbe {
                 try fixture.validate()
                 let target = InstallerUseTarget(device: fixture.initial.device, inode: fixture.initial.inode,
                     path: fixture.fileURL.path, observerRetainedFileDescriptors: [fixture.fd])
+                await printHandleStageDiagnostics(fixture: fixture, target: target)
                 let deadline = ProcessInfo.processInfo.systemUptime + 25
                 var latest = "No complete observation finished."
                 var duplicate = fcntl(fixture.fd, F_DUPFD_CLOEXEC, 0)
@@ -79,6 +82,58 @@ enum InstallerIdleProbe {
         } catch {
             FileHandle.standardError.write(Data("Standalone installer idle probe failed: \(error)\n".utf8))
             exit(1)
+        }
+    }
+
+    /// This result is console-only and cannot create idle-use.json. It isolates
+    /// the actual shared handle scanner while overall mount eligibility remains
+    /// separately required by the unchanged full-provider acceptance below.
+    private static func printHandleStageDiagnostics(fixture: ProbeFixture, target: InstallerUseTarget) async {
+        var result = ["scope": "current-user-fd-fileport-only", "mountEligibility": "not-evaluated",
+                      "positiveControl": "unavailable", "negativeControl": "not-run"]
+        do {
+            try fixture.validate()
+            var duplicate = fcntl(fixture.fd, F_DUPFD_CLOEXEC, 0)
+            guard duplicate >= 0 else { throw ProbeFailure("The diagnostic duplicate could not be retained.") }
+            defer { if duplicate >= 0 { close(duplicate) } }
+            let deadline = ProcessInfo.processInfo.systemUptime + 25
+            let positive = try await retryHandleDiagnostic(fixture: fixture, target: target, deadline: deadline)
+            result["positiveControl"] = handleDiagnosticLabel(positive)
+            close(duplicate); duplicate = -1
+            if case .observedHandleUse = positive {
+                let negative = try await retryHandleDiagnostic(fixture: fixture, target: target, deadline: deadline)
+                result["negativeControl"] = handleDiagnosticLabel(negative)
+                if case .unavailable(let reason) = negative { result["lastCause"] = reason }
+            } else if case .unavailable(let reason) = positive { result["lastCause"] = reason }
+            try fixture.validate()
+        } catch { result["lastCause"] = "Owned handle-diagnostic fixture validation failed." }
+        if let bytes = try? JSONSerialization.data(withJSONObject: result, options: [.sortedKeys]) {
+            print("Handle-only diagnostic, not installer eligibility: \(String(decoding: bytes, as: UTF8.self))")
+        }
+    }
+
+    private static func retryHandleDiagnostic(fixture: ProbeFixture, target: InstallerUseTarget,
+                                             deadline: TimeInterval) async throws -> InstallerCurrentUserHandleDiagnostic {
+        var latest = InstallerCurrentUserHandleDiagnostic.unavailable(reason: "The diagnostic observation window expired.")
+        while ProcessInfo.processInfo.systemUptime < deadline {
+            try fixture.validate()
+            let remaining = deadline - ProcessInfo.processInfo.systemUptime
+            guard remaining > 0 else { break }
+            let provider = NativeInstallerUseEvidenceProvider(maximumDuration: min(8, remaining))
+            latest = await provider.currentUserHandleDiagnostic(for: target)
+            try fixture.validate()
+            if case .unavailable = latest {
+                if ProcessInfo.processInfo.systemUptime + 0.2 < deadline { try await Task.sleep(for: .milliseconds(200)) }
+            } else { return latest }
+        }
+        return latest
+    }
+
+    private static func handleDiagnosticLabel(_ value: InstallerCurrentUserHandleDiagnostic) -> String {
+        switch value {
+        case .observedHandleUse: "observedHandleUse"
+        case .noHandleUseObserved: "noHandleUseObserved"
+        case .unavailable: "unavailable"
         }
     }
 
@@ -160,6 +215,7 @@ enum InstallerIdleProbe {
     /// than exhausting descriptors by pinning every installed system image.
     private static func printImageMetadata(_ records: [[String: Any]]) {
         var emitted = 0
+        var account242: [String: Any]?
         let deadline = ProcessInfo.processInfo.systemUptime + 5
         for (index, record) in records.prefix(64).enumerated() {
             guard ProcessInfo.processInfo.systemUptime < deadline else {
@@ -188,6 +244,10 @@ enum InstallerIdleProbe {
                 result["ancestorsLeafToRoot"] = ancestors
                 let named = try ProbeSnapshot.at(parent.fd, url.lastPathComponent)
                 result["source"] = statMetadata(named)
+                if named.uid == 242 {
+                    if account242 == nil { account242 = observedAccount242() }
+                    result["observedUID242Account"] = account242
+                }
                 let fd = openat(parent.fd, url.lastPathComponent, O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)
                 guard fd >= 0 else { throw ProbeFailure("source-not-readable-with-no-follow") }
                 defer { close(fd) }
@@ -227,7 +287,66 @@ enum InstallerIdleProbe {
     private static func statMetadata(_ s: ProbeSnapshot) -> [String: Any] {
         ["owner": s.uid, "group": s.gid, "mode": String(format: "%04o", s.mode & 0o7777),
          "type": s.regular ? "regular" : (s.mode & UInt32(S_IFMT) == UInt32(S_IFDIR) ? "directory" : "other"),
-         "links": s.links, "device": s.device, "inode": s.inode, "flags": s.flags]
+         "links": s.links, "device": s.device, "inode": s.inode, "flags": s.flags,
+         "restrictedFlag": s.flags & UInt32(SF_RESTRICTED) != 0]
+    }
+
+    /// Resolve only the actually observed UID242, with a fixed buffer. Never
+    /// read/output its password, home directory, or arbitrary account fields.
+    /// This is identity research, not an approved-system-account allowlist.
+    private static func observedAccount242() -> [String: Any] {
+        var entry = passwd(), found: UnsafeMutablePointer<passwd>?
+        var buffer = [CChar](repeating: 0, count: 16 * 1_024)
+        var result: [String: Any] = buffer.withUnsafeMutableBufferPointer { storage in
+            let status = getpwuid_r(242, &entry, storage.baseAddress, storage.count, &found)
+            guard status == 0, found != nil, entry.pw_uid == 242,
+                  let name = boundedAccountField(entry.pw_name, storage: storage, maximum: 64),
+                  !name.isEmpty, name.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "_" || $0 == "-") }) else {
+                return ["uid": 242, "resolved": false, "lookupStatus": status]
+            }
+            let shell = boundedAccountField(entry.pw_shell, storage: storage, maximum: 128)
+            return ["uid": entry.pw_uid, "gid": entry.pw_gid, "resolved": true, "name": name,
+                    "nonLoginShell": shell.map { ["/usr/bin/false", "/bin/false", "/usr/sbin/nologin", "/sbin/nologin"].contains($0) } ?? false]
+        }
+        if let name = result["name"] as? String {
+            // Only one lookup per metadata batch; a stalled read is left alone
+            // after two seconds, never signalled or replaced by another query.
+            let lookup = ProbeLocalAccountLookup()
+            DispatchQueue.global(qos: .utility).async { lookup.finish(queryLocalAccount242(expectedName: name)) }
+            result["localDefault"] = lookup.wait()
+        }
+        return result
+    }
+
+    private static func queryLocalAccount242(expectedName: String) -> [String: String] {
+        do {
+            let node = try ODNode(session: ODSession.default(), name: "/Local/Default")
+            guard node.nodeName == "/Local/Default" else { return ["status": "unexpected-node"] }
+            let attributes: [String] = [kODAttributeTypeRecordName, kODAttributeTypeUniqueID, kODAttributeTypeUserShell]
+            let recordType: String = kODRecordTypeUsers
+            let query = try ODQuery(node: node, forRecordTypes: recordType, attribute: kODAttributeTypeUniqueID,
+                                    matchType: ODMatchType(kODMatchEqualTo), queryValues: "242",
+                                    returnAttributes: attributes, maximumResults: 2)
+            let rows = try query.resultsAllowingPartial(false)
+            guard rows.count == 1, let record = rows.first as? ODRecord,
+                  let name = record.recordName, name.utf8.count <= 64, !name.isEmpty,
+                  name.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "_" || $0 == "-") }),
+                  let identifiers = try record.values(forAttribute: kODAttributeTypeUniqueID) as? [String], identifiers == ["242"],
+                  let shells = try record.values(forAttribute: kODAttributeTypeUserShell) as? [String], shells.count == 1,
+                  let shell = shells.first, shell.utf8.count <= 128 else { return ["status": "missing-ambiguous-or-invalid-record"] }
+            return ["status": "one-local-record", "node": "/Local/Default", "uid": "242", "name": name,
+                    "matchesGetpwuidName": String(name == expectedName),
+                    "nonLoginShell": String(["/usr/bin/false", "/bin/false", "/usr/sbin/nologin", "/sbin/nologin"].contains(shell))]
+        } catch { return ["status": "local-record-read-unavailable"] }
+    }
+
+    private static func boundedAccountField(_ value: UnsafePointer<CChar>?, storage: UnsafeMutableBufferPointer<CChar>, maximum: Int) -> String? {
+        guard let value, let base = storage.baseAddress else { return nil }
+        let offset = Int(bitPattern: value) - Int(bitPattern: base)
+        guard offset >= 0, offset < storage.count else { return nil }
+        let bytes = storage[offset..<min(storage.count, offset + maximum)]
+        guard let end = bytes.firstIndex(of: 0) else { return nil }
+        return String(bytes: bytes[..<end].map { UInt8(bitPattern: $0) }, encoding: .utf8)
     }
 
     private static func mountMetadata(_ entity: [String: Any]) -> [String: Any] {
@@ -300,6 +419,20 @@ enum InstallerIdleProbe {
         guard count == expected.count, Data(bytes.prefix(expected.count)) == expected else {
             throw ProbeFailure("The held owned-file bytes do not match the expected complete bytes.")
         }
+    }
+}
+
+private final class ProbeLocalAccountLookup: @unchecked Sendable {
+    private let lock = NSLock()
+    private let completed = DispatchSemaphore(value: 0)
+    private var value: [String: String]?
+    func finish(_ result: [String: String]) {
+        lock.withLock { value = result }
+        completed.signal()
+    }
+    func wait() -> [String: String] {
+        guard completed.wait(timeout: .now() + 2) == .success else { return ["status": "local-record-read-timed-out"] }
+        return lock.withLock { value ?? ["status": "local-record-read-unavailable"] }
     }
 }
 

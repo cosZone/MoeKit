@@ -794,8 +794,12 @@ struct RepositoryScannerTests {
         let changed = aboveRoot ? selected.deletingLastPathComponent() : selected
         let result = try await RepositoryScanner().scan(roots: [selected], progress: { update in
             if update.enumeratedEntries == 1 && update.completedRoots == 0 {
-                try? FileManager.default.moveItem(at: changed, to: fixture.root.appendingPathComponent("old"))
-                try? FileManager.default.createSymbolicLink(at: changed, withDestinationURL: replacement)
+                do {
+                    try FileManager.default.moveItem(at: changed, to: fixture.root.appendingPathComponent("old"))
+                    try FileManager.default.createSymbolicLink(at: changed, withDestinationURL: replacement)
+                } catch {
+                    Issue.record("The synthetic ancestor replacement failed: \(error)")
+                }
             }
         })
         #expect(result.items.isEmpty)

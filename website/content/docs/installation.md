@@ -11,7 +11,7 @@ description: 先核对来源和版本，再了解 macOS 的安全提示。
 
 ## 获取可用产物
 
-当前已交付 [0.1.0-preview.6 开发签名预览](https://github.com/cosZone/MoeKit/releases/tag/v0.1.0-preview.6)，提供 DMG 与 ZIP，包内是同一份 universal Release App，并附校验和与构建信息。本版接入逐次确认的官方固定版本 Mole 目录分析、工具准备与边界加固；使用 Apple Development 签名，未公证。文档网站独立构建，不是安装包组件。
+当前已交付 [0.1.0-preview.7 开发签名预览](https://github.com/cosZone/MoeKit/releases/tag/v0.1.0-preview.7)，提供 DMG 与 ZIP，包内是同一份 universal Release App，并附校验和与构建信息。本版新增精确分析器下载指引、逐次确认的单个 Downloads 磁盘映像废纸篓与凭据恢复，并保留官方固定版本 Mole 目录分析；使用 Apple Development 签名，未公证。文档网站独立构建，不是安装包组件。
 
 先查看 [GitHub Releases](https://github.com/cosZone/MoeKit/releases)。只有实际发布页中附带的文件才是已交付版本；文档中的版本计划或示例号不构成下载承诺。
 
@@ -24,7 +24,7 @@ description: 先核对来源和版本，再了解 macOS 的安全提示。
 只下载 DMG 时，在文件所在目录执行，并将结果与 `SHA256SUMS.txt` 中的同名条目对照：
 
 ```sh
-shasum -a 256 MoeKit-v0.1.0-preview.6-macOS.dmg
+shasum -a 256 MoeKit-v0.1.0-preview.7-macOS.dmg
 ```
 
 如果 DMG、ZIP、`BUILD_INFO.json` 和校验和文件全部已下载到同一目录，可一次检查全部：
@@ -47,7 +47,9 @@ MoeKit 不附带或自动安装 Mole。先确认已有分析器与 [官方 V1.57
 
 本版不接受 Homebrew、自编译或其他版本。工具准备中的“已找到 · 未验证”与复制安装命令不能替代分析校验。遇到隔离标记、内容变化或不匹配文件时会拒绝运行，不移除隔离标记或绕过 Gatekeeper。
 
-分析使用普通用户权限，不是 OS 沙箱；确认会说明私有副本、缓存和临时目录写入。不会修改或删除所选内容，尚未接入可执行的清理操作。完整范围与取消说明见 [Mole 空间分析与报告](/docs/mole)。
+分析使用普通用户权限，不是 OS 沙箱；确认会说明私有副本、缓存和临时目录写入。Mole 分析本身不会修改或删除所选内容。preview.7 另有独立复查并确认的原生文件操作：从当前真实 Downloads 分析中选择一个受支持的直属 `.dmg`，移到废纸篓或凭记录另行确认恢复；不覆盖、不清空废纸篓，不提供广域 Mole 清理。
+
+使用该操作前，先将 App 安装到 Applications，并只自行推出自己打开的磁盘映像；系统管理的映像不要触碰。首版要求完整空映像清单，系统映像存在时可能持续不可用。完整范围、取消与恢复限制见 [Mole 空间分析与报告](/docs/mole)。
 
 ## 签名和公证是不同的事
 

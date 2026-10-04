@@ -66,7 +66,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
           test "$(tuist version)" = '4.148.3'
           test "$(xcodebuild -version | head -1)" = 'Xcode 16.4'
-          tuist install
+          tuist install --cache-path "$(mktemp -d "$RUNNER_TEMP/moekit-swiftpm-cache.XXXXXX")"
           tuist generate --no-open
       - name: Archive both architectures with script sandboxing enabled
         run: |
@@ -185,7 +185,7 @@ jobs:
         run: python3 Scripts/prepare-mole-ci-fixture.py
       - name: Generate Xcode workspace
         run: |
-          tuist install
+          tuist install --cache-path "$(mktemp -d "$RUNNER_TEMP/moekit-swiftpm-cache.XXXXXX")"
           tuist generate --no-open
       - name: Build app and tests, then run the built tests
         run: |
@@ -347,7 +347,7 @@ jobs:
           test "$(tuist version)" = '4.148.3'
           xcodebuild -version
           swift --version
-          tuist install
+          tuist install --cache-path "$(mktemp -d "$RUNNER_TEMP/moekit-swiftpm-cache.XXXXXX")"
           tuist generate --no-open
       - name: Build and test optimized Release without signing secrets
         run: |

@@ -57,7 +57,7 @@ jobs:
           python3 Scripts/verify-source.py
           test "$(tuist version)" = '4.148.3'
           xcodebuild -version
-          tuist install
+          tuist install --cache-path "$(mktemp -d "$RUNNER_TEMP/moekit-swiftpm-cache.XXXXXX")"
           tuist generate --no-open
       - name: Prepare official Mole synthetic fixture without private signing secrets
         run: |

@@ -264,7 +264,7 @@ def scenario(name, owned, server, binary, framework, signer, test_key, other_key
         while time.monotonic() - started < 105:
             owned.verify()
             events = read_events(events_path)
-            terminal = next((e for e in events if e["event"] in ("relaunched", "error", "not_found", "cancelled", "start_error")), None)
+            terminal = next((e for e in events if e["event"] in ("relaunched", "error", "not_found", "cancelled", "start_error", "preference_setup_error")), None)
             if terminal: break
             if process.poll() is not None and name not in ("valid", "preview-allowed"): break
             time.sleep(0.1)

@@ -73,18 +73,33 @@ static void finish(NSString *name, NSDictionary *extra) {
         BOOL preserved = [[preferences stringForKey:@"FixturePreference"] isEqualToString:configuration[@"FixtureMarker"]] &&
             [preferences objectForKey:@"SUEnableAutomaticChecks"] != nil && ![preferences boolForKey:@"SUEnableAutomaticChecks"] &&
             [preferences objectForKey:@"SUAutomaticallyUpdate"] != nil && ![preferences boolForKey:@"SUAutomaticallyUpdate"];
-        finish(@"relaunched", @{@"preferences_preserved": @(preserved)});
+        finish(@"relaunched", @{@"preferences_preserved": @(preserved),
+            @"preference_marker_preserved": @([[preferences stringForKey:@"FixturePreference"] isEqualToString:configuration[@"FixtureMarker"]]),
+            @"automatic_checks_stored": @([preferences objectForKey:@"SUEnableAutomaticChecks"] != nil),
+            @"automatic_downloads_stored": @([preferences objectForKey:@"SUAutomaticallyUpdate"] != nil),
+            @"automatic_checks": @([preferences boolForKey:@"SUEnableAutomaticChecks"]),
+            @"automatic_downloads": @([preferences boolForKey:@"SUAutomaticallyUpdate"])});
         return;
     }
     [preferences setObject:configuration[@"FixtureMarker"] forKey:@"FixturePreference"];
     self.updater = [[SPUUpdater alloc] initWithHostBundle:NSBundle.mainBundle applicationBundle:NSBundle.mainBundle userDriver:self delegate:self];
     NSError *error = nil;
     if (![self.updater startUpdater:&error]) { finish(@"start_error", @{@"code": @(error.code)}); return; }
-    self.updater.automaticallyChecksForUpdates = NO;
+    // Sparkle ignores the download-preference setter while automatic updates
+    // are unavailable. Exercise an explicit choice before disabling checks.
+    // This completes synchronously before the next update-cycle run-loop turn.
+    self.updater.automaticallyChecksForUpdates = YES;
+    self.updater.automaticallyDownloadsUpdates = YES;
     self.updater.automaticallyDownloadsUpdates = NO;
+    self.updater.automaticallyChecksForUpdates = NO;
     self.updater.sendsSystemProfile = NO;
     [preferences synchronize];
-    event(@"preferences_set", @{@"automatic_checks": @(self.updater.automaticallyChecksForUpdates), @"automatic_downloads": @(self.updater.automaticallyDownloadsUpdates)});
+    BOOL explicitPreferences = [preferences objectForKey:@"SUEnableAutomaticChecks"] != nil &&
+        [preferences objectForKey:@"SUAutomaticallyUpdate"] != nil &&
+        ![preferences boolForKey:@"SUEnableAutomaticChecks"] && ![preferences boolForKey:@"SUAutomaticallyUpdate"];
+    event(@"preferences_set", @{@"explicit_values_stored": @(explicitPreferences),
+        @"automatic_checks": @(self.updater.automaticallyChecksForUpdates), @"automatic_downloads": @(self.updater.automaticallyDownloadsUpdates)});
+    if (!explicitPreferences) { finish(@"preference_setup_error", @{}); return; }
     [self.updater checkForUpdates];
 }
 - (BOOL)updater:(SPUUpdater *)updater mayPerformUpdateCheck:(SPUUpdateCheck)kind error:(NSError **)error {

@@ -45,6 +45,29 @@ struct InstallerFileAccessTests {
         try #require(acl_set_fd_np(directory.fd, nonempty, ACL_TYPE_EXTENDED) == 0)
         #expect(throws: InstallerTrashFailure.unsafeRecovery) { try InstallerFileAccess.validatePrivate(directory.fd, directory: true) }
     }
+    @Test("Mutation boundaries accept deny-only/read-only ACLs and reject write or delete-child grants")
+    func mutationACLPolicy() throws {
+        let root = try fixture(), directory = try InstallerDirectoryAnchor.open(root)
+        let file = root.appendingPathComponent("owned.dmg")
+        try Data("owned ACL fixture".utf8).write(to: file, options: .withoutOverwriting)
+        let held = try InstallerFileDescriptor(parent: directory, name: file.lastPathComponent)
+        for descriptor in [directory.fd, held.fd] {
+            try InstallerFileAccess.rejectMutationGrantingACL(descriptor)
+            for permissions in ["deny:delete", "allow:read,readattr,readextattr,readsecurity"] {
+                let acl = try #require(acl_from_text("!#acl 1\ngroup:ABCDEFAB-CDEF-ABCD-EFAB-CDEF0000000C:::\(permissions)\n"))
+                defer { acl_free(UnsafeMutableRawPointer(acl)) }
+                try #require(acl_set_fd_np(descriptor, acl, ACL_TYPE_EXTENDED) == 0)
+                try InstallerFileAccess.rejectMutationGrantingACL(descriptor)
+            }
+            for permissions in ["write", "append", "delete", "delete_child", "writeattr", "writeextattr", "writesecurity", "chown"] {
+                let acl = try #require(acl_from_text("!#acl 1\ngroup:ABCDEFAB-CDEF-ABCD-EFAB-CDEF0000000C:::allow:\(permissions)\n"))
+                defer { acl_free(UnsafeMutableRawPointer(acl)) }
+                try #require(acl_set_fd_np(descriptor, acl, ACL_TYPE_EXTENDED) == 0)
+                #expect(throws: InstallerTrashFailure.unsupported) { try InstallerFileAccess.rejectMutationGrantingACL(descriptor) }
+            }
+        }
+        #expect(try Data(contentsOf: file) == Data("owned ACL fixture".utf8))
+    }
     @Test("No-overwrite rename preserves both names")
     func exclusiveCollision() throws {
         let root = try fixture(), a = root.appendingPathComponent("a"), b = root.appendingPathComponent("b")

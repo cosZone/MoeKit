@@ -32,8 +32,12 @@ private struct InstallerFixture: Sendable {
     let recovery: URL
     let marker: Data
     let sentinel: URL
-    init(name: String = "Owned installer 空格\n.dmg", realTrash: Bool = false) throws {
-        let temp = try MoleAnalysisFiles.canonicalURL(FileManager.default.temporaryDirectory)
+    init(name: String = "Owned installer 空格\n.dmg", realTrash: Bool = false, hostedHomeFixture: Bool = false) throws {
+        if hostedHomeFixture {
+            let env = ProcessInfo.processInfo.environment
+            try #require(env["GITHUB_ACTIONS"] == "true" && env["RUNNER_ENVIRONMENT"] == "github-hosted")
+        }
+        let temp = try MoleAnalysisFiles.canonicalURL(hostedHomeFixture ? FileManager.default.homeDirectoryForCurrentUser : FileManager.default.temporaryDirectory)
         base = temp.appendingPathComponent("MoeKit-Installer-Test-\(UUID().uuidString)")
         downloads = base.appendingPathComponent("Downloads")
         source = downloads.appendingPathComponent(name)
@@ -47,7 +51,7 @@ private struct InstallerFixture: Sendable {
         try marker.write(to: source, options: .withoutOverwriting)
         try Data("outside remains unchanged".utf8).write(to: sentinel, options: .withoutOverwriting)
     }
-    var environment: InstallerTrashEnvironment { .init(downloads: downloads, recoveryRoot: recovery, trash: trash, enforceLocalVolume: false) }
+    var environment: InstallerTrashEnvironment { .init(downloads: downloads, recoveryRoot: recovery, trash: trash, enforceLocalVolume: false, enforceTrustedAncestry: false) }
     var scope: InstallerTrashScope { .init(generation: UUID(), liveAnalysisID: UUID(), liveDirectory: downloads,
         liveEntryPaths: [source.path], protectedPaths: [], catalogIsKnown: true) }
     var context: InstallerRecoveryContext { .init(generation: UUID(), protectedPaths: [], catalogIsKnown: true) }
@@ -71,6 +75,26 @@ struct InstallerTrashExecutorTests {
         #expect(!FileManager.default.fileExists(atPath: f.recovery.path))
         await executor.discardPlans()
         await #expect(throws: InstallerTrashFailure.expired) { try await executor.moveToTrash(planID: plan.id, scope: plan.scope) }
+        #expect(try Data(contentsOf: f.source) == f.marker)
+        try f.checkSentinel()
+    }
+    @Test("Write-granting source/Downloads ACLs refuse before preparation or confirmation", arguments: ["source", "downloads"])
+    func writeGrantingACLs(_ target: String) async throws {
+        let f = try InstallerFixture(), executor = f.executor()
+        let parent = try InstallerDirectoryAnchor.open(f.downloads)
+        let file = try InstallerFileDescriptor(parent: parent, name: f.source.lastPathComponent)
+        let descriptor = target == "source" ? file.fd : parent.fd
+        let safe = try #require(acl_from_text("!#acl 1\ngroup:ABCDEFAB-CDEF-ABCD-EFAB-CDEF0000000C:::deny:delete\n"))
+        defer { acl_free(UnsafeMutableRawPointer(safe)) }
+        try #require(acl_set_fd_np(descriptor, safe, ACL_TYPE_EXTENDED) == 0)
+        let plan = try await executor.prepare(selection: f.source, scope: f.scope)
+        let rights = target == "source" ? "write" : "delete_child"
+        let unsafe = try #require(acl_from_text("!#acl 1\ngroup:ABCDEFAB-CDEF-ABCD-EFAB-CDEF0000000C:::allow:\(rights)\n"))
+        defer { acl_free(UnsafeMutableRawPointer(unsafe)) }
+        try #require(acl_set_fd_np(descriptor, unsafe, ACL_TYPE_EXTENDED) == 0)
+        await #expect(throws: (any Error).self) { try await executor.moveToTrash(planID: plan.id, scope: plan.scope) }
+        await #expect(throws: InstallerTrashFailure.unsupported) { try await executor.prepare(selection: f.source, scope: f.scope) }
+        #expect(!FileManager.default.fileExists(atPath: f.recovery.path))
         #expect(try Data(contentsOf: f.source) == f.marker)
         try f.checkSentinel()
     }
@@ -439,6 +463,48 @@ private struct FixtureOnlyNativeTrashSink: InstallerTrashSink {
 /// native guards separately without downloading/running the upstream analyzer.
 @Suite("Live Mole selection to native installer operation", .serialized)
 struct InstallerLiveMoleFlowTests {
+    @Test("Production ancestry rejects a write ACL above private staging without moving the installer",
+          .enabled(if: ProcessInfo.processInfo.environment["MOEKIT_INSTALLER_TRASH_FIXTURE"] == "1"))
+    func unsafeRecoveryAncestor() async throws {
+        let f = try InstallerFixture(hostedHomeFixture: true)
+        let environment = InstallerTrashEnvironment(downloads: f.downloads, recoveryRoot: f.recovery,
+            trash: f.trash, enforceLocalVolume: true, enforceTrustedAncestry: true)
+        let executor = NativeInstallerTrashExecutor(environment: environment,
+            evidence: InstallerFixtureEvidence(result: .noUseObserved), sink: InstallerFixtureSink(f.trash), nativeExecutionEnabled: true)
+        let support = try InstallerDirectoryAnchor.open(f.base.appendingPathComponent("Support"))
+        try support.validateTrustedMutationAncestry()
+        let plan = try await executor.prepare(selection: f.source, scope: f.scope)
+        let acl = try #require(acl_from_text("!#acl 1\ngroup:ABCDEFAB-CDEF-ABCD-EFAB-CDEF0000000C:::allow:delete_child\n"))
+        defer { acl_free(UnsafeMutableRawPointer(acl)) }
+        try #require(acl_set_fd_np(support.fd, acl, ACL_TYPE_EXTENDED) == 0)
+        #expect(throws: InstallerTrashFailure.unsupported) { try support.validateTrustedMutationAncestry() }
+        await #expect(throws: InstallerTrashFailure.unsupported) { try await executor.moveToTrash(planID: plan.id, scope: plan.scope) }
+        #expect(!FileManager.default.fileExists(atPath: f.recovery.path))
+        #expect(try Data(contentsOf: f.source) == f.marker)
+        try f.checkSentinel()
+    }
+    @Test("A late write ACL above staging prevents native Trash and preserves captured bytes",
+          .enabled(if: ProcessInfo.processInfo.environment["MOEKIT_INSTALLER_TRASH_FIXTURE"] == "1"))
+    func lateUnsafeRecoveryAncestor() async throws {
+        let f = try InstallerFixture(hostedHomeFixture: true)
+        let environment = InstallerTrashEnvironment(downloads: f.downloads, recoveryRoot: f.recovery,
+            trash: f.trash, enforceLocalVolume: true, enforceTrustedAncestry: true)
+        let supportURL = f.base.appendingPathComponent("Support")
+        let executor = NativeInstallerTrashExecutor(environment: environment,
+            evidence: InstallerFixtureEvidence(result: .noUseObserved), sink: InstallerFixtureSink(f.trash), nativeExecutionEnabled: true) { point in
+                guard point == .beforeTrash else { return }
+                let support = try InstallerDirectoryAnchor.open(supportURL)
+                let acl = try #require(acl_from_text("!#acl 1\ngroup:ABCDEFAB-CDEF-ABCD-EFAB-CDEF0000000C:::allow:delete_child\n"))
+                defer { acl_free(UnsafeMutableRawPointer(acl)) }
+                try #require(acl_set_fd_np(support.fd, acl, ACL_TYPE_EXTENDED) == 0)
+            }
+        let plan = try await executor.prepare(selection: f.source, scope: f.scope)
+        let outcome = try await executor.moveToTrash(planID: plan.id, scope: plan.scope)
+        #expect(!outcome.movedToTrash && outcome.requiresRecovery)
+        #expect(try Data(contentsOf: plan.recoveryURL.appendingPathComponent(f.source.lastPathComponent)) == f.marker)
+        #expect(!FileManager.default.fileExists(atPath: f.trash.appendingPathComponent(f.source.lastPathComponent).path))
+        try f.checkSentinel()
+    }
     @Test("Official Mole live result supplies the exact native fixture selection",
           .enabled(if: ProcessInfo.processInfo.environment["MOEKIT_INSTALLER_TRASH_FIXTURE"] == "1"))
     func liveMoleToTrashAndRestore() async throws {
@@ -446,7 +512,7 @@ struct InstallerLiveMoleFlowTests {
         try #require(env["GITHUB_ACTIONS"] == "true" && env["RUNNER_ENVIRONMENT"] == "github-hosted")
         let resource = try #require(Bundle(for: InstallerLiveMoleBundle.self).url(forResource: "MoleAnalyzerFixturePath", withExtension: "txt"))
         let binary = try String(contentsOf: resource, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)
-        let f = try InstallerFixture(name: "MoeKit-live-Mole-owned-\(UUID().uuidString).dmg", realTrash: true)
+        let f = try InstallerFixture(name: "MoeKit-live-Mole-owned-\(UUID().uuidString).dmg", realTrash: true, hostedHomeFixture: true)
         let analyzer = MoleAnalysisExecutor(privateSessionParent: f.base.appendingPathComponent("analysis-session"))
         let analysisPlan = try await analyzer.prepare(executable: URL(fileURLWithPath: binary), directory: f.downloads)
         let live = try await analyzer.run(analysisPlan)
@@ -458,7 +524,7 @@ struct InstallerLiveMoleFlowTests {
             liveEntryPaths: Set(live.report.entries.map(\.path)), protectedPaths: [], catalogIsKnown: true)
         let sink = FixtureOnlyNativeTrashSink(marker: f.marker, allowedParent: f.recovery)
         let productionVolumeEnvironment = InstallerTrashEnvironment(downloads: f.downloads, recoveryRoot: f.recovery,
-            trash: f.trash, enforceLocalVolume: true)
+            trash: f.trash, enforceLocalVolume: true, enforceTrustedAncestry: true)
         let executor = NativeInstallerTrashExecutor(environment: productionVolumeEnvironment,
             evidence: InstallerFixtureEvidence(result: .noUseObserved), sink: sink, nativeExecutionEnabled: true)
         let plan: InstallerTrashPlan

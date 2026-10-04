@@ -53,6 +53,19 @@ final class InstallerDirectoryAnchor {
             current = node.parent
         }
     }
+    func validateTrustedMutationAncestry() throws {
+        var current: InstallerDirectoryAnchor? = self
+        while let node = current {
+            try node.validate()
+            let value = try InstallerFileAccess.snapshot(node.fd)
+            guard (value.uid == 0 || value.uid == geteuid()), value.mode & 0o022 == 0 else {
+                throw InstallerTrashFailure.unsupported
+            }
+            try InstallerFileAccess.rejectMutationGrantingACL(node.fd)
+            current = node.parent
+        }
+        try validate()
+    }
 }
 
 final class InstallerFileDescriptor {
@@ -152,6 +165,40 @@ enum InstallerFileAccess {
         guard !FileManager.default.isUbiquitousItem(at: URL(fileURLWithPath: url.path)) else { throw InstallerTrashFailure.unsupported }
         try checkName()
     }
+    /// Darwin ACL allow entries can grant writes despite 0644/0755 POSIX modes.
+    /// Standard deny-only Downloads ACLs remain supported. No ACL is changed.
+    static func rejectMutationGrantingACL(_ fd: Int32) throws {
+        let before = try snapshot(fd)
+        guard let security = filesec_init() else { throw InstallerTrashFailure.unsupported }
+        defer { filesec_free(security) }
+        var attributes = stat(), hasACL: Int32 = 0
+        guard fstatx_np(fd, &attributes, security) == 0,
+              filesec_query_property(security, FILESEC_ACL, &hasACL) == 0,
+              before == snapshot(attributes), hasACL == 0 || hasACL == 1 else { throw InstallerTrashFailure.changed }
+        if hasACL == 1 {
+            var value: acl_t?
+            guard filesec_get_property(security, FILESEC_ACL, &value) == 0, let acl = value else { throw InstallerTrashFailure.unsupported }
+            defer { acl_free(UnsafeMutableRawPointer(acl)) }
+            guard acl_valid(acl) == 0 else { throw InstallerTrashFailure.unsupported }
+            let nonmutating = [ACL_READ_DATA, ACL_EXECUTE, ACL_READ_ATTRIBUTES, ACL_READ_EXTATTRIBUTES, ACL_READ_SECURITY, ACL_SYNCHRONIZE]
+                .reduce(UInt64(0)) { $0 | UInt64($1.rawValue) }
+            var ended = false
+            for index in 0...128 {
+                var entry: acl_entry_t?
+                errno = 0
+                let result = acl_get_entry(acl, Int32(truncatingIfNeeded: (index == 0 ? ACL_FIRST_ENTRY : ACL_NEXT_ENTRY).rawValue), &entry)
+                if result == -1, errno == EINVAL { ended = true; break }
+                guard result == 0, index < 128, let entry else { throw InstallerTrashFailure.unsupported }
+                var tag = ACL_UNDEFINED_TAG
+                var mask: acl_permset_mask_t = 0
+                guard acl_get_tag_type(entry, &tag) == 0, acl_get_permset_mask_np(entry, &mask) == 0,
+                      tag == ACL_EXTENDED_DENY || tag == ACL_EXTENDED_ALLOW else { throw InstallerTrashFailure.unsupported }
+                if tag == ACL_EXTENDED_ALLOW, mask & ~nonmutating != 0 { throw InstallerTrashFailure.unsupported }
+            }
+            guard ended else { throw InstallerTrashFailure.unsupported }
+        }
+        guard before == (try snapshot(fd)) else { throw InstallerTrashFailure.changed }
+    }
     static func rejectCloudAttributes(_ fd: Int32) throws {
         let size = flistxattr(fd, nil, 0, 0)
         guard size >= 0, size <= 64 * 1024 else { throw InstallerTrashFailure.unsupported }
@@ -166,6 +213,7 @@ enum InstallerFileAccess {
     static func exclusiveMove(from parent: InstallerDirectoryAnchor, name: String, to destination: InstallerDirectoryAnchor, destinationName: String) throws {
         try basename(name); try basename(destinationName)
         try parent.validate(); try destination.validate()
+        try rejectMutationGrantingACL(parent.fd); try rejectMutationGrantingACL(destination.fd)
         guard parent.identity.device == destination.identity.device else { throw InstallerTrashFailure.unsupportedRename }
         guard renameatx_np(parent.fd, name, destination.fd, destinationName, UInt32(RENAME_EXCL)) == 0 else {
             if errno == EEXIST { throw InstallerTrashFailure.collision }

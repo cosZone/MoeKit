@@ -18,11 +18,12 @@ struct InstallerTrashEnvironment: Sendable {
     let recoveryRoot: URL
     let trash: URL
     let enforceLocalVolume: Bool
+    let enforceTrustedAncestry: Bool
     static var user: Self {
         let home = FileManager.default.homeDirectoryForCurrentUser
         return .init(downloads: home.appendingPathComponent("Downloads"),
                      recoveryRoot: home.appendingPathComponent("Library/Application Support/MoeKit/InstallerRecovery"),
-                     trash: home.appendingPathComponent(".Trash"), enforceLocalVolume: true)
+                     trash: home.appendingPathComponent(".Trash"), enforceLocalVolume: true, enforceTrustedAncestry: true)
     }
 }
 
@@ -101,6 +102,7 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
         try revalidate(plan)
         try await requireNoObservedUse(plan.display.file, path: plan.display.originalURL.path, excluding: [plan.file.fd])
         try revalidate(plan); try Task.checkCancellation()
+        try validateRecoveryAncestry()
         let journal = try InstallerRecoveryJournal(rootURL: environment.recoveryRoot, create: true, exclusive: true)
         guard journal.root.identity.device == plan.parent.identity.device else { throw InstallerTrashFailure.unsupportedRename }
         let catalogLease = try InstallerCatalogLease(app: journal.appParent)
@@ -118,7 +120,7 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
         do {
             try revalidate(plan); try journal.validate(); try catalogLease.requireSnapshot(plan.catalog); try Task.checkCancellation()
             try checkpoint(.beforeCapture)
-            try InstallerFileAccess.exclusiveMove(from: plan.parent, name: plan.display.originalURL.lastPathComponent,
+            try exclusiveMove(from: plan.parent, name: plan.display.originalURL.lastPathComponent,
                 to: operation, destinationName: plan.display.originalURL.lastPathComponent)
             captured = true
             capturedSnapshot = try InstallerFileAccess.snapshotAt(operation.fd, plan.display.originalURL.lastPathComponent)
@@ -142,7 +144,8 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
             receipt = receipt.advancing(to: .trashIntent, payloadName: plan.display.originalURL.lastPathComponent)
             try journal.append(receipt, operation: operation)
             try checkpoint(.beforeTrash); try Task.checkCancellation()
-            try operation.validate(); try InstallerFileAccess.validatePrivate(operation.fd, directory: true)
+            try validateNamespaceBoundary(operation); try InstallerFileAccess.validatePrivate(operation.fd, directory: true)
+            try InstallerFileAccess.rejectMutationGrantingACL(staged.fd)
             guard capturedIdentity == (try InstallerFileAccess.snapshotAt(operation.fd, plan.display.originalURL.lastPathComponent)) else { throw InstallerTrashFailure.changed }
             // Apple accepts a URL, not an expected inode. Under the documented
             // cooperative threat model, never call it on the untrusted Downloads name.
@@ -173,6 +176,7 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
         return try InstallerRecoveryJournal(rootURL: environment.recoveryRoot, create: false, exclusive: false).receipts()
     }
     func validatedRecoveryLocation(receiptID: UUID) throws -> URL {
+        try validateRecoveryAncestry()
         let journal = try InstallerRecoveryJournal(rootURL: environment.recoveryRoot, create: false, exclusive: false)
         let operation = try journal.operation(receiptID)
         guard let receipt = try? journal.latest(receiptID) else { return operation.url }
@@ -184,6 +188,7 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
     func prepareRestore(receiptID: UUID, context: InstallerRecoveryContext) async throws -> InstallerRestorePlan {
         guard !isMutating else { throw InstallerTrashFailure.busy }
         discardPlans()
+        try validateRecoveryAncestry()
         let journal = try InstallerRecoveryJournal(rootURL: environment.recoveryRoot, create: false, exclusive: false)
         let receipt = try journal.latest(receiptID)
         try validateRecoveryContext(context, target: receipt.originalURL)
@@ -209,6 +214,7 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
         try InstallerFileAccess.validateRegular(expectedSource)
         let source = try InstallerFileDescriptor(parent: sourceParent, name: sourceURL.lastPathComponent)
         let identity = try InstallerFileAccess.snapshot(source.fd)
+        try validateNamespaceBoundary(sourceParent); try InstallerFileAccess.rejectMutationGrantingACL(source.fd)
         guard identity == expectedSource, receipt.originalFile.matchesCaptured(identity), identity == (try InstallerFileAccess.snapshotAt(sourceParent.fd, sourceURL.lastPathComponent)) else { throw InstallerTrashFailure.changed }
         try await requireNoObservedUse(identity, path: sourceURL.path, excluding: [source.fd])
         try parent.validate(); try sourceParent.validate()
@@ -229,6 +235,7 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
         preparedRestore = nil; prepared = nil; isMutating = true
         defer { isMutating = false }
         try validateRecoveryContext(context, target: plan.display.receipt.originalURL)
+        try validateRecoveryAncestry()
         let journal = try InstallerRecoveryJournal(rootURL: environment.recoveryRoot, create: false, exclusive: true)
         let catalogLease = try InstallerCatalogLease(app: journal.appParent)
         defer { withExtendedLifetime(catalogLease) {} }
@@ -263,7 +270,7 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
             try Task.checkCancellation()
             if !alreadyStaged {
                 try checkpoint(.beforeRestoreCapture)
-                try InstallerFileAccess.exclusiveMove(from: plan.sourceParent, name: plan.display.sourceURL.lastPathComponent, to: operation, destinationName: "restore.dmg")
+                try exclusiveMove(from: plan.sourceParent, name: plan.display.sourceURL.lastPathComponent, to: operation, destinationName: "restore.dmg")
             }
             captured = true
             restoreCapturedSnapshot = try InstallerFileAccess.snapshotAt(operation.fd, "restore.dmg")
@@ -281,7 +288,7 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
             try journal.append(receipt, operation: operation)
             try checkpoint(.beforeRestore); try Task.checkCancellation()
             guard stagedIdentity == (try InstallerFileAccess.snapshotAt(operation.fd, "restore.dmg")) else { restoreStageChanged = true; throw InstallerTrashFailure.changed }
-            try InstallerFileAccess.exclusiveMove(from: operation, name: "restore.dmg", to: plan.parent, destinationName: receipt.originalURL.lastPathComponent)
+            try exclusiveMove(from: operation, name: "restore.dmg", to: plan.parent, destinationName: receipt.originalURL.lastPathComponent)
             originalMoveStarted = true
             guard receipt.originalFile.matchesCaptured(try InstallerFileAccess.snapshotAt(plan.parent.fd, receipt.originalURL.lastPathComponent)) else { throw InstallerTrashFailure.changed }
             guard fsync(plan.parent.fd) == 0, fsync(operation.fd) == 0 else { throw InstallerTrashFailure.journal }
@@ -303,7 +310,7 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
                     guard restoreCapturedSnapshot == (try InstallerFileAccess.snapshotAt(operation.fd, "restore.dmg")) else {
                         restoreStageChanged = true; throw InstallerTrashFailure.changed
                     }
-                    try InstallerFileAccess.exclusiveMove(from: operation, name: "restore.dmg", to: plan.sourceParent, destinationName: plan.display.sourceURL.lastPathComponent)
+                    try exclusiveMove(from: operation, name: "restore.dmg", to: plan.sourceParent, destinationName: plan.display.sourceURL.lastPathComponent)
                     restoreRollbackCommitted = true
                     guard restoreCapturedSnapshot.matchesCaptured(try InstallerFileAccess.snapshotAt(plan.sourceParent.fd, plan.display.sourceURL.lastPathComponent)) else { throw InstallerTrashFailure.changed }
                     guard fsync(operation.fd) == 0, fsync(plan.sourceParent.fd) == 0 else { throw InstallerTrashFailure.journal }
@@ -335,7 +342,7 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
             guard capturedSnapshot == (try InstallerFileAccess.snapshotAt(operation.fd, payloadName)) else {
                 stageWasReplaced = true; throw InstallerTrashFailure.changed
             }
-            try InstallerFileAccess.exclusiveMove(from: operation, name: payloadName, to: originalParent, destinationName: receipt.originalURL.lastPathComponent)
+            try exclusiveMove(from: operation, name: payloadName, to: originalParent, destinationName: receipt.originalURL.lastPathComponent)
             returnedToOriginal = true
             guard capturedSnapshot.matchesCaptured(try InstallerFileAccess.snapshotAt(originalParent.fd, receipt.originalURL.lastPathComponent)) else { throw InstallerTrashFailure.changed }
             try checkpoint(.afterRollback)
@@ -349,7 +356,13 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
             return .init(receipt: retained, message: returnedToOriginal ? String(localized: "The captured item was returned, but its final recovery record could not be verified. Inspect the original and recovery locations; do not repeat the move.") : String(localized: "The move stopped before Trash. Recovery data was retained; inspect it before any new operation."), movedToTrash: false, requiresRecovery: true)
         }
     }
+    private func validateRecoveryAncestry() throws {
+        guard environment.enforceTrustedAncestry else { return }
+        let support = try InstallerDirectoryAnchor.open(environment.recoveryRoot.deletingLastPathComponent().deletingLastPathComponent())
+        try support.validateTrustedMutationAncestry()
+    }
     private func catalogSnapshot(protecting target: URL) throws -> InstallerCatalogSnapshot {
+        try validateRecoveryAncestry()
         let snapshot = try InstallerCatalogSnapshot.read(recoveryRoot: environment.recoveryRoot)
         try validateRecoveryContext(.init(generation: UUID(), protectedPaths: try snapshot.protectedPaths, catalogIsKnown: true), target: target)
         return snapshot
@@ -371,8 +384,18 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
             if root.starts(with: protected) || protected.starts(with: root) { throw InstallerTrashFailure.protected }
         }
     }
+    private func validateNamespaceBoundary(_ parent: InstallerDirectoryAnchor) throws {
+        try parent.validate()
+        try InstallerFileAccess.rejectMutationGrantingACL(parent.fd)
+        if environment.enforceTrustedAncestry { try parent.validateTrustedMutationAncestry() }
+    }
+    private func exclusiveMove(from parent: InstallerDirectoryAnchor, name: String,
+                               to destination: InstallerDirectoryAnchor, destinationName: String) throws {
+        try validateNamespaceBoundary(parent); try validateNamespaceBoundary(destination)
+        try InstallerFileAccess.exclusiveMove(from: parent, name: name, to: destination, destinationName: destinationName)
+    }
     private func validateParent(_ parent: InstallerDirectoryAnchor) throws {
-        try parent.validate(); try parent.rejectGitAncestors()
+        try validateNamespaceBoundary(parent); try parent.rejectGitAncestors()
         guard parent.identity.uid == geteuid(), parent.identity.mode & 0o022 == 0,
               parent.identity.device == parent.parent?.identity.device else { throw InstallerTrashFailure.unsupported }
         if environment.enforceLocalVolume { try InstallerFileAccess.validateVolume(parent.fd, url: parent.url) }
@@ -380,6 +403,7 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
     }
     private func validateFile(_ fd: Int32, identity: InstallerFileSnapshot, url: URL) throws {
         try InstallerFileAccess.validateRegular(identity)
+        try InstallerFileAccess.rejectMutationGrantingACL(fd)
         try InstallerFileAccess.rejectCloudAttributes(fd)
         if environment.enforceLocalVolume { try InstallerFileAccess.validateVolume(fd, url: url) }
     }
@@ -400,6 +424,7 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
         _ = try InstallerFileAccess.components(url)
         guard url.deletingLastPathComponent().path == environment.trash.path else { throw InstallerTrashFailure.changed }
         let parent = try InstallerDirectoryAnchor.open(environment.trash)
+        try validateNamespaceBoundary(parent)
         guard parent.identity.uid == geteuid(), parent.identity.device == expected.device else { throw InstallerTrashFailure.changed }
         let named = try InstallerFileAccess.snapshotAt(parent.fd, url.lastPathComponent)
         guard expected.matchesCaptured(named), exact == nil || exact == named else { throw InstallerTrashFailure.changed }

@@ -6,9 +6,9 @@ enum PreparedTool: String, CaseIterable, Identifiable, Sendable {
     case mole, git
     var id: String { rawValue }
     var title: String { self == .mole ? "Mole" : "Git" }
-    var installCommand: String { self == .mole ? "brew install mole" : "brew install git" }
+    var installCommand: String { self == .mole ? MoleAnalyzerRelease.native.manualDownloadCommand : "brew install git" }
     var documentationURL: URL {
-        URL(string: self == .mole ? "https://github.com/tw93/Mole#quick-start" : "https://git-scm.com/install/mac")!
+        self == .mole ? MoleAnalyzerRelease.native.releaseURL : URL(string: "https://git-scm.com/install/mac")!
     }
 
     /// Keep the account's home path out of first-use and Demo presentation.
@@ -16,6 +16,9 @@ enum PreparedTool: String, CaseIterable, Identifiable, Sendable {
     func conventionalLocationLabel(_ url: URL, home: URL) -> String {
         if url.deletingLastPathComponent().path == home.appendingPathComponent(".local/bin").path {
             return "~/.local/bin/" + url.lastPathComponent
+        }
+        if url == home.appendingPathComponent(".config/mole/bin/analyze-go") {
+            return "~/.config/mole/bin/analyze-go"
         }
         return url.path
     }
@@ -28,7 +31,31 @@ enum PreparedTool: String, CaseIterable, Identifiable, Sendable {
                         home.appendingPathComponent(".local/bin", isDirectory: true)]
         var result = prefixes.flatMap { prefix in names.map { prefix.appendingPathComponent($0) } }
         if self == .git { result.append(URL(fileURLWithPath: "/usr/bin/git")) }
+        if self == .mole { result.insert(home.appendingPathComponent(".config/mole/bin/analyze-go"), at: 0) }
         return result
+    }
+}
+
+/// Display/copy guidance only. Nothing in this type downloads or starts a tool.
+/// Reuse the executor's release allowlist so the suggested asset cannot drift.
+extension MoleAnalyzerRelease {
+    var releaseURL: URL { URL(string: "https://github.com/tw93/Mole/releases/tag/\(version)")! }
+    var assetName: String { "analyze-darwin-" + (architecture == "arm64" ? "arm64" : "amd64") }
+    var assetURL: URL { URL(string: "https://github.com/tw93/Mole/releases/download/\(version)/\(assetName)")! }
+    var manualDownloadCommand: String {
+        """
+        (
+          umask 077 &&
+          mole_dir=$(/usr/bin/mktemp -d "$HOME/MoeKit-Mole-\(version).XXXXXX") &&
+          printf 'Download folder: %s\\n' "$mole_dir" &&
+          /usr/bin/curl -q --fail --location --show-error --proto '=https' --proto-redir '=https' --connect-timeout 15 --max-time 120 --max-filesize \(byteCount) \\
+            '\(assetURL.absoluteString)' -o "$mole_dir/analyze-go" &&
+          test "$(/usr/bin/stat -f %z "$mole_dir/analyze-go")" -eq \(byteCount) &&
+          printf '%s  %s\\n' '\(sha256)' "$mole_dir/analyze-go" | /usr/bin/shasum -a 256 -c - &&
+          /bin/chmod 700 "$mole_dir/analyze-go" &&
+          printf '\\nAnalyzer path: %s\\n' "$mole_dir/analyze-go"
+        )
+        """
     }
 }
 

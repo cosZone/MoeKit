@@ -4,7 +4,7 @@
 
 ## 检查范围
 
-- Mole：`/opt/homebrew/bin/{mo,mole}`、`/usr/local/bin/{mo,mole}`、`~/.local/bin/{mo,mole}`
+- Mole：`~/.config/mole/bin/analyze-go`、`/opt/homebrew/bin/{mo,mole}`、`/usr/local/bin/{mo,mole}`、`~/.local/bin/{mo,mole}`
 - Git：`/opt/homebrew/bin/git`、`/usr/local/bin/git`、`~/.local/bin/git`、`/usr/bin/git`
 - 也可通过原生文件选择器选择一个候选文件；不接受命令字符串，不展开 Shell，不搜索 PATH 或遍历目录
 - 单次最多 8 个路径；独立 actor 执行 `lstat`，不读取候选文件内容。末端符号链接不跟随；父目录可能正常解析，结果不构成已验证的执行身份
@@ -23,14 +23,31 @@
 
 ## 安装指引
 
-[Mole 官方说明](https://github.com/tw93/Mole#quick-start) 与 [Git 官方 macOS 安装说明](https://git-scm.com/install/mac) 提供的 Homebrew 命令分别为 `brew install mole`、`brew install git`。按钮只复制界面上的固定命令，不自动执行、不打开终端、不安装 Homebrew。自行执行可能下载文件、安装依赖、修改工具安装目录或更新 Homebrew；先阅读官方说明。官方页面可能以后变化，MoeKit 不把指引等同于已验证安装。
+Mole 的「工具准备」现在直接对应实际分析适配器的受支持文件，不再默认推荐 `brew install mole`。仅接受 [V1.57.0 官方发布](https://github.com/tw93/Mole/releases/tag/V1.57.0) 的原始分析器；Homebrew、自行构建和其他版本暂不兼容。界面根据当前应用架构选择文件，和执行器共用版本、大小、SHA-256 常量；在 Rosetta 下运行的 Intel 应用会显示 amd64 文件。
 
-无需安装工具即可导入 Mole JSON 或使用现有项目元数据发现。Demo 显式禁止读取真实工具位置，也不制造示例安装成功。常见位置列表始终用 `~/.local/bin` 显示用户目录候选项，避免首次打开或 Demo 截图泄露账户主目录名；真实路径只在主动检查后用于结果。
+| 应用架构 | 官方文件 | 字节数 | SHA-256 |
+| --- | --- | --- | --- |
+| arm64 | [analyze-darwin-arm64](https://github.com/tw93/Mole/releases/download/V1.57.0/analyze-darwin-arm64) | 3827474 | `62c6b5076349081a34e60256a1471979f600d74d8f4990745a37d30d6faa00e1` |
+| x86_64 | [analyze-darwin-amd64](https://github.com/tw93/Mole/releases/download/V1.57.0/analyze-darwin-amd64) | 4022992 | `cff7d9da8bd18cb3364d566186944b5b14b01e21e5bb4a3d61579f553ea39ad7` |
+
+操作顺序：
+
+1. 阅读官方发布说明，在界面展开「查看下载命令」检查内容，按需复制并自行粘贴到终端执行。复制按钮只更新剪贴板，不运行命令或打开终端。
+2. 命令以 `umask 077` 和 `mktemp -d` 在主目录新建 `MoeKit-Mole-V1.57.0.XXXXXX` 私有文件夹，不覆盖既有安装。只下载对应官方二进制；`curl -q` 忽略用户 curl 配置，限制为 HTTPS，设置连接/总时限与预期文件大小上限。随后独立核对精确字节数和 SHA-256，全部通过后才设置 `700` 权限。不会运行下载的文件、执行安装脚本、修改 PATH 或自动清理。
+3. 终端会先输出下载文件夹，成功后输出 `analyze-go` 路径；到 Mole → 空间 → 使用 Mole 分析… 选择该文件。此目录会保留；失败的下载也保留供检查。安装器此前安装的常见路径是 `~/.config/mole/bin/analyze-go`，可自行选择，但位置本身不证明兼容。
+4. MoeKit 再次检查实际文件的身份、权限、大小、精确摘要和隔离标记。找到候选文件或下载成功都不等于已获执行许可；每次分析仍需确认范围与私有临时写入。
+
+浏览器下载的文件可能带有 macOS 隔离标记，此时 MoeKit 会拒绝。复制的命令和应用均不移除 xattrs、重新签名或绕过 Gatekeeper；不要通过换下载途径来规避已出现的系统安全警告。下载指引不承诺通过所有系统执行策略，也不把浏览器下载立即描述为可运行。`curl --max-filesize` 的流式限制依赖系统 curl 版本，最终精确大小及摘要校验始终独立执行；没有声称跨版本的硬下载字节边界。
+
+为什么不直接复制上游安装器命令：已核对 [V1.57.0 install.sh](https://github.com/tw93/Mole/blob/6bca4812acd6a3d54ffe97291734c3556a174057/install.sh)。它确实接受版本参数 `V1.57.0`、`--prefix` 和 `--config`，但下载失败可回退到其他发布或本地构建，安装时会清理扩展属性，并可能处理既有 Homebrew 安装。因此这里提供固定发布文件的手动下载指引，不把脚本安装成功当作兼容证明。审计只读源码，没有运行该安装器。
+
+Git 仍链接 [官方 macOS 安装说明](https://git-scm.com/install/mac) 并提供 `brew install git`。手动执行可访问网络、安装依赖或更新 Homebrew；不自动安装 Homebrew。
+无需安装工具即可导入 Mole JSON 或使用现有项目元数据发现。Demo 显式禁止读取真实工具位置，也不制造示例安装成功。常见位置列表始终用 `~/.local/bin`、`~/.config/mole/bin/analyze-go` 显示用户目录候选项，避免首次打开或 Demo 截图泄露账户主目录名；真实路径只在主动检查后用于结果。
 
 ## 生命周期与验证
 
 取消是合作式的：`lstat` 正在等待文件系统时无法由 Swift 中断，因此 UI 保持「正在取消」与任务所有权，直到操作真正返回。不会宣称硬超时或放开第二次检查。关闭窗口、模式切换、取消后不接收旧结果。`WorkspaceStore` 在真实模式切换时同步更新工具准备的模式代次，不依赖 SwiftUI 渲染或 `onChange`；选择器返回时由 model 核对票据，快速进入再退出 Demo 也使旧选择失效。
 
-测试只使用唯一临时目录中的普通文件、可执行权限位、FIFO、符号链接、无效路径与可控异步 provider。候选脚本永不执行；不安装/探测 runner 的真实工具。新增套件参加 Debug、优化 Release 和定向 ASan；具体通过状态以精确提交的 CI 为准。合成原生渲染包含中英文、两种尺寸和深浅色，仍需人工键盘、VoiceOver 与真实 Mac 验收。
+测试只使用唯一临时目录中的普通文件、可执行权限位、FIFO、符号链接、无效路径与可控异步 provider。候选脚本永不执行；不安装/探测 runner 的真实工具。新增套件参加 Debug、优化 Release 和定向 ASan；具体通过状态以精确提交的 CI 为准。原生 bash/zsh 以 `-n` 对两种架构的复制文本做纯语法检查，不展开或执行命令。合成原生渲染包含完整窗口、独立 Mole/Git 指引与展开命令内容、中英文、两种尺寸和深浅色，仍需人工键盘、VoiceOver 与真实 Mac 验收。
 
-实际 Mole 分析属于独立适配器，另行校验精确官方二进制并要求逐次确认；见 [执行设计与验证](Mole-analysis-execution-design.md)。工具准备观察不能代替该校验，也不授权执行。当前分析适配器不接受 Homebrew 或自编译的分析器，复制 Homebrew 安装命令不意味着安装后可直接执行。
+实际 Mole 分析属于独立适配器，另行校验精确官方二进制并要求逐次确认；见 [执行设计与验证](Mole-analysis-execution-design.md)。工具准备观察不能代替该校验，也不授权执行。当前分析适配器不接受 Homebrew 或自编译的分析器。

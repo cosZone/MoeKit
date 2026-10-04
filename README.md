@@ -18,7 +18,7 @@ Swift 6 · SwiftUI / AppKit · macOS 15+ · Tuist 4.148.3 · SPM
 
 尚未实现：任意 CLI 执行、停止/强制停止其他进程、清理、卸载、维护、实时系统指标、提权、第三方插件加载及持久任务历史。导入报告不运行 Mole，报告数值不等于可回收空间。
 
-**实际 Mole 分析的边界：** 目前只支持匹配精确 SHA-256 的 V1.57.0 官方发布分析器，常见官方脚本安装位置为 `~/.config/mole/bin/analyze-go`；Homebrew 与自编译版本暂不匹配该校验。每次分析前显示范围及私有临时副本/缓存写入并要求确认，可取消，失败或未知覆盖不冒充成功。工具以普通用户权限运行，没有 OS 沙箱；没有自动安装、更新、提权或目标清理。详见 [执行设计与验证](Documentation/Mole-analysis-execution-design.md)。本节描述当前源码，具体构建/测试以对应提交 CI 为准。
+**实际 Mole 分析的边界：** 目前只支持匹配精确 SHA-256 的 V1.57.0 官方发布分析器，常见官方脚本安装位置为 `~/.config/mole/bin/analyze-go`；Homebrew 与自编译版本暂不匹配该校验。工具准备页提供精确受支持文件的手动下载链接与复制命令，校验大小和 SHA-256 后才添加执行权限；详见 [工具准备](Documentation/Tool-preparation.md)。每次分析前显示范围及私有临时副本/缓存写入并要求确认，可取消，失败或未知覆盖不冒充成功。工具以普通用户权限运行，没有 OS 沙箱；没有自动安装、更新、提权或目标清理。详见 [执行设计与验证](Documentation/Mole-analysis-execution-design.md)。本节描述当前源码，具体构建/测试以对应提交 CI 为准。
 
 **预览验证记录：** `0.1.0-preview.5` 的精确源码 [`c54eb38`](https://github.com/cosZone/MoeKit/commit/c54eb38eaa56aa209c3761cc0d14e4b34caa99ed) 已在 [发布运行](https://github.com/cosZone/MoeKit/actions/runs/37192663888) 通过 246 项 Release Swift 测试、7 项合成视图渲染测试与 74 项发布辅助测试，包括实际 macOS DMG 创建、只读挂载、签名一致性与卸载检查。同源码 [Native CI](https://github.com/cosZone/MoeKit/actions/runs/37192263616) 还通过完整优化 Release、定向 AddressSanitizer 和中文渲染检查。DMG、ZIP 及校验信息已公开下载并核对；完整窗口、键盘、VoiceOver、双架构实机与真实权限仍需手动验收。
 

@@ -90,7 +90,7 @@ def verify(directory: Path, language: str) -> int:
     })
     expected.update({
         f"tool-preparation-{scenario}-{language}-{appearance}-{width}x{height}": (width, height)
-        for scenario in ("unchecked", "observed", "demo")
+        for scenario in ("unchecked", "observed", "demo", "mole-guidance", "git-guidance", "mole-command")
         for appearance in ("light", "dark")
         for width, height in ((580, 520), (680, 720))
     })
@@ -138,6 +138,7 @@ def verify(directory: Path, language: str) -> int:
             f"Content size: {width} × {height} points",
         }
         if name.startswith("tool-preparation-"):
+            required.add(f"Download copy title: {'复制下载命令' if language == 'zh-Hans' else 'Copy download command'}")
             required.add(f"Tool candidate title: {'已找到 · 未验证' if language == 'zh-Hans' else 'Found · unverified'}")
         if not required.issubset(lines):
             raise ValueError(f"Missing runtime localization/size evidence: {name}")

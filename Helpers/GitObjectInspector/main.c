@@ -262,17 +262,37 @@ int main(int argc, char **argv) {
         if (waitid(P_PID, (id_t)child, &info, WEXITED | WNOHANG | WNOWAIT) < 0) { result = INTERNAL; break; }
 #ifdef __APPLE__
         if (child_ready && info.si_pid != child) {
-            struct proc_taskinfo task;
+            struct proc_taskinfo task; memset(&task, 0, sizeof(task));
+#ifdef GIT_TEST_UNAVAILABLE_METRICS
+            // Build-only adverse fixture. Production never defines this macro.
+            int measured = 0; errno = EACCES;
+#else
             int measured = proc_pidinfo(child, PROC_PIDTASKINFO, 0, &task, sizeof(task));
+#endif
             if (measured != (int)sizeof(task)) {
-                // Exit between waitid and proc_pidinfo is benign. An unobservable
-                // still-running owned child is stopped; there is no unbounded fallback.
+                int metric_error = errno;
+                // Darwin can remove task metrics while a fast child is exiting,
+                // before waitid publishes WEXITED, or transiently during exec.
+                // Keep its PID reserved and allow only a bounded 100 ms grace.
                 siginfo_t after; memset(&after, 0, sizeof(after));
-                if (waitid(P_PID, (id_t)child, &after, WEXITED | WNOHANG | WNOWAIT) < 0 || after.si_pid != child) {
+                if (waitid(P_PID, (id_t)child, &after, WEXITED | WNOHANG | WNOWAIT) < 0) {
                     result = INTERNAL; break;
                 }
-            } else if (task.pti_resident_size > GIT_MEMORY_LIMIT_BYTES) {
-                result = MEMORY_LIMIT; break;
+                if (after.si_pid == child) info = after;
+                else {
+                    double observed = now();
+                    if (observed < 0) { result = INTERNAL; break; }
+                    if (missing_metrics_since < 0) missing_metrics_since = observed;
+                    if (observed - missing_metrics_since >= 0.100) {
+                        fprintf(stderr, "GitObjectInspector task metrics unavailable size=%d errno=%d\n", measured, metric_error);
+                        result = INTERNAL; break;
+                    }
+                }
+            } else {
+                missing_metrics_since = -1;
+                if (task.pti_resident_size > GIT_MEMORY_LIMIT_BYTES) {
+                    result = MEMORY_LIMIT; break;
+                }
             }
         }
 #endif

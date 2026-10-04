@@ -1,7 +1,7 @@
 import Foundation
 
 enum GitCleanupFailure: Error, LocalizedError, Equatable {
-    case unsupported, scope, dirty, uniqueCommits, locked, changed, expired, helper, budget, occupied, partial(String)
+    case unsupported, scope, dirty, uniqueCommits, locked, changed, expired, helper, budget, occupied, partial(String), inspectionChanged(String)
     var errorDescription: String? {
         switch self {
         case .unsupported: "This Git layout or configuration is not supported. No force option is available."
@@ -15,7 +15,16 @@ enum GitCleanupFailure: Error, LocalizedError, Equatable {
         case .budget: "This repository exceeds the bounded inspection budget. Use Git directly for this repository."
         case .occupied: "The destination already exists. Nothing will be overwritten."
         case .partial(let path): "The operation stopped with data retained at \(path). Do not delete that recovery folder."
+        case .inspectionChanged(let stage): "Inspection stopped because a filesystem identity changed during \(stage). Inspect again."
         }
+    }
+}
+
+enum GitCleanupInspectionStage {
+    /// Stable stage labels only; never serialize repository bytes or stderr.
+    static func check<Value>(_ name: String, _ operation: () throws -> Value) throws -> Value {
+        do { return try operation() }
+        catch InstallerTrashFailure.changed { throw GitCleanupFailure.inspectionChanged(name) }
     }
 }
 

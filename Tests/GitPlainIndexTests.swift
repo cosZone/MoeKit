@@ -237,5 +237,10 @@ struct GitPlainIndexTests {
         }
         let tooDeep = Array(repeating: "a", count: GitPlainIndex.maximumDepth + 1).joined(separator: "/")
         #expect(throws: GitPlainIndexError.oversized) { try GitPlainIndex.parse(index([FixtureEntry(tooDeep)])) }
+        // File/byte caps alone do not bound a wide, deeply nested trie.
+        let manyDirectories = (0..<(GitPlainIndex.maximumTreeNodes / 2 + 1)).map {
+            FixtureEntry(String(format: "%06d/file", $0))
+        }
+        #expect(throws: GitPlainIndexError.oversized) { try GitPlainIndex.parse(index(manyDirectories)) }
     }
 }

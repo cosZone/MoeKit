@@ -165,7 +165,7 @@ enum GitCleanupInspection {
         _ = try branchComponents(request.branch); _ = try branchComponents(request.baseBranch)
         guard request.branch != request.baseBranch, !["main", "master", "develop", "development", "release"].contains(request.branch.lowercased()) else { throw GitCleanupFailure.locked }
         let scope = try InstallerDirectoryAnchor.open(request.scope)
-        try scope.validateTrustedMutationAncestry()
+        try GitCleanupInspectionStage.check("scope ancestry") { try scope.validateTrustedMutationAncestry() }
         let target = try InstallerDirectoryAnchor.open(request.project.url)
         if request.action == .retireWorktree {
             guard !request.protectedPaths.contains(where: { path in
@@ -185,7 +185,9 @@ enum GitCleanupInspection {
               within(target.url, scope: scope.url), within(main.url, scope: scope.url),
               target.url != scope.url, main.url != scope.url,
               request.action != .retireWorktree || !within(target.url, scope: main.url) else { throw GitCleanupFailure.scope }
-        try common.validateTrustedMutationAncestry(); try target.validateTrustedMutationAncestry()
+        try GitCleanupInspectionStage.check("repository ancestry") {
+            try common.validateTrustedMutationAncestry(); try target.validateTrustedMutationAncestry()
+        }
         var ancestor = target.parent
         while let node = ancestor, node.url != scope.url {
             var status = stat()
@@ -193,7 +195,7 @@ enum GitCleanupInspection {
             ancestor = node.parent
         }
         let admin = GitCleanupCapture()
-        try admin.collect(common, skip: ["objects", "hooks", "logs", "moekit-recovery"])
+        try GitCleanupInspectionStage.check("metadata capture") { try admin.collect(common, skip: ["objects", "hooks", "logs", "moekit-recovery"]) }
         guard admin.files["worktrees"] == nil else { throw GitCleanupFailure.unsupported }
         guard !admin.files.keys.contains(where: { $0.hasSuffix(".lock") || ["shallow", "MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "BISECT_LOG", "MERGE_MSG", "AUTO_MERGE"].contains(String($0.split(separator: "/").last ?? "")) || ["info/grafts", "info/attributes"].contains($0) }),
               !admin.directories.keys.contains(where: { $0 == "modules" || $0.split(separator: "/").contains(where: { $0.hasPrefix("rebase-") || $0 == "sequencer" }) || $0 == "rr-cache" || $0 == "refs/replace" }) else { throw GitCleanupFailure.locked }
@@ -236,7 +238,8 @@ enum GitCleanupInspection {
                   let indexData = admin.files[prefix + "index"]?.data else { throw GitCleanupFailure.locked }
             let index = try GitPlainIndex.parse(indexData)
             let expected = Set(index.entries.map(\.path)).union([".git"])
-            let working = GitCleanupCapture(allowedFiles: expected); try working.collect(target)
+            let working = GitCleanupCapture(allowedFiles: expected)
+            try GitCleanupInspectionStage.check("worktree capture") { try working.collect(target) }
             guard Set(working.files.keys) == expected else { throw GitCleanupFailure.dirty }
             let expectedDirectories = Set(index.entries.flatMap { entry -> [String] in
                 let parts = entry.path.split(separator: "/"); return (1..<parts.count).map { parts.prefix($0).joined(separator: "/") }

@@ -16,7 +16,7 @@
 ## 有意限定的首个子集
 
 - 同一台机器上的本地可写同卷目录，逐级拒绝符号链接与不可信写权限／ACL；主仓库和 worktree 都在明确范围内
-- 普通 SHA-1、files refs、index v2，普通 100644／100755 文件；index checksum、排序、路径、Unicode／大小写别名、stage 和 flags 均检查
+- 普通 SHA-1、files refs、index v2，普通 100644／100755 文件；index checksum、排序、路径、Unicode／大小写别名、stage 和 flags 均检查；index 条目与中间 tree 节点分别最多 20,000 个
 - 有界 TREE cache 可跳过，但 tree OID 重新计算；拒绝其它 index 扩展、assume-valid、skip-worktree、split／sparse index、冲突、symlink、gitlink／submodule
 - 配置 includes、filter、extensions、partial clone、非默认内容转换、额外属性、shallow、alternates、replace、grafts、reftable、未知状态不支持
 - 目标不得是主 worktree、保护分支、被锁定目标；有 staged／modified／untracked／ignored 文件、额外空目录、独有提交或嵌套目录清单项目时拒绝
@@ -32,7 +32,7 @@
 
 对象库仅允许标准 loose object 和 pack/idx/rev/keep 文件，普通逐字节复制到独占 0700 临时目录。不会带入 live config、refs、index、HEAD、attributes、alternates、hooks、远端配置或 worktree 路径。新建的是 app 自己的 bare config、占位 HEAD 和空 refs。Git 先执行固定 `--version` 验证，再只执行两个固定对象操作：`rev-parse --verify <sha>^{tree}` 与 `merge-base --is-ancestor <sha> <base-sha>`。引用参数仅接受 40 位小写十六进制。
 
-系统／全局配置关闭，环境从固定 allowlist 新建，无继承 GIT_*／DYLD_*／开发工具变量；协议禁止、lazy fetch 禁止、stdin 关闭，无 shell。原创 `GitObjectInspector` supervisor 负责 15 秒墙钟、10 秒 CPU、零文件输出、128 B stdout／64 KiB stderr 上限、拥有的子进程组终止与回收。macOS 用 `proc_pidinfo(PROC_PIDTASKINFO)` 在 25 ms 轮询边界监视本次拥有的直接子进程 RSS，超过 512 MiB 或无法读取仍在运行的进程指标时停止并回收；退出竞态通过保留 PID 的 waitid 再检查区分。RSS watchdog 可能在采样间隔内超调，不是内核强制的硬上限，也不覆盖全部 mmap、内核内存或后代进程合计。Linux helper fixture 保留独立的 hard data limit，不能把 Linux 证据当作 macOS 的同等内存机制。Swift capture 和同步文件系统调用也不是强制可中断系统调用沙箱。
+系统／全局配置关闭，环境从固定 allowlist 新建，无继承 GIT_*／DYLD_*／开发工具变量；协议禁止、lazy fetch 禁止、stdin 关闭，无 shell。原创 `GitObjectInspector` supervisor 负责 15 秒墙钟、10 秒 CPU、零文件输出、128 B stdout／64 KiB stderr 上限、拥有的子进程组终止与回收。macOS 用 `proc_pidinfo(PROC_PIDTASKINFO)` 在 25 ms 轮询边界监视本次拥有的直接子进程 RSS，超过 512 MiB 或无法读取仍在运行的进程指标时停止并回收；退出竞态通过保留 PID 的 waitid 再检查区分；Darwin 的 exec／退出转换若暂时没有 task 指标，仅允许 100 ms 有界等待，之后仍不可读就停止。RSS watchdog 可能在采样间隔内超调，不是内核强制的硬上限，也不覆盖全部 mmap、内核内存或后代进程合计。Linux helper fixture 保留独立的 hard data limit，不能把 Linux 证据当作 macOS 的同等内存机制。Swift capture 和同步文件系统调用也不是强制可中断系统调用沙箱。
 
 ### Apple Git 的来源与临时复制
 

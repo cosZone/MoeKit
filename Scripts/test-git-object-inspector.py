@@ -149,6 +149,11 @@ class InspectorTests(unittest.TestCase):
                             str(input_path), "-o", str(output)], check=True, timeout=60,
                            env=clean_environment(cls.base), stdin=subprocess.DEVNULL)
         if sys.platform == "darwin":
+            cls.metrics_unavailable_helper = cls.base / "GitObjectInspector-no-metrics"
+            subprocess.run(["cc", "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2",
+                            "-DGIT_WALL_SECONDS=3", "-DGIT_CPU_SECONDS=1", "-DGIT_TEST_UNAVAILABLE_METRICS=1",
+                            str(ROOT / "Helpers/GitObjectInspector/main.c"), "-o", str(cls.metrics_unavailable_helper)],
+                           check=True, timeout=60, env=clean_environment(cls.base), stdin=subprocess.DEVNULL)
             host_git = subprocess.run(["/usr/bin/xcrun", "--find", "git"], check=True,
                                       capture_output=True, text=True, timeout=30,
                                       env=clean_environment(cls.base)).stdout.strip()
@@ -175,9 +180,9 @@ class InspectorTests(unittest.TestCase):
             "UNRELATED_SECRET": "synthetic-do-not-inherit",
         }
 
-    def start(self, mode="success", *, first=SHA, second="-", binary=None, snapshot=None, **kwargs):
+    def start(self, mode="success", *, first=SHA, second="-", binary=None, snapshot=None, helper=None, **kwargs):
         (self.snapshot / "fixture-mode").write_text(mode, encoding="ascii")
-        process = subprocess.Popen([str(self.helper), str(binary or self.fixture),
+        process = subprocess.Popen([str(helper or self.helper), str(binary or self.fixture),
                                     str(snapshot or self.snapshot), first, second],
                                    stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                    env=self.environment, **kwargs)
@@ -253,6 +258,16 @@ class InspectorTests(unittest.TestCase):
         for mode in ("floodout", "flooderr", "flood-negative"):
             with self.subTest(mode=mode):
                 self.finish(self.start(mode, second=OTHER_SHA), 71)
+
+    def test_fast_successful_queries_do_not_race_exit_metrics(self):
+        for _ in range(25):
+            self.finish(self.start(first="version"), 0)
+            self.finish(self.start(), 0)
+
+    @unittest.skipUnless(sys.platform == "darwin", "Darwin owned-child task metrics")
+    def test_unavailable_live_metrics_fail_closed_after_bounded_grace(self):
+        process = self.start("sleep", helper=self.metrics_unavailable_helper)
+        self.finish(process, 70)
 
     def test_memory_budget_stops_owned_allocation_fixture(self):
         # Darwin watches the owned child's RSS at the poll boundary; Linux uses

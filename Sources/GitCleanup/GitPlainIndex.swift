@@ -15,7 +15,8 @@ struct GitPlainIndex: Sendable {
     let treeOID: String
 
     static let maximumBytes = 16 * 1_024 * 1_024
-    static let maximumEntries = 100_000
+    static let maximumEntries = 20_000
+    static let maximumTreeNodes = 20_000
     static let maximumPathBytes = 4_096
     static let maximumDepth = 64
 
@@ -38,7 +39,7 @@ struct GitPlainIndex: Sendable {
         var entries: [Entry] = []
         entries.reserveCapacity(count)
         var previousPath: [UInt8]?
-        let root = Directory()
+        let root = Directory(budget: NodeBudget())
         for _ in 0..<count {
             let start = cursor.offset
             try cursor.skip(24) // ctime, mtime, device and inode; never trusted.
@@ -158,6 +159,8 @@ struct GitPlainIndex: Sendable {
     /// A local trie catches file/directory conflicts and aliases at EVERY level,
     /// including `A/one` with `a/two`, before constructing any tree object.
     private final class Directory {
+        private let budget: NodeBudget
+        init(budget: NodeBudget) { self.budget = budget }
         private enum Content {
             case blob(oid: [UInt8], executable: Bool)
             case directory(Directory)
@@ -190,9 +193,11 @@ struct GitPlainIndex: Sendable {
                     }
                     directory = nested
                 } else if isFile {
+                    try budget.claim()
                     directory.children[key] = Child(name: bytes, content: .blob(oid: oid, executable: executable))
                 } else {
-                    let nested = Directory()
+                    try budget.claim()
+                    let nested = Directory(budget: budget)
                     directory.children[key] = Child(name: bytes, content: .directory(nested))
                     directory = nested
                 }
@@ -222,6 +227,14 @@ struct GitPlainIndex: Sendable {
             hash.update(data: Data("tree \(body.count)\0".utf8))
             hash.update(data: body)
             return Array(hash.finalize())
+        }
+    }
+    private final class NodeBudget {
+        private var count = 0
+        func claim() throws {
+            try Task.checkCancellation()
+            guard count < GitPlainIndex.maximumTreeNodes else { throw GitPlainIndexError.oversized }
+            count += 1
         }
     }
 }

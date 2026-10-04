@@ -60,6 +60,34 @@ struct AppEntryPointTests {
             #expect(NSApp.sendAction(try #require(item.action), to: item.target, from: item))
         }
         #expect(opens == 1 && settings == 1 && updates == 1 && quits == 1)
+        for (key, code) in [("o", UInt16(31)), (",", UInt16(43)), ("q", UInt16(12))] {
+            let event = try #require(NSEvent.keyEvent(with: .keyDown, location: .zero,
+                modifierFlags: .command, timestamp: 0, windowNumber: 0, context: nil,
+                characters: key, charactersIgnoringModifiers: key, isARepeat: false, keyCode: code))
+            #expect(menu.performKeyEquivalent(with: event))
+        }
+        #expect(opens == 2 && settings == 2 && updates == 1 && quits == 2)
+    }
+
+    @Test func delegateReopenKeepsAppAliveAfterClosingAllWindows() {
+        _ = NSApplication.shared
+        let preferences = AppVisibilityPreferences()
+        preferences.showDockIcon = false; preferences.showMenuBarIcon = false
+        var opens = 0
+        let controller = AppEntryPointController(preferences: preferences, managesStatusItem: false,
+            applyDock: { _ in }, activate: {}, quit: {})
+        let updates = ReleaseCheckStore(installedVersion: nil)
+        let delegate = MoeKitAppDelegate(entryPoints: controller, updates: updates)
+        #expect(!delegate.applicationShouldHandleReopen(NSApp, hasVisibleWindows: false))
+        controller.install(openWorkspace: { opens += 1 }, openSettings: {}, checkUpdates: {})
+        #expect(opens == 1)
+        #expect(!delegate.applicationShouldTerminateAfterLastWindowClosed(NSApp))
+        #expect(!delegate.applicationShouldHandleReopen(NSApp, hasVisibleWindows: false))
+        #expect(!delegate.applicationShouldHandleReopen(NSApp, hasVisibleWindows: true))
+        #expect(opens == 3 && preferences.hasNoPersistentIcon)
+        #expect(updates.state == .idle)
+        delegate.applicationWillTerminate(Notification(name: NSApplication.willTerminateNotification))
+        #expect(!controller.isInstalled)
     }
 
     @Test func ownedStatusItemIsInsertedRemovedAndRecreated() {

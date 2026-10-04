@@ -123,8 +123,19 @@ final class AppEntryPointController: NSObject {
 
 @MainActor
 final class MoeKitAppDelegate: NSObject, NSApplicationDelegate {
-    let entryPoints = AppEntryPointController(preferences: AppVisibilityPreferences(defaults: .standard))
-    let updates = ReleaseCheckStore()
+    let entryPoints: AppEntryPointController
+    let updates: ReleaseCheckStore
+
+    override convenience init() {
+        self.init(entryPoints: AppEntryPointController(preferences: AppVisibilityPreferences(defaults: .standard)),
+                  updates: ReleaseCheckStore())
+    }
+
+    init(entryPoints: AppEntryPointController, updates: ReleaseCheckStore) {
+        self.entryPoints = entryPoints
+        self.updates = updates
+        super.init()
+    }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         // Reopen the workspace even if only Settings or About is currently visible.

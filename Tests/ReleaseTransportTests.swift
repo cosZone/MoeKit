@@ -96,7 +96,9 @@ private final class ReleaseFixtureProtocol: URLProtocol, @unchecked Sendable {
         }
         if fixture.redirect {
             let response = HTTPURLResponse(url: url, statusCode: 302, httpVersion: "HTTP/1.1", headerFields: ["Location": "https://unexpected.invalid/"])!
-            client?.urlProtocol(self, wasRedirectedTo: URLRequest(url: URL(string: "https://unexpected.invalid/")!), redirectResponse: response)
+            var redirected = URLRequest(url: URL(string: "https://unexpected.invalid/")!)
+            redirected.setValue(id, forHTTPHeaderField: "X-MoeKit-Test-Fixture")
+            client?.urlProtocol(self, wasRedirectedTo: redirected, redirectResponse: response)
             return
         }
         let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: ["Content-Type": "application/json"])!

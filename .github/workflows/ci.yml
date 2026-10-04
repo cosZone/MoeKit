@@ -100,8 +100,10 @@ jobs:
                           "This archive gate must not sign with a certificate.")
           release.require(app_settings.get("DEPLOYMENT_LOCATION") == "YES" and
                           app_settings.get("MOLE_SUPERVISOR_SOURCE_DIR") ==
+                          str(Path(app_settings["UNINSTALLED_PRODUCTS_DIR"]) / app_settings["PLATFORM_NAME"]) and
+                          app_settings.get("GIT_INSPECTOR_SOURCE_DIR") ==
                           str(Path(app_settings["UNINSTALLED_PRODUCTS_DIR"]) / app_settings["PLATFORM_NAME"]),
-                          "The archive must declare the exact physical helper input.")
+                          "The archive must declare the exact physical helper inputs.")
           app = Path("build/MoeKit.xcarchive/Products/Applications/MoeKit.app")
           release.require(set(app.parent.iterdir()) == {app} and
                           set(app.parent.parent.iterdir()) == {app.parent},
@@ -135,6 +137,7 @@ jobs:
       DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
       TEST_RUNNER_MOEKIT_INSTALLER_MOUNT_FIXTURE: '1'
       TEST_RUNNER_MOEKIT_INSTALLER_TRASH_FIXTURE: '1'
+      TEST_RUNNER_MOEKIT_GIT_NATIVE_FIXTURE: '1'
       TEST_RUNNER_GITHUB_ACTIONS: 'true'
       TEST_RUNNER_RUNNER_ENVIRONMENT: github-hosted
       TEST_RUNNER_MOEKIT_INSTALLER_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -154,6 +157,7 @@ jobs:
           python3 Scripts/test-preview-release.py
           python3 Scripts/test-ui-render-artifacts.py
           python3 Scripts/test-mole-supervisor.py
+          python3 Scripts/test-git-object-inspector.py
           python3 Scripts/test-installer-fixture-evidence.py
           python3 Scripts/test-installer-conditional-evidence.py
           xcodebuild -version
@@ -291,6 +295,7 @@ jobs:
       DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
       TEST_RUNNER_MOEKIT_INSTALLER_MOUNT_FIXTURE: '1'
       TEST_RUNNER_MOEKIT_INSTALLER_TRASH_FIXTURE: '1'
+      TEST_RUNNER_MOEKIT_GIT_NATIVE_FIXTURE: '1'
       TEST_RUNNER_GITHUB_ACTIONS: 'true'
       TEST_RUNNER_RUNNER_ENVIRONMENT: github-hosted
       TEST_RUNNER_MOEKIT_INSTALLER_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}

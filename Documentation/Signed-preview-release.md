@@ -36,9 +36,9 @@ MoeKit 工作流直接读取上述三个名字，**不要求创建 `Prod` enviro
 - 无签名 secrets 的独立 job 运行 Release 配置单元测试（`ENABLE_TESTABILITY=YES`），随后从相同源码单独 archive universal Release；测试只运行 runner 的当前 CPU 架构
 - 归档 `.app` 同时包含 arm64、x86_64，Bundle ID 固定为 `com.yusixian.MoeKit`，最低 macOS 15.0
 - 签名 job 不编译源码、执行应用或运行第三方安装器；它只验证同次 run/attempt 的产物，用临时 keychain 内唯一的 Apple Development 身份重新签名，核对证书指纹、预期 Team ID、两种架构、bundle 信息与 provenance
-- Hardened Runtime 开启；无额外 entitlements、无 get-task-allow、无 App Sandbox、无 provisioning profile。仅允许一个已审查的原创辅助程序 `Contents/MacOS/MoleAnalysisSupervisor`，标识固定为 `com.yusixian.MoeKit.MoleAnalysisSupervisor`；其他 helper/framework/XPC、符号链接与可执行资源一律拒绝
-- 先用同一个现有 Apple Development 身份显式签名 supervisor，再签名父 App；不使用 `--deep` 签名或继承旧 entitlements。两者每个 arm64／x86_64 slice 均验证精确标识、Hardened Runtime、空 entitlements、Apple trust anchor、预期 Team ID 与导入证书指纹；ZIP 往返与 DMG 内再次逐个核验代码，全部文件内容（含 helper 与签名）必须相同
-- 此 helper 由本仓库原创 C 源码构建。第三方 Mole 分析器不随 App 分发，不进入发布签名流程，也不会被重新签名
+- Hardened Runtime 开启；无额外 entitlements、无 get-task-allow、无 App Sandbox、无 provisioning profile。仅允许两个显式列出的原创辅助程序 `Contents/MacOS/MoleAnalysisSupervisor` 和 `Contents/MacOS/GitObjectInspector`，标识分别固定为 `com.yusixian.MoeKit.MoleAnalysisSupervisor` 和 `com.yusixian.MoeKit.GitObjectInspector`；其他 helper/framework/XPC、符号链接与可执行资源一律拒绝
+- 先用同一个现有 Apple Development 身份显式逐个签名两个 helper，再签名父 App；不使用 `--deep` 签名或继承旧 entitlements。三份代码每个 arm64／x86_64 slice 均验证精确标识、Hardened Runtime、空 entitlements、Apple trust anchor、预期 Team ID 与导入证书指纹；ZIP 往返与 DMG 内再次逐个核验代码，全部文件内容（含 helper 与签名）必须相同
+- 这两个 helper 均由本仓库原创 C 源码构建。第三方 Mole 分析器和 Apple Git 不随 App 分发，不进入发布签名流程，也不会被重新签名；发布 allowlist 显式拒绝额外的 `Contents/MacOS/git`
 - 不使用公证或安全时间戳；证书过期／撤销可能影响后续校验。代码签名并不承诺长期分发可用性
 - Release 精确包含四个文件：`MoeKit-v<version>-macOS.dmg`、`MoeKit-v<version>-macOS.zip`、`SHA256SUMS.txt`、`BUILD_INFO.json`。两种安装包均为 universal，包含 arm64 与 x86_64；不另发芯片专用包
 - ZIP 中是 `MoeKit.app`（如有 `ditto` 的 AppleDouble 元数据，只允许对应 App 的数据）；DMG 根目录严格只有 `MoeKit.app` 和指向 `/Applications` 的 `Applications` 快捷方式，不包含安装器、其他可执行文件或更新组件
@@ -56,7 +56,7 @@ MoeKit 工作流直接读取上述三个名字，**不要求创建 `Prod` enviro
 
 挂载点位于签名临时目录之外。正常、失败、部分挂载和超时路径均通过 `finally` 尝试 detach；工作流的 `always` 清理会再次检查。不会 force-detach；卸载失败会阻止发布并保留独立挂载目录供 runner 销毁，同时仍清除签名凭据。挂载点只允许 `rmdir`，绝不递归删除它或一个可能包含它的父目录。
 
-`Scripts/test-preview-release.py` 包含无需凭据的 macOS 集成测试：用 Xcode 编译两个合成的 universal 小程序，按 helper → App 顺序 ad-hoc 签名后实际执行 ZIP／DMG 创建与只读校验，最后验证卸载；另检查 helper 标识错误、缺少 runtime、额外 entitlements、篡改、缺少架构和未签名均失败。**不执行这些程序**。它随 Native CI 与发布的无 secrets 测试阶段运行，Linux 上显式跳过。便携单元测试不能代替这项原生验证。
+`Scripts/test-preview-release.py` 包含无需凭据的 macOS 集成测试：用 Xcode 编译三个合成的 universal 小程序，按 helper → App 顺序 ad-hoc 签名后实际执行 ZIP／DMG 创建与只读校验，最后验证卸载；另检查 helper 标识错误、缺少 runtime、额外 entitlements、篡改、缺少架构和未签名均失败。**不执行这些程序**。它随 Native CI 与发布的无 secrets 测试阶段运行，Linux 上显式跳过。便携单元测试不能代替这项原生验证。
 
 ### 版本说明的唯一来源
 

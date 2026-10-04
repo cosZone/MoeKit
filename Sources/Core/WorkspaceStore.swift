@@ -12,6 +12,7 @@ final class WorkspaceStore {
     let processes = ProcessInventoryStore()
     let moleAnalysis: MoleAnalysisStore
     let installerTrash: InstallerTrashStore
+    let gitCleanup: GitCleanupStore
     let toolPreparation: ToolPreparationStore
     let gettingStarted: GettingStartedState
     var projectSearch = "" { didSet { reconcileProjectSelection() } }
@@ -28,6 +29,7 @@ final class WorkspaceStore {
             modeID = UUID()
             toolPreparation.setDemoEnabled(isDemoEnabled)
             processes.resetForModeChange()
+            gitCleanup.invalidate()
             moleAnalysis.setDemoEnabled(isDemoEnabled)
             cancelScan()
             cancelMoleReportImport()
@@ -46,7 +48,7 @@ final class WorkspaceStore {
         }
     }
     var projects: [ProjectRecord] = [] {
-        didSet { reconcileProjectSelection(); refreshInstallerTrashContext() }
+        didSet { reconcileProjectSelection(); refreshInstallerTrashContext(); gitCleanup.invalidate() }
     }
     var tasks: [TaskRecord] = [] { didSet { reconcileTaskSelection() } }
     var pendingDiscovery: RepositoryScanResult?
@@ -83,6 +85,7 @@ final class WorkspaceStore {
         self.reportImporter = reportImporter
         self.moleAnalysis = moleAnalysis ?? MoleAnalysisStore()
         self.installerTrash = installerTrash ?? InstallerTrashStore()
+        self.gitCleanup = GitCleanupStore()
         // Construct the MainActor model in this initializer, not in a nested
         // actor-isolated default argument inside SwiftUI State initialization.
         let preparation = toolPreparation ?? ToolPreparationStore()
@@ -92,6 +95,15 @@ final class WorkspaceStore {
         processes.onEvent = { [weak self] event in self?.recordProcessEvent(event) }
         self.moleAnalysis.onContextChange = { [weak self] in self?.refreshInstallerTrashContext() }
         self.installerTrash.onMutationOutcome = { [weak self] in self?.moleAnalysis.invalidateLiveResult() }
+        self.gitCleanup.onMutation = { [weak self] plan, restored in
+            guard let self, plan.request.action == .retireWorktree else { return }
+            if restored {
+                if !self.projects.contains(where: { $0.id == plan.request.project.id || $0.path == plan.request.project.path }) {
+                    self.projects.append(plan.request.project)
+                }
+            } else { self.projects.removeAll { $0.id == plan.request.project.id } }
+            self.saveCatalog()
+        }
         do { projects = try persistence.load() }
         catch {
             catalogIsWritable = false
@@ -202,7 +214,9 @@ final class WorkspaceStore {
     }
     var cleanupReviewProject: ProjectRecord? {
         guard !isDemoEnabled else { return nil }
-        return projects.first { $0.id == cleanupReviewProjectID && $0.kind != .group }
+        if let project = projects.first(where: { $0.id == cleanupReviewProjectID && $0.kind != .group }) { return project }
+        if let retired = gitCleanup.receipt?.plan.request.project, retired.id == cleanupReviewProjectID { return retired }
+        return nil
     }
     func presentCleanupReview() {
         guard !isDemoEnabled, let project = selectedProject, project.kind != .group else { return }

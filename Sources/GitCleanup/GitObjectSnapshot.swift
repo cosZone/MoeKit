@@ -1,0 +1,117 @@
+import CryptoKit
+import Darwin
+import Foundation
+import Security
+
+/// Apple Git receives an app-owned, configuration-free object database only.
+/// No live index, refs, worktree path, config, alternates, hooks or attributes enter it.
+final class GitObjectSnapshot {
+    let directory: URL
+    let fingerprint: String
+    private let git: URL
+    private let source: InstallerDirectoryAnchor
+    private(set) var version = ""
+    private var binaryDigest = ""
+    var provenance: String { version + "|" + binaryDigest }
+    init(common: InstallerDirectoryAnchor) throws {
+        source = try common.child("objects")
+        let objects = GitCleanupCapture(maximumBytes: 256 * 1_024 * 1_024)
+        try objects.collect(source)
+        guard objects.directories.keys.allSatisfy({ $0.isEmpty || $0 == "pack" || $0 == "info" || ($0.count == 2 && $0.utf8.allSatisfy(Self.hex)) }),
+              objects.files.keys.allSatisfy(Self.allowedObject) else { throw GitCleanupFailure.unsupported }
+        fingerprint = objects.fingerprint
+        let temp = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
+        directory = temp.appendingPathComponent("MoeKit-Git-" + UUID().uuidString, isDirectory: true)
+        git = directory.appendingPathComponent("git")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+        do {
+            try FileManager.default.createDirectory(at: directory.appendingPathComponent("objects"), withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+            try FileManager.default.createDirectory(at: directory.appendingPathComponent("refs"), withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+            try Data("ref: refs/heads/private\n".utf8).write(to: directory.appendingPathComponent("HEAD"), options: .withoutOverwriting)
+            try Data("[core]\nrepositoryformatversion = 0\nbare = true\n".utf8).write(to: directory.appendingPathComponent("config"), options: .withoutOverwriting)
+            for path in objects.directories.keys.sorted() where !path.isEmpty {
+                try FileManager.default.createDirectory(at: directory.appendingPathComponent("objects/" + path), withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+            }
+            for (path, file) in objects.files {
+                try file.data.write(to: directory.appendingPathComponent("objects/" + path), options: .withoutOverwriting)
+            }
+            // Read a real toolchain binary, never the /usr/bin/git install-on-demand shim.
+            // Apple-signature validation follows the no-follow bounded copy.
+            let candidates = ["/Library/Developer/CommandLineTools/usr/bin/git",
+                "/Applications/Xcode.app/Contents/Developer/usr/bin/git",
+                "/Applications/Xcode_16.4.app/Contents/Developer/usr/bin/git"]
+            var copied = false
+            for path in candidates {
+                guard let data = try? BoundedRegularFileReader.read(at: URL(fileURLWithPath: path), maximumBytes: 32 * 1_024 * 1_024) else { continue }
+                try data.write(to: git, options: .withoutOverwriting)
+                try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: git.path)
+                var code: SecStaticCode?, requirement: SecRequirement?
+                guard SecStaticCodeCreateWithPath(git as CFURL, [], &code) == errSecSuccess,
+                      SecRequirementCreateWithString("anchor apple" as CFString, [], &requirement) == errSecSuccess,
+                      let code, let requirement,
+                      SecStaticCodeCheckValidity(code, [], requirement) == errSecSuccess else { throw GitCleanupFailure.helper }
+                binaryDigest = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+                copied = true; break
+            }
+            guard copied else { throw GitCleanupFailure.helper }
+            version = try Self.validateVersion(run("version", "-"))
+        } catch { try? FileManager.default.removeItem(at: directory); throw error }
+    }
+    func remove() { try? FileManager.default.removeItem(at: directory) }
+    func validateSource() throws {
+        let current = GitCleanupCapture(maximumBytes: 256 * 1_024 * 1_024); try current.collect(source)
+        guard current.fingerprint == fingerprint else { throw GitCleanupFailure.changed }
+    }
+    func treeOID(_ oid: String) throws -> String { try GitCleanupInspection.oid(run(oid, "-")) }
+    func requireAncestor(_ ancestor: String, _ descendant: String) throws {
+        _ = try run(ancestor, descendant)
+    }
+    private func run(_ first: String, _ second: String) throws -> Data {
+        try Task.checkCancellation()
+        guard let helper = Bundle.main.executableURL?.deletingLastPathComponent().appendingPathComponent("GitObjectInspector"),
+              FileManager.default.isExecutableFile(atPath: helper.path) else { throw GitCleanupFailure.helper }
+        let process = Process()
+        let input = Pipe(), output = Pipe(), errors = Pipe()
+        process.executableURL = helper
+        process.arguments = [git.path, directory.path, first, second]
+        process.environment = ["PATH": "/usr/bin:/bin", "LC_ALL": "C"]
+        process.currentDirectoryURL = directory
+        process.standardInput = input; process.standardOutput = output; process.standardError = errors
+        try process.run()
+        // Helper buffers at most 128 stdout + 64 KiB stderr bytes and has a 15s
+        // wall deadline. Drain stderr concurrently to avoid pipe backpressure.
+        let drained = DispatchGroup(); drained.enter()
+        DispatchQueue.global().async {
+            while (try? errors.fileHandleForReading.read(upToCount: 4096))?.isEmpty == false {}
+            drained.leave()
+        }
+        let result = output.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit(); try? input.fileHandleForWriting.close(); drained.wait()
+        try Task.checkCancellation()
+        guard process.terminationReason == .exit, result.count <= 128 else { throw GitCleanupFailure.helper }
+        if process.terminationStatus == 75 { throw GitCleanupFailure.uniqueCommits }
+        guard process.terminationStatus == 0 else { throw GitCleanupFailure.helper }
+        return result
+    }
+    private static func hex(_ byte: UInt8) -> Bool { (48...57).contains(byte) || (97...102).contains(byte) }
+    static func validateVersion(_ data: Data) throws -> String {
+        guard data.count <= 128, let text = String(data: data, encoding: .utf8), text.hasSuffix("\n"),
+              text.range(of: #"\Agit version 2\.[0-9]+\.[0-9]+ \(Apple Git-[0-9]+\)\n\z"#, options: .regularExpression) != nil else { throw GitCleanupFailure.helper }
+        let fields = text.split(separator: " ")
+        let version = fields[2].split(separator: ".").compactMap { Int($0) }
+        let build = Int(fields[4].dropFirst(4).prefix(while: { $0.isNumber }))
+        guard version.count == 3, version[1] > 39 || (version[1] == 39 && version[2] >= 5), let build, build >= 154 else { throw GitCleanupFailure.helper }
+        return text.trimmingCharacters(in: .newlines)
+    }
+    private static func allowedObject(_ path: String) -> Bool {
+        let parts = path.split(separator: "/")
+        guard parts.count == 2 else { return false }
+        if parts[0] == "pack" {
+            let name = String(parts[1])
+            let suffix = [".pack", ".idx", ".rev", ".keep"].first(where: name.hasSuffix)
+            guard let suffix, name.hasPrefix("pack-"), name.count == 45 + suffix.count else { return false }
+            return name.dropFirst(5).dropLast(suffix.count).utf8.allSatisfy(hex)
+        }
+        return parts[0].count == 2 && parts[1].count == 38 && parts.joined().utf8.allSatisfy(hex)
+    }
+}

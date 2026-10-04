@@ -61,7 +61,7 @@ Swift Testing 测试覆盖扫描边界、取消、异常元数据、模块注册
 
 ## Git status 准备
 
-纯 porcelain-v2/NUL 解析器与 session-only 结果模型已独立准备，包含系统 Git 的合成参考输出与格式/预算测试；没有连接到发现器或 UI，也没有启用 Git 进程。真实工作树仍为未检查，清理仍不可执行。[执行设计与激活前安全门槛](Git-status-execution-design.md) 记录后续实现必须解决的配置执行、属性语义、路径竞态和资源边界。
+纯 porcelain-v2/NUL 解析器与 session-only 结果模型已独立准备，包含系统 Git 的合成参考输出与格式/预算测试；没有连接到发现器或常规状态 UI。发现结果仍为未检查；新的逐次确认 Git 整理使用独立的原生 index/blob/tree 比对与配置隔离对象副本，不会启用 live git status。[执行设计与激活前安全门槛](Git-status-execution-design.md) 记录后续实现必须解决的配置执行、属性语义、路径竞态和资源边界。
 
 ## 工具准备
 
@@ -74,3 +74,7 @@ Swift Testing 测试覆盖扫描边界、取消、异常元数据、模块注册
 不可变一次性方案与分析／模式／目录代次绑定，显示精确转义路径和写入影响，要求结束使用声明及明确确认。排他重命名到私有持久暂存区后再次核对对象，才调用 macOS Trash；它不是 Mole 清理能力，也不释放废纸篓中的空间。每个命名空间变更先持久记录意图，失败不盲目重试或覆盖，保留恢复数据。恢复原路径需要新的复查与确认；关闭、切换 Demo、导入或过期均不能重放方案。
 
 检查不证明全局未使用，也无法原子地抵抗恶意同用户路径替换。连接着任何磁盘映像（包括系统管理的映像）时保持不可用；只能由用户自行推出其打开的映像，不能要求触碰系统映像。没有自动推出、永久删除、批量清理或自动恢复。验证范围及 source-bound CI 的当前环境不支持结果见 [设计与验证](Installer-trash-design.md)。
+
+## 独立 Git 整理适配器
+
+`GitCleanupStore` 管理一次检查、精确确认与会话恢复；`NativeGitCleanupExecutor` 在后台 actor 上持有一次性计划并再次复核目录清单、scope、commit 和文件身份。只用独占同卷 rename 退役 linked worktree／登记，或移除已合并且未检出的 loose ref。数据保存在 `.git/moekit-recovery`，不释放空间、不永久删除、不触碰其它项目。原创 `GitObjectInspector` 仅接触 app-owned 配置隔离对象副本和临时验证的 Apple Git，未启用 PR #30 的 XPC 原型，也不声称有 OS 沙箱。详见 [Git 整理边界](Git-cleanup-design.md)。

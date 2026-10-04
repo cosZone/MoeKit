@@ -1,5 +1,7 @@
 # Git status：解析器已准备，执行仍关闭
 
+> 新的 [逐次确认 Git 整理](Git-cleanup-design.md) 是另一个窄作用域适配器。它自己比对原生 index／文件，并仅在私有对象副本执行固定对象查询；不会启用这里描述的 live git status，也不激活暂停的 XPC 原型。
+
 ## 本次已实现的边界
 
 `GitStatusParser` 是无 IO 的纯字节解析器，读取完整、最多 2 MiB 的 Git porcelain v2 / NUL 输出。它不创建进程、不读取项目、不执行 Git，也不接受任意命令。现有源码执行禁令保持不变。

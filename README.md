@@ -7,7 +7,7 @@ Swift 6 · SwiftUI / AppKit · macOS 15+ · Tuist 4.148.3 · SPM
 ## 当前预览
 
 已经写入源码：
-- **Projects**：原生表格、搜索与排序、项目详情 inspector、置顶项目、Finder 定位；多根目录只读发现 Git 项目，复查筛选后导入/刷新；验证 worktree 关系后分组，展示带时间的分支/锁元数据和不可执行的清理安全复查
+- **Projects**：原生表格、搜索与排序、项目详情 inspector、置顶项目、Finder 定位；多根目录只读发现 Git 项目，复查筛选后导入/刷新；验证 worktree 关系后分组，展示带时间的分支/锁元数据；源码新增单独确认的干净 linked worktree 退役与已合并 loose 本地分支移除
 - **Tools**：Mole 的 Space / Clean / Apps / Maintenance / Status 工作区；Space 可导入 Mole analyze JSON，也可选择已安装的官方 V1.57.0 直接分析器与单个文件夹，复查确认后实际分析；Processes & Ports 可由用户主动读取当前用户进程和 TCP 监听端口，按工作目录展示项目关联
 - **下载磁盘映像**：从本机 Downloads 当前真实 Mole 分析中选择一个常规 `.dmg`，独立复查路径、大小和影响，确认已结束使用后移到 macOS 原生废纸篓；私有凭据支持另行确认的原路径恢复，不覆盖已有目标、不清空废纸篓
 - **Processes & Ports**：原生密集表格、身份与关联证据、部分读取提示、项目相关进程入口，以及不可执行的精确选择停止计划预览；不读取命令参数/环境变量，不自动扫描或发送进程信号
@@ -22,6 +22,8 @@ Swift 6 · SwiftUI / AppKit · macOS 15+ · Tuist 4.148.3 · SPM
 **实际 Mole 分析的边界：** 目前只支持匹配精确 SHA-256 的 V1.57.0 官方发布分析器，常见官方脚本安装位置为 `~/.config/mole/bin/analyze-go`；Homebrew 与自编译版本暂不匹配该校验。工具准备页提供精确受支持文件的手动下载链接与复制命令，校验大小和 SHA-256 后才添加执行权限；详见 [工具准备](Documentation/Tool-preparation.md)。每次分析前显示范围及私有临时副本/缓存写入并要求确认，可取消，失败或未知覆盖不冒充成功。工具以普通用户权限运行，没有 OS 沙箱；没有自动安装、更新、提权；Mole 分析本身不执行目标清理。详见 [执行设计与验证](Documentation/Mole-analysis-execution-design.md)。本节描述当前源码，具体构建/测试以对应提交 CI 为准。
 
 **原生废纸篓的边界：** 仅支持本地内置 APFS 上、Downloads 直属的单个常规 `.dmg`；导入 JSON、Demo、`.pkg`、链接、云占位、项目与 worktree 不能授权。必须取得完整且为空的磁盘映像清单；只可自行推出自己打开的映像，不要触碰系统管理的映像，系统映像仍存在时此操作不可用。当前用户文件描述符／fileport 检查不等于全局未使用证明，无法覆盖所有内存映射、系统服务和其他用户。每次操作及恢复都重新复查并确认，移入废纸篓不会释放占用空间；不确定结果保留数据并停止。详见 [设计与恢复边界](Documentation/Installer-trash-design.md)。
+
+**未发布的 Git 整理：** Projects → Git cleanup… 可单独复查并确认一个干净 linked worktree 的退役，或一个未检出且完全包含于指定本地 base 的 loose 分支移除。所有数据移入主仓库的私有恢复目录，保留分支或 ref 备份；会话内另行确认恢复，不覆盖、不 force、不永久删除，也不释放磁盘空间。拒绝脏文件、untracked／ignored、独有提交、锁、链接、跨范围及不支持布局；Git 只查看配置隔离的对象副本。详见 [设计与限制](Documentation/Git-cleanup-design.md)。此功能不包含在 preview.7。
 
 精确分析器下载指引和原生单个 `.dmg` 操作已随下方 preview.7 安装包交付；此前的 preview.6 不包含这两项改动。
 

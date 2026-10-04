@@ -7,9 +7,11 @@ final class CleanupJournal {
     static let maximumBytes = 24 * 1024 * 1024
     private(set) var isHealthy = true
     private let environment: CleanupEnvironment
+    private let afterRecordCreated: @Sendable () throws -> Void
     let storage: InstallerRecoveryJournal
     var app: InstallerDirectoryAnchor { storage.appParent }
-    init(environment: CleanupEnvironment, create: Bool, exclusive: Bool) throws {
+    init(environment: CleanupEnvironment, create: Bool, exclusive: Bool, afterRecordCreated: @escaping @Sendable () throws -> Void = { }) throws {
+        self.afterRecordCreated = afterRecordCreated
         self.environment = environment
         if environment.enforceProductionPolicy {
             let base = try InstallerDirectoryAnchor.open(environment.recovery.deletingLastPathComponent().deletingLastPathComponent())
@@ -23,6 +25,7 @@ final class CleanupJournal {
         try InstallerFileAccess.validatePrivate(operation.fd, directory: true)
         if receipt.sequence == 0 {
             guard try CleanupFiles.names(operation, honorCancellation: false).isEmpty else { throw CleanupFailure.journal }
+            try validate(receipt, previous: nil)
         } else {
             let prior = try latest(receipt.id)
             guard prior.sequence + 1 == receipt.sequence else { throw CleanupFailure.journal }
@@ -36,6 +39,7 @@ final class CleanupJournal {
         guard fd >= 0 else { throw CleanupFailure.journal }
         defer { close(fd) }
         try InstallerFileAccess.validatePrivate(fd, directory: false)
+        try afterRecordCreated()
         var offset = 0
         while offset < data.count {
             let amount = data.withUnsafeBytes { write(fd, $0.baseAddress!.advanced(by: offset), data.count - offset) }
@@ -64,7 +68,8 @@ final class CleanupJournal {
             guard before.bytes > 0, before.bytes <= Self.maximumBytes else { throw CleanupFailure.journal }
             var data = Data(count: Int(before.bytes)), offset = 0
             while offset < data.count {
-                let count = data.withUnsafeMutableBytes { read(file.fd, $0.baseAddress!.advanced(by: offset), data.count - offset) }
+                let remaining = data.count - offset
+                let count = data.withUnsafeMutableBytes { read(file.fd, $0.baseAddress!.advanced(by: offset), remaining) }
                 if count < 0, errno == EINTR { continue }
                 guard count > 0 else { throw CleanupFailure.journal }
                 offset += count
@@ -130,7 +135,7 @@ final class CleanupJournal {
             case .trashed: allowed = [.restoreCaptureIntent, .deleteCaptureIntent]
             case .deleteCaptureIntent: allowed = [.deleteStaged, .retained, .uncertain]
             case .deleteStaged: allowed = [.deleteIntent, .restoreCaptureIntent, .retained, .uncertain]
-            case .deleteIntent: allowed = [.deleted, .uncertain]
+            case .deleteIntent: allowed = [.deleted, .retained, .uncertain]
             case .retained: allowed = [.restoreCaptureIntent, .uncertain]
             case .restoreCaptureIntent: allowed = [.restoreStaged, .retained, .uncertain]
             case .restoreStaged: allowed = [.restoreIntent, .restoreCaptureIntent, .retained, .uncertain]

@@ -251,6 +251,7 @@ actor NativeCleanupExecutor: CleanupExecuting {
             try exclusiveMove(from: plan.sourceParent, name: plan.display.sourceURL.lastPathComponent,
                 to: operation, destinationName: stageName)
             captured = true
+            guard fsync(plan.sourceParent.fd) == 0, fsync(operation.fd) == 0 else { throw CleanupFailure.journal }
             try checkpoint(.afterRecoveryCapture)
             let actual = try CleanupFiles.manifest(operation.child(stageName), environment: environment, honorCancellation: false)
             guard CleanupFiles.matchesAfterMove(receipt.manifest, actual) else { throw CleanupFailure.changed }
@@ -310,7 +311,8 @@ actor NativeCleanupExecutor: CleanupExecuting {
             try journal.append(receipt, operation: operation)
             return outcome(receipt, message: String(localized: "Permanently removed the confirmed cache entries. Restore is no longer available. Open files, hard links and APFS snapshots may delay or reduce physical space reclaimed."), success: true)
         } catch {
-            receipt = receipt.advancing(.uncertain, payloadURL: captured ? stageURL : plan.display.sourceURL)
+            let verifiedCapture = receipt.state == .deleteStaged || receipt.state == .deleteIntent
+            receipt = receipt.advancing(!deletionStarted && captured && verifiedCapture ? .retained : .uncertain, payloadURL: captured ? stageURL : plan.display.sourceURL)
             receipt = recordFailure(receipt, journal: journal, operation: operation)
             return outcome(receipt, message: deletionStarted
                 ? String(localized: "Permanent deletion stopped after it began. Some confirmed entries may already be removed; remaining data is retained. No automatic retry is allowed.")

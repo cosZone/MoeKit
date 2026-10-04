@@ -34,7 +34,7 @@ enum CleanupPermanentRemoval {
             directories[entry.relativePath] = child
         }
         var removedLinks: [String: UInt64] = [:]
-        for entry in manifest.entries.reversed() where !entry.relativePath.isEmpty {
+        for (index, entry) in manifest.entries.enumerated().reversed() where !entry.relativePath.isEmpty {
             try Task.checkCancellation()
             let parts = split(entry.relativePath)
             guard let owner = directories[parts.parent] else { throw CleanupFailure.changed }
@@ -53,7 +53,8 @@ enum CleanupPermanentRemoval {
             try CleanupFiles.validateNamespace(owner, environment: environment)
             try CleanupFiles.validateNamespace(parent, environment: environment)
             try InstallerFileAccess.validatePrivate(parent.fd, directory: true)
-            let slot = "delete-entry-" + UUID().uuidString
+            // The durable deleteIntent manifest binds each retained slot to its original path.
+            let slot = String(format: "delete-entry-%06d", index)
             try InstallerFileAccess.exclusiveMove(from: owner, name: parts.name, to: parent, destinationName: slot)
             try checkpoint(.afterLeafCapture)
             let captured = try InstallerFileAccess.snapshotAt(parent.fd, slot)
@@ -85,7 +86,7 @@ enum CleanupPermanentRemoval {
         guard root.identity.matchesDirectory(beforeRoot), try CleanupFiles.names(directory).isEmpty else { throw CleanupFailure.changed }
         try checkpoint(.beforeLeafCapture); try Task.checkCancellation()
         try CleanupFiles.validateNamespace(parent, environment: environment)
-        let rootSlot = "delete-entry-" + UUID().uuidString
+        let rootSlot = "delete-entry-000000"
         try InstallerFileAccess.exclusiveMove(from: parent, name: name, to: parent, destinationName: rootSlot)
         try checkpoint(.afterLeafCapture)
         let capturedRoot = try InstallerFileAccess.snapshotAt(parent.fd, rootSlot)

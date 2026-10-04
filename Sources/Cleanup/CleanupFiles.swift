@@ -84,14 +84,51 @@ enum CleanupFiles {
         return String(localized: "Standard CACHEDIR.TAG signature found. The tag is a claim by the folder creator, not permission or proof that every file is disposable.")
     }
     static func protect(_ target: URL, paths: [String]) throws {
-        guard paths.count <= 2_000 else { throw CleanupFailure.limit }
+        guard paths.count <= 2_002 else { throw CleanupFailure.limit }
+        let selected = try InstallerFileAccess.components(target)
+        let selectedFolded = selected.map(foldedComponent)
+        let candidate = try InstallerDirectoryAnchor.open(target)
         for path in paths {
-            let protected = try InstallerFileAccess.components(URL(fileURLWithPath: path))
-            let selected = try InstallerFileAccess.components(target)
-            guard !selected.starts(with: protected), !protected.starts(with: selected) else {
-                throw CleanupFailure.refused(String(localized: "A saved project, worktree, or Git metadata location overlaps this cache and is protected."))
+            let url = URL(fileURLWithPath: path)
+            let protected = try InstallerFileAccess.components(url)
+            let protectedFolded = protected.map(foldedComponent)
+            // Conservative even on case-sensitive volumes; diacritic/width
+            // equivalence may refuse extra locations but cannot widen consent.
+            guard !selectedFolded.starts(with: protectedFolded), !protectedFolded.starts(with: selectedFolded) else {
+                throw CleanupFailure.refused(String(localized: "A saved project, worktree, or protected control location overlaps this cache."))
             }
+            var metadata = stat()
+            if lstat(url.path, &metadata) != 0 {
+                // Missing protected roots confer no inode, but lexical protection
+                // above remains. Permission errors never silently clear scope.
+                guard errno == ENOENT else { throw CleanupFailure.changed }
+                continue
+            }
+            let protectedDirectory: InstallerDirectoryAnchor
+            if metadata.st_mode & mode_t(S_IFMT) == mode_t(S_IFDIR) {
+                protectedDirectory = try InstallerDirectoryAnchor.open(url)
+            } else {
+                // Protect the parent of metadata files and reject symlink aliases.
+                guard metadata.st_mode & mode_t(S_IFMT) == mode_t(S_IFREG) else { throw CleanupFailure.changed }
+                protectedDirectory = try InstallerDirectoryAnchor.open(url.deletingLastPathComponent())
+            }
+            func containsIdentity(_ chain: InstallerDirectoryAnchor, _ identity: InstallerFileSnapshot) -> Bool {
+                var current: InstallerDirectoryAnchor? = chain
+                while let node = current {
+                    if node.identity.device == identity.device && node.identity.inode == identity.inode { return true }
+                    current = node.parent
+                }
+                return false
+            }
+            guard !containsIdentity(candidate, protectedDirectory.identity), !containsIdentity(protectedDirectory, candidate.identity) else {
+                throw CleanupFailure.refused(String(localized: "A saved project, worktree, or protected control location overlaps this cache."))
+            }
+            try protectedDirectory.validate()
         }
+        try candidate.validate()
+    }
+    private static func foldedComponent(_ value: String) -> String {
+        value.decomposedStringWithCanonicalMapping.folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: Locale(identifier: "en_US_POSIX"))
     }
     static func manifest(_ directory: InstallerDirectoryAnchor, environment: CleanupEnvironment, honorCancellation: Bool = true,
                          maximumEntries: Int = CleanupFiles.maximumEntries, deadline: Date = Date().addingTimeInterval(30)) throws -> CleanupManifest {

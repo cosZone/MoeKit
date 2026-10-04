@@ -20,12 +20,19 @@ private final class CacheFixtureSink: InstallerTrashSink, @unchecked Sendable {
 
 private struct VerifiedCacheNativeSink: InstallerTrashSink {
     let identity: InstallerFileSnapshot
+    let fixtureRoot: URL
+    let fixtureRootIdentity: InstallerFileSnapshot
+    let markerIdentity: InstallerFileSnapshot
     let marker: Data
     func trash(_ url: URL) throws -> URL {
+        let root = try InstallerDirectoryAnchor.open(fixtureRoot)
+        try #require(fixtureRootIdentity.matchesDirectory(InstallerFileAccess.snapshot(root.fd)))
         let directory = try InstallerDirectoryAnchor.open(url)
         try #require(identity.matchesCaptured(InstallerFileAccess.snapshot(directory.fd)))
         try #require(CleanupFiles.names(directory) == ["owned.bin"])
         let file = try InstallerFileDescriptor(parent: directory, name: "owned.bin")
+        try #require(markerIdentity == InstallerFileAccess.snapshot(file.fd))
+        try #require(markerIdentity == InstallerFileAccess.snapshotAt(directory.fd, "owned.bin"))
         try #require(BoundedRegularFileReader.read(descriptor: file.fd, maximumBytes: 1024) == marker)
         return try NativeInstallerTrashSink().trash(url)
     }
@@ -253,13 +260,105 @@ struct CleanupExecutorTests {
         #expect(rows.first?.receipt == nil)
         await #expect(throws: (any Error).self) { try await executor.prepareRecovery(receiptID: receipt.id, action: .deletePermanently, context: context) }
     }
+    @Test("Leaf replacement before or after private capture never deletes replacement bytes", arguments: ["before", "after"])
+    func leafRace(_ timing: String) async throws {
+        let f = try CacheFixture(), a = try f.folder("cache"), context = f.context
+        let executor = f.executor(), plan = try await f.plan(executor, selected: [a], context: context)
+        let moved = try await executor.moveToTrash(planID: plan.id, context: context)
+        let receipt = try #require(moved.items.first?.receipt)
+        let operation = receipt.operationURL
+        let expectedSource = operation.appendingPathComponent(timing == "before" ? "delete-payload/owned.bin" : "delete-entry-000001")
+        let preserved = operation.appendingPathComponent("race-original-preserved")
+        let replacement = Data("Never delete unconfirmed replacement".utf8)
+        let guarded = f.executor { checkpoint in
+            let applies: Bool
+            switch checkpoint {
+            case .beforeLeafCapture: applies = timing == "before"
+            case .afterLeafCapture: applies = timing == "after"
+            default: applies = false
+            }
+            if applies {
+                try FileManager.default.moveItem(at: expectedSource, to: preserved)
+                try replacement.write(to: expectedSource, options: .withoutOverwriting)
+            }
+        }
+        let deletion = try await guarded.prepareRecovery(receiptID: receipt.id, action: .deletePermanently, context: context)
+        let result = try await guarded.applyRecovery(planID: deletion.id, context: context)
+        #expect(result.items.first?.succeeded == false)
+        #expect(result.items.first?.receipt?.state == .uncertain)
+        #expect(try Data(contentsOf: operation.appendingPathComponent("delete-entry-000001")) == replacement)
+        #expect(try Data(contentsOf: preserved) == f.marker)
+        try f.sentinelUnchanged()
+    }
+    @Test("Late restore collision leaves a durable stage that a new exact confirmation can restore")
+    func lateRestoreCollision() async throws {
+        let f = try CacheFixture(), a = try f.folder("cache"), context = f.context
+        let executor = f.executor(), plan = try await f.plan(executor, selected: [a], context: context)
+        let moved = try await executor.moveToTrash(planID: plan.id, context: context)
+        let receipt = try #require(moved.items.first?.receipt)
+        let collision = f.executor { checkpoint in
+            if case .beforeRestore = checkpoint {
+                try FileManager.default.createDirectory(at: a, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+                try Data("new cache preserved".utf8).write(to: a.appendingPathComponent("new"), options: .withoutOverwriting)
+            }
+        }
+        let first = try await collision.prepareRecovery(receiptID: receipt.id, action: .restore, context: context)
+        let failed = try await collision.applyRecovery(planID: first.id, context: context)
+        let retained = try #require(failed.items.first?.receipt)
+        #expect(retained.state == .retained && retained.canRestore)
+        #expect(try Data(contentsOf: #require(retained.payloadURL).appendingPathComponent("owned.bin")) == f.marker)
+        let neighbor = f.caches.appendingPathComponent("new-cache-preserved")
+        try FileManager.default.moveItem(at: a, to: neighbor)
+        let clean = f.executor()
+        let retry = try await clean.prepareRecovery(receiptID: receipt.id, action: .restore, context: context)
+        let restored = try await clean.applyRecovery(planID: retry.id, context: context)
+        #expect(restored.items.first?.succeeded == true)
+        #expect(try Data(contentsOf: a.appendingPathComponent("owned.bin")) == f.marker)
+        #expect(try Data(contentsOf: neighbor.appendingPathComponent("new")) == Data("new cache preserved".utf8))
+    }
+    @Test("A partial journal write latches the writer and revokes receipt authority")
+    func journalWriteFailure() async throws {
+        let f = try CacheFixture(), a = try f.folder("cache"), context = f.context
+        let executor = f.executor(), plan = try await f.plan(executor, selected: [a], context: context)
+        let moved = try await executor.moveToTrash(planID: plan.id, context: context)
+        let receipt = try #require(moved.items.first?.receipt)
+        do {
+            let journal = try CleanupJournal(environment: f.environment, create: false, exclusive: true,
+                                             afterRecordCreated: { throw CleanupFailure.journal })
+            let operation = try journal.storage.operation(receipt.id)
+            let proposed = receipt.advancing(.restoreCaptureIntent, payloadURL: receipt.payloadURL)
+            #expect(throws: (any Error).self) { try journal.append(proposed, operation: operation) }
+            #expect(!journal.isHealthy)
+            #expect(throws: (any Error).self) { try journal.append(proposed, operation: operation) }
+            #expect(throws: (any Error).self) { try journal.latest(receipt.id) }
+        }
+        let records = try await executor.recoveryRecords()
+        #expect(records.first?.receipt == nil)
+        #expect(try Data(contentsOf: #require(receipt.payloadURL).appendingPathComponent("owned.bin")) == f.marker)
+        try f.sentinelUnchanged()
+    }
+    @Test("Own Trash namespace is protected even with a valid cache tag")
+    func ownStorageProtection() async throws {
+        let f = try CacheFixture(), context = f.context
+        try CleanupFiles.cacheSignature.write(to: f.trash.appendingPathComponent("CACHEDIR.TAG"), options: .withoutOverwriting)
+        let wider = CleanupEnvironment(home: f.base.deletingLastPathComponent(), caches: f.caches, recovery: f.recovery,
+                                       trash: f.trash, enforceProductionPolicy: false)
+        let executor = NativeCleanupExecutor(environment: wider, sink: CacheFixtureSink(f.trash))
+        let report = try await executor.inspect(root: f.base, context: context)
+        #expect(report.candidates.first(where: { $0.url.path == f.trash.path })?.isEligible == false)
+        #expect(try Data(contentsOf: f.trash.appendingPathComponent("CACHEDIR.TAG")) == CleanupFiles.cacheSignature)
+        try f.sentinelUnchanged()
+    }
+
     @Test("Actual native Trash and restore use only a uniquely owned fixture", .enabled(if: ProcessInfo.processInfo.environment["MOEKIT_CACHE_NATIVE_FIXTURE"] == "1"))
     func actualNativeTrash() async throws {
         let f = try CacheFixture(realTrash: true), a = try f.folder("Owned-Cache-\(UUID().uuidString)")
         let original = try InstallerDirectoryAnchor.open(a)
         let identity = try InstallerFileAccess.snapshot(original.fd)
         let expectedMarker = f.marker
-        let executor = f.executor(sink: VerifiedCacheNativeSink(identity: identity, marker: expectedMarker)), context = f.context
+        let markerIdentity = try InstallerFileAccess.snapshotAt(original.fd, "owned.bin")
+        let fixtureRootIdentity = try InstallerDirectoryAnchor.open(f.base).identity
+        let executor = f.executor(sink: VerifiedCacheNativeSink(identity: identity, fixtureRoot: f.base, fixtureRootIdentity: fixtureRootIdentity, markerIdentity: markerIdentity, marker: expectedMarker)), context = f.context
         let plan = try await f.plan(executor, selected: [a], context: context)
         let result = try await executor.moveToTrash(planID: plan.id, context: context)
         let receipt = try #require(result.items.first?.receipt)

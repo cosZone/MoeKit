@@ -14,6 +14,46 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  installer-idle-probe:
+    name: Native idle-use probe (clean Intel runner)
+    runs-on: macos-15-intel
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+      MOEKIT_INSTALLER_IDLE_PROBE: '1'
+      MOEKIT_INSTALLER_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      MOEKIT_INSTALLER_EVIDENCE_DIR: ${{ github.workspace }}/InstallerIdleEvidence
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Compile and run the actual provider before Xcode test services
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$(uname -m)" = x86_64
+          mkdir -m 700 InstallerIdleEvidence
+          build_dir=$(mktemp -d "$RUNNER_TEMP/MoeKit-idle-probe.XXXXXX")
+          swiftc -swift-version 6 -parse-as-library -target x86_64-apple-macosx15.0 \
+            Sources/Installer/InstallerUseEvidence.swift Scripts/InstallerIdleProbe.swift \
+            -o "$build_dir/moekit-installer-idle-probe"
+          "$build_dir/moekit-installer-idle-probe" | tee InstallerIdleProbe.log
+          python3 Scripts/verify-installer-fixture-evidence.py --directory InstallerIdleEvidence --source-sha "$SOURCE_SHA" --kinds idle-use
+      - name: Preserve exact-commit idle-use proof and diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: native-idle-use-${{ env.SOURCE_SHA }}
+          path: |
+            InstallerIdleEvidence/
+            InstallerIdleProbe.log
+          if-no-files-found: ignore
+          retention-days: 14
+
   universal-archive:
     name: Unsigned universal archive
     runs-on: macos-15
@@ -148,21 +188,8 @@ jobs:
           xcodebuild "${args[@]}" build-for-testing
           xcodebuild "${args[@]}" test-without-building -testLanguage en -testRegion US -resultBundlePath TestResults.xcresult \
             '-skip-testing:MoeKitTests/InstallerUseEvidenceTests/nativeIdleCurrentUserCoverage()'
-      - name: Verify actual idle installer-use coverage in isolation
-        if: ${{ always() && !cancelled() }}
-        env:
-          TEST_RUNNER_MOEKIT_INSTALLER_IDLE_FIXTURE: '1'
-        run: |
-          set -euo pipefail
-          test -d DerivedData/Build/Products/Debug/MoeKit.app/Contents/PlugIns/MoeKitTests.xctest
-          xcodebuild -workspace MoeKit.xcworkspace -scheme MoeKit -configuration Debug \
-            -destination 'platform=macOS' -derivedDataPath DerivedData \
-            CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= \
-            test-without-building -testLanguage en -testRegion US \
-            -parallel-testing-enabled NO \
-            '-only-testing:MoeKitTests/InstallerUseEvidenceTests/nativeIdleCurrentUserCoverage()' \
-            -resultBundlePath InstallerIdleResults.xcresult
-          python3 Scripts/verify-installer-fixture-evidence.py --directory InstallerFixtureEvidence --source-sha "$SOURCE_SHA"
+      - name: Verify affirmative native installer fixture evidence
+        run: python3 Scripts/verify-installer-fixture-evidence.py --directory InstallerFixtureEvidence --source-sha "$SOURCE_SHA" --kinds native-trash mounted-image live-mole
       - name: Render workspaces and first-use guidance in Simplified Chinese
         run: |
           set -euo pipefail

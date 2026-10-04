@@ -25,6 +25,10 @@ for kind in args.kinds:
     record = json.loads(path.read_text())
     assert record['schema'] == 1 and record['kind'] == kind and record['sourceSHA'] == args.source_sha
     assert record['detail']['result'] == expected[kind]
+    if kind == 'idle-use':
+        assert record['detail']['observedUseControl'] == 'true'
+    if kind == 'native-trash':
+        assert record['detail']['duplicateNamesPreserved'] == 'true'
     if kind == 'mounted-image':
         assert record['detail']['observedRefusal'] == 'true'
     for key in ('sourceDevice', 'sourceInode'):

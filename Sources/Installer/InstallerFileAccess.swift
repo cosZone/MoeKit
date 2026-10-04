@@ -96,7 +96,7 @@ enum InstallerFileAccess {
               changedSeconds: Int64(s.st_ctimespec.tv_sec), changedNanoseconds: Int64(s.st_ctimespec.tv_nsec))
     }
     static func validateRegular(_ s: InstallerFileSnapshot) throws {
-        guard s.mode & UInt32(S_IFMT) == UInt32(S_IFREG), s.links == 1, s.uid == geteuid(), s.mode & 0o022 == 0,
+        guard geteuid() != 0, s.mode & UInt32(S_IFMT) == UInt32(S_IFREG), s.links == 1, s.uid == geteuid(), s.mode & 0o022 == 0,
               s.flags == 0, s.bytes > 0 else { throw InstallerTrashFailure.unsupported }
     }
     static func validatePrivate(_ fd: Int32, directory: Bool) throws {
@@ -131,9 +131,26 @@ enum InstallerFileAccess {
             throw InstallerTrashFailure.unsupported
         }
         let type = withUnsafeBytes(of: &volume.f_fstypename) { bytes in String(decoding: bytes.prefix(while: { $0 != 0 }), as: UTF8.self) }
-        let values = try url.resourceValues(forKeys: [.volumeIsLocalKey, .volumeIsInternalKey, .volumeIsRemovableKey, .volumeIsEjectableKey, .isUbiquitousItemKey])
+        let values = try URL(fileURLWithPath: url.path).resourceValues(forKeys: [.volumeIsLocalKey, .volumeIsInternalKey, .volumeIsRemovableKey, .volumeIsEjectableKey])
         guard type == "apfs", values.volumeIsLocal == true, values.volumeIsInternal == true,
-              values.volumeIsRemovable == false, values.volumeIsEjectable == false, values.isUbiquitousItem == false else { throw InstallerTrashFailure.unsupported }
+              values.volumeIsRemovable == false, values.volumeIsEjectable == false else { throw InstallerTrashFailure.unsupported }
+        // The optional URL resource key is nil on ordinary local macOS files.
+        // Ask the documented iCloud-targeting Bool instead. It also returns
+        // false for a missing item, so bracket it with named/retained identity.
+        let held = try snapshot(fd)
+        func checkName() throws {
+            var status = stat()
+            guard lstat(url.path, &status) == 0 else { throw InstallerTrashFailure.changed }
+            let named = snapshot(status)
+            if held.mode & UInt32(S_IFMT) == UInt32(S_IFDIR) {
+                guard held.matchesDirectory(named), held.matchesDirectory(try snapshot(fd)) else { throw InstallerTrashFailure.changed }
+            } else {
+                guard held == named, held == (try snapshot(fd)) else { throw InstallerTrashFailure.changed }
+            }
+        }
+        try checkName()
+        guard !FileManager.default.isUbiquitousItem(at: URL(fileURLWithPath: url.path)) else { throw InstallerTrashFailure.unsupported }
+        try checkName()
     }
     static func rejectCloudAttributes(_ fd: Int32) throws {
         let size = flistxattr(fd, nil, 0, 0)

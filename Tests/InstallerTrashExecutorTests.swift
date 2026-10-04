@@ -390,6 +390,23 @@ struct InstallerTrashExecutorTests {
         let receipt = try #require(result.receipt), destination = try #require(receipt.trashURL)
         try #require(receipt.originalFile.matchesCaptured(#require(receipt.trashFile)))
         try #require(try Data(contentsOf: destination) == f.marker)
+        // Two independent one-file confirmations with the same authored name
+        // exercise native Trash collision handling without touching existing items.
+        let second = try InstallerFixture(name: f.source.lastPathComponent, realTrash: true)
+        let secondSink = FixtureOnlyNativeTrashSink(marker: second.marker, allowedParent: second.recovery)
+        let secondExecutor = second.executor(sink: secondSink)
+        let secondPlan = try await secondExecutor.prepare(selection: second.source, scope: second.scope)
+        let secondMoved = try await secondExecutor.moveToTrash(planID: secondPlan.id, scope: secondPlan.scope)
+        try #require(secondMoved.movedToTrash)
+        let secondDestination = try #require(secondMoved.receipt?.trashURL)
+        try #require(secondDestination.path != destination.path)
+        try #require(try Data(contentsOf: destination) == f.marker)
+        try #require(try Data(contentsOf: secondDestination) == second.marker)
+        let secondContext = second.context
+        let secondRestore = try await secondExecutor.prepareRestore(receiptID: secondPlan.id, context: secondContext)
+        let secondRestored = try await secondExecutor.restore(planID: secondRestore.id, context: secondContext)
+        try #require(secondRestored.receipt?.state == .restored)
+        try #require(try Data(contentsOf: second.source) == second.marker)
         let context = f.context
         let restore = try await executor.prepareRestore(receiptID: receipt.id, context: context)
         let restored = try await executor.restore(planID: restore.id, context: context)
@@ -398,7 +415,7 @@ struct InstallerTrashExecutorTests {
         try f.checkSentinel()
         try InstallerNativeFixtureEvidence.record(kind: "native-trash", detail: [
             "result": "verified-trash-and-restore", "sourceDevice": String(plan.file.device),
-            "sourceInode": String(plan.file.inode), "operationID": receipt.id.uuidString])
+            "sourceInode": String(plan.file.inode), "operationID": receipt.id.uuidString, "duplicateNamesPreserved": "true"])
     }
 }
 

@@ -103,7 +103,19 @@ enum InstallerFileAccess {
         let s = try snapshot(fd)
         guard s.uid == geteuid(), s.mode & 0o777 == (directory ? 0o700 : 0o600), s.flags == 0,
               s.mode & UInt32(S_IFMT) == UInt32(directory ? S_IFDIR : S_IFREG), directory || s.links == 1 else { throw InstallerTrashFailure.unsafeRecovery }
-        guard let acl = acl_get_fd_np(fd, ACL_TYPE_EXTENDED) else { throw InstallerTrashFailure.unsafeRecovery }
+        // acl_get_fd_np returns NULL for both a genuinely absent ACL and
+        // read failures. Query the successfully read filesec property instead.
+        guard let security = filesec_init() else { throw InstallerTrashFailure.unsafeRecovery }
+        defer { filesec_free(security) }
+        var attributes = stat()
+        var hasACL: Int32 = 0
+        guard fstatx_np(fd, &attributes, security) == 0,
+              filesec_query_property(security, FILESEC_ACL, &hasACL) == 0,
+              (directory ? s.matchesDirectory(snapshot(attributes)) : s == snapshot(attributes)) else { throw InstallerTrashFailure.unsafeRecovery }
+        if hasACL == 0 { return }
+        guard hasACL == 1 else { throw InstallerTrashFailure.unsafeRecovery }
+        var readACL: acl_t?
+        guard filesec_get_property(security, FILESEC_ACL, &readACL) == 0, let acl = readACL else { throw InstallerTrashFailure.unsafeRecovery }
         defer { acl_free(UnsafeMutableRawPointer(acl)) }
         guard acl_valid(acl) == 0 else { throw InstallerTrashFailure.unsafeRecovery }
         var entry: acl_entry_t?

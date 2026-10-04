@@ -87,6 +87,10 @@ final class CatalogPersistence {
         }
     }
 
+    /// Reuses the full validation contract for native read-only protection checks.
+    /// This does not change this instance's saved snapshot or write any files.
+    static func decodedProjectsForReadOnlyProtection(_ data: Data) throws -> [ProjectRecord] { try decode(data) }
+
     private static func decode(_ data: Data) throws -> [ProjectRecord] {
         let projects = try JSONDecoder().decode([ProjectRecord].self, from: data)
         // The current format is an unversioned array. Unknown fields must not be

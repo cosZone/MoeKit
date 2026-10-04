@@ -316,6 +316,32 @@ struct InstallerTrashExecutorTests {
         #expect(try Data(contentsOf: plan.recoveryURL.appendingPathComponent(f.source.lastPathComponent)) == Data("replacement stage sentinel".utf8))
         try f.checkSentinel()
     }
+    @Test("Another instance changing the saved catalog invalidates confirmation")
+    func externalCatalogChange() async throws {
+        let f = try InstallerFixture(), sink = InstallerFixtureSink(f.trash), executor = f.executor(sink: sink)
+        let plan = try await executor.prepare(selection: f.source, scope: f.scope)
+        let catalog = CatalogPersistence(directory: f.recovery.deletingLastPathComponent())
+        _ = try catalog.load(); try catalog.save([])
+        await #expect(throws: InstallerTrashFailure.changed) { try await executor.moveToTrash(planID: plan.id, scope: plan.scope) }
+        #expect(sink.callCount == 0); #expect(try Data(contentsOf: f.source) == f.marker)
+    }
+    @Test("Saved catalog writer cannot replace protection during native capture")
+    func catalogLockedDuringCapture() async throws {
+        let f = try InstallerFixture(), sink = InstallerFixtureSink(f.trash)
+        let executor = f.executor(sink: sink) { point in
+            if point == .beforeCapture {
+                let fd = open(f.recovery.deletingLastPathComponent().appendingPathComponent("projects.json.lock").path, O_RDWR | O_NOFOLLOW)
+                try #require(fd >= 0)
+                defer { close(fd) }
+                errno = 0
+                try #require(flock(fd, LOCK_EX | LOCK_NB) != 0)
+                try #require(errno == EWOULDBLOCK || errno == EAGAIN)
+            }
+        }
+        let plan = try await executor.prepare(selection: f.source, scope: f.scope)
+        let result = try await executor.moveToTrash(planID: plan.id, scope: plan.scope)
+        #expect(result.movedToTrash); #expect(sink.callCount == 1)
+    }
     @Test("Actual macOS Trash API and receipt restore only on owned CI fixture",
           .enabled(if: ProcessInfo.processInfo.environment["MOEKIT_INSTALLER_TRASH_FIXTURE"] == "1"))
     func nativeTrashRoundTrip() async throws {
@@ -348,7 +374,7 @@ private struct FixtureOnlyNativeTrashSink: InstallerTrashSink {
     let marker: Data
     let allowedParent: URL
     func trash(_ url: URL) throws -> URL {
-        guard url.deletingLastPathComponent().deletingLastPathComponent() == allowedParent,
+        guard url.deletingLastPathComponent().deletingLastPathComponent().path == allowedParent.path,
               UUID(uuidString: url.deletingLastPathComponent().lastPathComponent) != nil else { throw InstallerTrashFailure.protected }
         let parent = try InstallerDirectoryAnchor.open(url.deletingLastPathComponent())
         let fd = try InstallerFileDescriptor(parent: parent, name: url.lastPathComponent)

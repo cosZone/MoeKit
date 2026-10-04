@@ -396,7 +396,7 @@ private struct InstallerOwnedUseFixture {
 
     init() throws {
         let token = UUID().uuidString
-        root = FileManager.default.temporaryDirectory.appendingPathComponent("MoeKit-installer-use-\(token)", isDirectory: true)
+        root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath().appendingPathComponent("MoeKit-installer-use-\(token)", isDirectory: true)
         file = root.appendingPathComponent("owned.dmg")
         marker = Data("MoeKit owned descriptor fixture \(token)\n".utf8)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: false)
@@ -450,7 +450,7 @@ private final class InstallerMountFixtureCI {
         guard Self.isEnabled else { throw InstallerUseReadError.unavailable("Mount fixtures require explicit ephemeral CI opt-in.") }
         try InstallerUseCIFixtureGate.requireHostedRunner()
         let token = UUID().uuidString
-        root = FileManager.default.temporaryDirectory.appendingPathComponent("MoeKit-owned-dmg-\(token)", isDirectory: true)
+        root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath().appendingPathComponent("MoeKit-owned-dmg-\(token)", isDirectory: true)
         content = root.appendingPathComponent("content", isDirectory: true)
         marker = content.appendingPathComponent("moekit-owned-fixture.txt")
         image = root.appendingPathComponent("owned.dmg")
@@ -498,11 +498,28 @@ private final class InstallerMountFixtureCI {
               let images = root["images"] as? [[String: Any]] else {
             throw InstallerUseReadError.unavailable("Invalid real disk-image inventory.")
         }
-        let matches = images.filter { ($0["image-path"] as? String) == image.path }
-        guard matches.count == 1, let match = matches.first,
-              let alias = match["image-alias"] as? Data,
-              try InstallerUseNativeParsing.resolveMountedImage(path: image.path, alias: alias) == imageIdentity() else {
-            throw InstallerUseReadError.unavailable("The exact owned mounted-image record could not be verified.")
+        let physicalPath = image.resolvingSymlinksInPath().path
+        let matches = images.filter {
+            guard let path = $0["image-path"] as? String, path.hasPrefix("/"), !path.utf8.contains(0) else { return false }
+            return URL(fileURLWithPath: path).resolvingSymlinksInPath().path == physicalPath
+        }
+        guard matches.count == 1, let match = matches.first else {
+            let deviceMatches = images.filter {
+                guard let entities = $0["system-entities"] as? [[String: Any]], let disk else { return false }
+                return entities.contains { ($0["dev-entry"] as? String) == disk }
+            }
+            // Counts/types only: never log another image's path, alias or data.
+            let candidateAlias = deviceMatches.first?["image-alias"]
+            let candidateAliasType = candidateAlias.map { String(reflecting: type(of: $0)) } ?? "missing"
+            throw InstallerUseReadError.unavailable("Owned mount selection failed: images=\(images.count), physicalPathMatches=\(matches.count), capturedDeviceMatches=\(deviceMatches.count), candidateAliasType=\(candidateAliasType).")
+        }
+        guard let alias = match["image-alias"] as? Data,
+              let reportedPath = match["image-path"] as? String else {
+            let aliasType = match["image-alias"].map { String(reflecting: type(of: $0)) } ?? "missing"
+            throw InstallerUseReadError.unavailable("The owned image record has an unsupported alias value type: \(aliasType).")
+        }
+        guard try InstallerUseNativeParsing.resolveMountedImage(path: reportedPath, alias: alias) == imageIdentity() else {
+            throw InstallerUseReadError.unavailable("The owned mount alias resolved to a different source device/inode.")
         }
         return match
     }
@@ -528,7 +545,10 @@ private final class InstallerMountFixtureCI {
             let data = try await InstallerDiskImageInventory.shared.read(deadline: ProcessInfo.processInfo.systemUptime + 15)
             guard let root = try PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any],
                   let images = root["images"] as? [[String: Any]],
-                  !images.contains(where: { ($0["image-path"] as? String) == image.path }) else {
+                  !images.contains(where: {
+                      guard let path = $0["image-path"] as? String else { return true }
+                      return URL(fileURLWithPath: path).resolvingSymlinksInPath().path == image.resolvingSymlinksInPath().path
+                  }) else {
                 throw InstallerUseReadError.unavailable("The fixture may remain attached; retain it.")
             }
         }

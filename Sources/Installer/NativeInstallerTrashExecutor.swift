@@ -35,6 +35,7 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
         let display: InstallerTrashPlan
         let parent: InstallerDirectoryAnchor
         let file: InstallerFileDescriptor
+        let catalog: InstallerCatalogSnapshot
     }
     private struct PreparedRestore {
         let display: InstallerRestorePlan
@@ -42,6 +43,7 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
         let sourceParent: InstallerDirectoryAnchor
         let source: InstallerFileDescriptor
         let sourceIdentity: InstallerFileSnapshot
+        let catalog: InstallerCatalogSnapshot
     }
     private let environment: InstallerTrashEnvironment
     private let evidence: any InstallerUseEvidenceProviding
@@ -66,6 +68,7 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
         guard !isMutating else { throw InstallerTrashFailure.busy }
         discardPlans()
         try validateScope(selection, scope)
+        let catalog = try catalogSnapshot(protecting: selection)
         let parent = try InstallerDirectoryAnchor.open(environment.downloads)
         try validateParent(parent)
         let file = try InstallerFileDescriptor(parent: parent, name: selection.lastPathComponent)
@@ -77,10 +80,11 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
         try parent.validate()
         guard identity == (try InstallerFileAccess.snapshot(file.fd)), identity == (try InstallerFileAccess.snapshotAt(parent.fd, selection.lastPathComponent)) else { throw InstallerTrashFailure.changed }
         try Task.checkCancellation()
+        guard try catalogSnapshot(protecting: selection) == catalog else { throw InstallerTrashFailure.changed }
         let id = UUID(), now = Date()
         let display = InstallerTrashPlan(id: id, scope: scope, originalURL: selection, downloadsURL: environment.downloads,
             recoveryURL: environment.recoveryRoot.appendingPathComponent(id.uuidString), file: identity, preparedAt: now, expiresAt: now.addingTimeInterval(120))
-        prepared = Prepared(display: display, parent: parent, file: file)
+        prepared = Prepared(display: display, parent: parent, file: file, catalog: catalog)
         return display
     }
 
@@ -96,6 +100,9 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
         try revalidate(plan); try Task.checkCancellation()
         let journal = try InstallerRecoveryJournal(rootURL: environment.recoveryRoot, create: true, exclusive: true)
         guard journal.root.identity.device == plan.parent.identity.device else { throw InstallerTrashFailure.unsupportedRename }
+        let catalogLease = try InstallerCatalogLease(app: journal.appParent)
+        defer { withExtendedLifetime(catalogLease) {} }
+        try catalogLease.requireSnapshot(plan.catalog)
         let operation = try journal.createOperation(planID)
         var receipt = InstallerTrashReceipt(policy: InstallerTrashReceipt.policyVersion, id: planID, sequence: 0,
             originalURL: plan.display.originalURL, originalParent: plan.parent.identity, originalFile: plan.display.file,
@@ -105,7 +112,7 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
         var captured = false
         var trashStarted = false
         do {
-            try revalidate(plan); try journal.validate(); try Task.checkCancellation()
+            try revalidate(plan); try journal.validate(); try catalogLease.requireSnapshot(plan.catalog); try Task.checkCancellation()
             try checkpoint(.beforeCapture)
             try InstallerFileAccess.exclusiveMove(from: plan.parent, name: plan.display.originalURL.lastPathComponent,
                 to: operation, destinationName: plan.display.originalURL.lastPathComponent)
@@ -123,7 +130,7 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
             try await requireNoObservedUse(capturedIdentity, path: operation.url.appendingPathComponent(plan.display.originalURL.lastPathComponent).path,
                                           excluding: [plan.file.fd, staged.fd])
             try Task.checkCancellation()
-            try validateParent(plan.parent); try operation.validate(); try journal.validate()
+            try validateParent(plan.parent); try operation.validate(); try journal.validate(); try catalogLease.requireSnapshot(plan.catalog)
             guard capturedIdentity == (try InstallerFileAccess.snapshotAt(operation.fd, plan.display.originalURL.lastPathComponent)),
                   capturedIdentity == (try InstallerFileAccess.snapshot(staged.fd)) else { throw InstallerTrashFailure.changed }
             receipt = receipt.advancing(to: .trashIntent, payloadName: plan.display.originalURL.lastPathComponent)
@@ -174,9 +181,10 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
         let journal = try InstallerRecoveryJournal(rootURL: environment.recoveryRoot, create: false, exclusive: false)
         let receipt = try journal.latest(receiptID)
         try validateRecoveryContext(context, target: receipt.originalURL)
+        let catalog = try catalogSnapshot(protecting: receipt.originalURL)
         guard receipt.canOfferRestore else { throw InstallerTrashFailure.unavailable(String(localized: "This receipt has an uncertain or completed outcome. Inspect it in Finder; MoeKit will not retry automatically.")) }
         let parent = try InstallerDirectoryAnchor.open(receipt.originalURL.deletingLastPathComponent())
-        guard parent.url == environment.downloads, receipt.originalParent.matchesDirectory(parent.identity) else { throw InstallerTrashFailure.changed }
+        guard parent.url.path == environment.downloads.path, receipt.originalParent.matchesDirectory(parent.identity) else { throw InstallerTrashFailure.changed }
         try validateParent(parent); try InstallerFileAccess.assertAbsent(parent, receipt.originalURL.lastPathComponent)
         let sourceURL: URL
         if receipt.state == .trashed {
@@ -199,9 +207,10 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
               identity == (try InstallerFileAccess.snapshotAt(sourceParent.fd, sourceURL.lastPathComponent)) else { throw InstallerTrashFailure.changed }
         try InstallerFileAccess.assertAbsent(parent, receipt.originalURL.lastPathComponent)
         try Task.checkCancellation()
+        guard try catalogSnapshot(protecting: receipt.originalURL) == catalog else { throw InstallerTrashFailure.changed }
         let now = Date()
         let display = InstallerRestorePlan(id: UUID(), receipt: receipt, sourceURL: sourceURL, context: context, preparedAt: now, expiresAt: now.addingTimeInterval(120))
-        preparedRestore = .init(display: display, parent: parent, sourceParent: sourceParent, source: source, sourceIdentity: identity)
+        preparedRestore = .init(display: display, parent: parent, sourceParent: sourceParent, source: source, sourceIdentity: identity, catalog: catalog)
         return display
     }
     func restore(planID: UUID, context: InstallerRecoveryContext) async throws -> InstallerTrashOutcome {
@@ -212,6 +221,9 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
         defer { isMutating = false }
         try validateRecoveryContext(context, target: plan.display.receipt.originalURL)
         let journal = try InstallerRecoveryJournal(rootURL: environment.recoveryRoot, create: false, exclusive: true)
+        let catalogLease = try InstallerCatalogLease(app: journal.appParent)
+        defer { withExtendedLifetime(catalogLease) {} }
+        try catalogLease.requireSnapshot(plan.catalog)
         guard try journal.latest(plan.display.receipt.id) == plan.display.receipt else { throw InstallerTrashFailure.changed }
         let operation = try journal.operation(plan.display.receipt.id)
         try plan.parent.validate(); try plan.sourceParent.validate()
@@ -226,13 +238,13 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
         var originalMoveStarted = false
         // A retained source already in this exact restore slot needs no second
         // capture; all other sources get a verified exclusive stage first.
-        let alreadyStaged = plan.sourceParent.url == operation.url && plan.display.sourceURL.lastPathComponent == "restore.dmg"
+        let alreadyStaged = plan.sourceParent.url.path == operation.url.path && plan.display.sourceURL.lastPathComponent == "restore.dmg"
         do {
             receipt = receipt.advancing(to: .restoreCaptureIntent, payloadName: alreadyStaged ? "restore.dmg" : plan.display.sourceURL.lastPathComponent)
             try journal.append(receipt, operation: operation)
             // The observation and durable intent both take time. Recheck the
             // exact pre-rename snapshot (including ctime) immediately afterward.
-            try plan.parent.validate(); try plan.sourceParent.validate()
+            try plan.parent.validate(); try plan.sourceParent.validate(); try catalogLease.requireSnapshot(plan.catalog)
             guard plan.sourceIdentity == (try InstallerFileAccess.snapshot(plan.source.fd)),
                   plan.sourceIdentity == (try InstallerFileAccess.snapshotAt(plan.sourceParent.fd, plan.display.sourceURL.lastPathComponent)) else { throw InstallerTrashFailure.changed }
             try InstallerFileAccess.assertAbsent(plan.parent, receipt.originalURL.lastPathComponent)
@@ -249,7 +261,7 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
             capturedVerified = true
             receipt = receipt.advancing(to: .restoreCaptured, payloadName: "restore.dmg", payloadFile: stagedIdentity)
             try journal.append(receipt, operation: operation)
-            try Task.checkCancellation(); try validateParent(plan.parent)
+            try Task.checkCancellation(); try validateParent(plan.parent); try catalogLease.requireSnapshot(plan.catalog)
             try InstallerFileAccess.assertAbsent(plan.parent, receipt.originalURL.lastPathComponent)
             receipt = receipt.advancing(to: .restoreIntent, payloadName: "restore.dmg")
             try journal.append(receipt, operation: operation)
@@ -304,11 +316,16 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
             return .init(receipt: retained, message: returnedToOriginal ? String(localized: "The captured item was returned, but its final recovery record could not be verified. Inspect the original and recovery locations; do not repeat the move.") : String(localized: "The move stopped before Trash. Recovery data was retained; inspect it before any new operation."), movedToTrash: false, requiresRecovery: true)
         }
     }
+    private func catalogSnapshot(protecting target: URL) throws -> InstallerCatalogSnapshot {
+        let snapshot = try InstallerCatalogSnapshot.read(recoveryRoot: environment.recoveryRoot)
+        try validateRecoveryContext(.init(generation: UUID(), protectedPaths: try snapshot.protectedPaths, catalogIsKnown: true), target: target)
+        return snapshot
+    }
     private func validateScope(_ selection: URL, _ scope: InstallerTrashScope) throws {
         _ = try InstallerFileAccess.components(selection)
         guard scope.catalogIsKnown, scope.protectedPaths.count <= 2_000 else { throw InstallerTrashFailure.protected }
-        guard scope.liveDirectory == environment.downloads, scope.liveEntryPaths.count <= 50_000,
-              scope.liveEntryPaths.contains(selection.path), selection.deletingLastPathComponent() == environment.downloads,
+        guard scope.liveDirectory.path == environment.downloads.path, scope.liveEntryPaths.count <= 50_000,
+              scope.liveEntryPaths.contains(selection.path), selection.deletingLastPathComponent().path == environment.downloads.path,
               selection.pathExtension.lowercased() == "dmg", !selection.lastPathComponent.hasPrefix(".") else { throw InstallerTrashFailure.unsupported }
         try validateRecoveryContext(.init(generation: scope.generation, protectedPaths: scope.protectedPaths, catalogIsKnown: scope.catalogIsKnown), target: selection)
     }
@@ -347,7 +364,7 @@ actor NativeInstallerTrashExecutor: InstallerTrashExecuting {
     }
     private func verifiedTrashFile(_ url: URL, expected: InstallerFileSnapshot, exact: InstallerFileSnapshot? = nil) throws -> InstallerFileSnapshot {
         _ = try InstallerFileAccess.components(url)
-        guard url.deletingLastPathComponent() == environment.trash else { throw InstallerTrashFailure.changed }
+        guard url.deletingLastPathComponent().path == environment.trash.path else { throw InstallerTrashFailure.changed }
         let parent = try InstallerDirectoryAnchor.open(environment.trash)
         guard parent.identity.uid == geteuid(), parent.identity.device == expected.device else { throw InstallerTrashFailure.changed }
         let file = try InstallerFileDescriptor(parent: parent, name: url.lastPathComponent)

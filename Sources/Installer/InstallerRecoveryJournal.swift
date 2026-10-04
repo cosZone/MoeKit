@@ -8,7 +8,7 @@ final class InstallerRecoveryJournal {
     static let maximumRecords = 64
     static let maximumOperations = 256
     let root: InstallerDirectoryAnchor
-    private let appParent: InstallerDirectoryAnchor
+    let appParent: InstallerDirectoryAnchor
     private(set) var mutationJournalIsHealthy = true
     private var lockFD: Int32 = -1
     private var lockIdentity: InstallerFileSnapshot?

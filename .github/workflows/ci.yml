@@ -41,6 +41,7 @@ jobs:
           python3 Scripts/test-preview-release.py
           python3 Scripts/test-ui-render-artifacts.py
           python3 Scripts/test-mole-supervisor.py
+          python3 Scripts/test-installer-fixture-evidence.py
           xcodebuild -version
           xcodebuild -help > XcodeHelp.txt 2>&1
           grep -F -- '-testLanguage' XcodeHelp.txt
@@ -66,10 +67,12 @@ jobs:
           xcodebuild "${args[@]}" test-without-building -testLanguage en -testRegion US -resultBundlePath TestResults.xcresult \
             -skip-testing:MoeKitTests/InstallerUseEvidenceTests/nativeIdleCurrentUserCoverage
       - name: Verify actual idle installer-use coverage in isolation
+        if: ${{ always() && !cancelled() }}
         env:
           TEST_RUNNER_MOEKIT_INSTALLER_IDLE_FIXTURE: '1'
         run: |
           set -euo pipefail
+          test -d DerivedData/Build/Products/Debug/MoeKitTests.xctest
           xcodebuild -workspace MoeKit.xcworkspace -scheme MoeKit -configuration Debug \
             -destination 'platform=macOS' -derivedDataPath DerivedData \
             CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= \

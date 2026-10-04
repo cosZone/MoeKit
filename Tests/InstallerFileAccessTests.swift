@@ -30,8 +30,9 @@ struct InstallerFileAccessTests {
     func nativeACLPolarity() throws {
         let root = try fixture(), directory = try InstallerDirectoryAnchor.open(root)
         try InstallerFileAccess.validatePrivate(directory.fd, directory: true)
-        // An empty ACL is valid and Darwin acl_get_entry returns -1/EINVAL.
-        let acl = try #require(acl_get_fd_np(directory.fd, ACL_TYPE_EXTENDED))
+        // No ACL on disk is accepted only through a successful filesec query.
+        // A synthetic empty ACL is valid and Darwin returns -1/EINVAL.
+        let acl = try #require(acl_init(0))
         defer { acl_free(UnsafeMutableRawPointer(acl)) }
         #expect(acl_valid(acl) == 0)
         var entry: acl_entry_t?

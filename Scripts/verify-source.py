@@ -88,6 +88,22 @@ for path in sources:
                            and not re.search(r"\b(?:NSTask|NSAppleScript)\s*\(", text))
         require(allowed_adapter or not re.search(pattern, text), f"Execution API outside reviewed adapter: {path.relative_to(ROOT)} ({pattern})")
 
+installer_sources = list((ROOT / "Sources/Installer").glob("*.swift"))
+for path in installer_sources:
+    text = path.read_text()
+    for pattern in (r"\b(?:unlink|unlinkat|rmdir|chmod|fchmod|chown|fchown)\s*\(",
+                    r"\.removeItem\s*\(", r"\.moveItem\s*\(", r"\brenameat\s*\(",
+                    r'"(?:clean|purge|uninstall)"'):
+        require(not re.search(pattern, text), f"Installer must retain data with exclusive moves only: {path.relative_to(ROOT)} ({pattern})")
+helper = ROOT / "Sources/Installer/InstallerUseEvidence.swift"
+if helper.is_file():
+    text = helper.read_text()
+    require(text.count("Process()") == 1, "Installer evidence has one fixed read-only helper")
+    require('process.executableURL = URL(fileURLWithPath: "/usr/bin/hdiutil")' in text,
+            "Installer evidence must use the fixed system helper")
+    require('process.arguments = ["info", "-plist"]' in text,
+            "Installer evidence must use the fixed read-only inventory argv")
+
 process_sources = list((ROOT / "Sources/Processes").glob("*.swift"))
 process_sources += [ROOT / "Sources/Services/NativeProcessInventoryProvider.swift"]
 for path in process_sources:

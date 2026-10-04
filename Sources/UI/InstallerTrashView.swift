@@ -97,7 +97,7 @@ struct InstallerTrashView: View {
             storagePaths(plan.recoveryURL)
             path("Private journal directory", plan.recoveryURL.path)
             path("First recovery record", plan.recoveryURL.appendingPathComponent("000000.json").path)
-            Text("The private MoeKit and InstallerRecovery parent directories and shared operations.lock file may also be created. The lock only coordinates cooperating MoeKit instances; it does not lock out other applications.")
+            Text("The private MoeKit and InstallerRecovery parent directories and shared operations.lock and projects.json.lock files may also be created. The lock only coordinates cooperating MoeKit instances; it does not lock out other applications.")
             Text("After confirmation, MoeKit creates this private operation directory and numbered JSON recovery records inside it. These records persist and disclose the original path only in this private journal. Closing this plan does not create them.")
             Text("No open descriptor or fileport use observed in the checked current-user processes").font(.headline)
             Text("Checks cover current-user vnode file descriptors and fileports, plus mounted disk-image evidence. Memory mappings, other users, system services and files opened after the check are not exhaustively observable. This is not proof that the image is globally unused.")
@@ -132,7 +132,7 @@ struct InstallerTrashView: View {
             storagePaths(plan.receipt.operationURL)
             path("Private journal directory", plan.receipt.operationURL.path)
             path("Next recovery record", plan.receipt.operationURL.appendingPathComponent(String(format: "%06d.json", plan.receipt.sequence + 1)).path)
-            Text("Restore holds the existing shared operations.lock and appends numbered JSON records in this operation directory before namespace changes.")
+            Text("Restore holds the shared operations.lock and projects.json.lock, creating the catalog lock only if missing, and appends numbered JSON records in this operation directory before namespace changes.")
             Text("MoeKit will recheck identities and move this exact recorded file back to its original Downloads path. A collision refuses the operation; there is no overwrite or force option. Journal records persist. Finder Put Back may target private staging instead of the original path.")
             Text("Restore is unavailable after Trash is emptied, required identities or volumes change, or the original destination is occupied.")
                 .font(.caption).foregroundStyle(.secondary)
@@ -175,6 +175,7 @@ struct InstallerTrashView: View {
             path("Private MoeKit parent directory", root.deletingLastPathComponent().path)
             path("Private recovery root", root.path)
             path("Shared operation lock", root.appendingPathComponent("operations.lock").path)
+            path("Shared project-catalog lock", root.deletingLastPathComponent().appendingPathComponent("projects.json.lock").path)
         }
     }
 

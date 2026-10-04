@@ -105,7 +105,12 @@ struct SparkleUpdateTests {
         let store = SparkleUpdateStore(configuration: configuration, isolated: false, defaults: defaults,
                                        makeDriver: { _, preview in driver.includePreviews = preview; return driver })
         #expect(store.includePreviews && driver.includePreviews)
-        store.start(); store.setIncludePreviews(false)
+        store.start()
+        driver.snapshot.sessionInProgress = true; driver.didChange?(driver.snapshot)
+        store.setIncludePreviews(false)
+        #expect(driver.includePreviews)
+        driver.snapshot.sessionInProgress = false; driver.didChange?(driver.snapshot)
+        store.setIncludePreviews(false)
         #expect(!driver.includePreviews)
         let relaunched = SparkleUpdateStore(configuration: configuration, isolated: false, defaults: defaults,
                                             makeDriver: { _, _ in FixtureUpdateDriver() })

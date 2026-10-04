@@ -64,6 +64,6 @@ MoePeek 的现有发布 workflow 未包含测试门禁或 Apple 公证；MoeKit 
 | CLAUDE.md 强调弱引用、窗口/timer 清理、异步取消 | 将窗口生命周期、资源释放和取消作为工程验收项 |
 | 签名配置以被忽略的本地文件和 `.example` 区分 | 不提交凭据或本机签名信息；提供不含秘密的配置样例 |
 
-MoePeek 的参考构建步骤是 `tuist install`、`tuist generate --no-open`，再使用 xcodebuild；这些不能直接当成 MoeKit 当前的运行说明。工程生成并实际构建成功后，再记录 MoeKit 自己的准确 scheme、配置和命令。
+MoeKit 接入固定版本 Sparkle 后，先运行 `mise exec -- tuist install` 安装已锁定依赖，再运行 `mise exec -- tuist generate --no-open`，随后用仓库 README 中的 xcodebuild 命令构建。开发、演示与测试构建不会启动自动更新器；签名发布另走审查后的工作流。
 
 现有参考 release workflow 没有覆盖测试与公证步骤。MoeKit 可学习其组织方式，但应在自身发行门槛中补齐相应验证，不沿用这项缺口。参考项目的已观察结构不等于允许复制其源码；拟复用任何文件之前仍需核实许可与适用性。

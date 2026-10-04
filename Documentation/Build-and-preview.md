@@ -13,6 +13,7 @@
 ```sh
 python3 Scripts/verify-source.py
 mise install
+mise exec -- tuist install
 mise exec -- tuist generate --no-open
 open MoeKit.xcworkspace
 ```

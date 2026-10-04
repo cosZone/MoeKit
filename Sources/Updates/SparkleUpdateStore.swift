@@ -8,6 +8,7 @@ struct AppUpdateSnapshot: Equatable {
     var checksAutomatically = false
     var downloadsAutomatically = false
     var allowsAutomaticUpdates = false
+    var sessionInProgress = false
     var lastChecked: Date?
 }
 
@@ -77,7 +78,7 @@ final class SparkleUpdateStore {
         if let driver { snapshot = driver.snapshot }
     }
     func setIncludePreviews(_ enabled: Bool) {
-        guard isStarted, enabled != includePreviews else { return }
+        guard isStarted, !snapshot.sessionInProgress, enabled != includePreviews else { return }
         includePreviews = enabled
         defaults?.set(enabled, forKey: Self.previewPreference)
         driver?.includePreviews = enabled
@@ -106,7 +107,7 @@ private final class SparkleUpdateDriver: NSObject, AppUpdateDriving, SPUUpdaterD
         return AppUpdateSnapshot(canCheck: updater.canCheckForUpdates,
             checksAutomatically: updater.automaticallyChecksForUpdates,
             downloadsAutomatically: updater.automaticallyDownloadsUpdates,
-            allowsAutomaticUpdates: updater.allowsAutomaticUpdates, lastChecked: updater.lastUpdateCheckDate)
+            allowsAutomaticUpdates: updater.allowsAutomaticUpdates, sessionInProgress: updater.sessionInProgress, lastChecked: updater.lastUpdateCheckDate)
     }
 
     func start() throws {
@@ -118,6 +119,7 @@ private final class SparkleUpdateDriver: NSObject, AppUpdateDriving, SPUUpdaterD
         updater.publisher(for: \.automaticallyChecksForUpdates).sink { [weak self] _ in self?.refresh() }.store(in: &observations)
         updater.publisher(for: \.automaticallyDownloadsUpdates).sink { [weak self] _ in self?.refresh() }.store(in: &observations)
         updater.publisher(for: \.allowsAutomaticUpdates).sink { [weak self] _ in self?.refresh() }.store(in: &observations)
+        updater.publisher(for: \.sessionInProgress).sink { [weak self] _ in self?.refresh() }.store(in: &observations)
         updater.publisher(for: \.lastUpdateCheckDate).sink { [weak self] _ in self?.refresh() }.store(in: &observations)
     }
 

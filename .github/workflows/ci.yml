@@ -160,6 +160,7 @@ jobs:
           python3 Scripts/verify-source.py
           python3 Scripts/test-preview-release.py
           python3 Scripts/test-ui-render-artifacts.py
+          python3 Scripts/test-sparkle-render-artifacts.py
           python3 Scripts/test-mole-supervisor.py
           python3 Scripts/test-git-object-inspector.py
           python3 Scripts/test-installer-fixture-evidence.py
@@ -212,6 +213,7 @@ jobs:
             -only-testing:MoeKitTests/UISnapshotTests/testFirstUseWorkspacesRender \
             -only-testing:MoeKitTests/UISnapshotTests/testSettingsModeGuidanceRenders \
             -only-testing:MoeKitTests/ReleaseCheckViewTests/testUpdatePanelAndHiddenIconsRender \
+            -only-testing:MoeKitTests/AutomaticUpdateSettingsTests/testAutomaticUpdateSettingsRender \
             -only-testing:MoeKitTests/ToolPreparationViewTests/testToolPreparationRenders \
             -only-testing:MoeKitTests/MoleAnalysisViewTests/testAnalysisSheetRenders \
             -only-testing:MoeKitTests/InstallerTrashViewTests/testInstallerConfirmationRenders \
@@ -262,11 +264,13 @@ jobs:
           if [ -d TestResults.xcresult ]; then
             xcrun xcresulttool export attachments --path TestResults.xcresult --output-path UIRenderArtifacts
             python3 Scripts/verify-ui-render-artifacts.py UIRenderArtifacts en
+            python3 Scripts/verify-sparkle-render-artifacts.py UIRenderArtifacts en
             python3 Scripts/verify-cache-render-artifacts.py UIRenderArtifacts en
           fi
           if [ -d ChineseRenderResults.xcresult ]; then
             xcrun xcresulttool export attachments --path ChineseRenderResults.xcresult --output-path ChineseUIRenderArtifacts
             python3 Scripts/verify-ui-render-artifacts.py ChineseUIRenderArtifacts zh-Hans
+            python3 Scripts/verify-sparkle-render-artifacts.py ChineseUIRenderArtifacts zh-Hans
             python3 Scripts/verify-cache-render-artifacts.py ChineseUIRenderArtifacts zh-Hans
           fi
       - name: Preserve owned-view render evidence

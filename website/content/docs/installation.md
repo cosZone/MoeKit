@@ -11,7 +11,7 @@ description: 先核对来源和版本，再了解 macOS 的安全提示。
 
 ## 获取可用产物
 
-当前已交付 [0.1.0-preview.7 开发签名预览](https://github.com/cosZone/MoeKit/releases/tag/v0.1.0-preview.7)，提供 DMG 与 ZIP，包内是同一份 universal Release App，并附校验和与构建信息。本版新增精确分析器下载指引、逐次确认的单个 Downloads 磁盘映像废纸篓与凭据恢复，并保留官方固定版本 Mole 目录分析；使用 Apple Development 签名，未公证。文档网站独立构建，不是安装包组件。
+当前已交付 [0.1.0-preview.8 开发签名预览](https://github.com/cosZone/MoeKit/releases/tag/v0.1.0-preview.8)，提供 DMG 与 ZIP，包内是同一份 universal Release App，并附校验和与构建信息。本版新增逐次确认的精确进程停止、原生多缓存废纸篓、原路径恢复和另行确认的记录内缓存永久删除；保留官方固定版本 Mole 分析、精确下载指引与单个 Downloads 磁盘映像操作。使用 Apple Development 签名，未公证。精确测试与下载验证见 [版本记录](/changelog/0.1.0-preview.8)；文档网站独立构建，不是安装包组件。
 
 先查看 [GitHub Releases](https://github.com/cosZone/MoeKit/releases)。只有实际发布页中附带的文件才是已交付版本；文档中的版本计划或示例号不构成下载承诺。
 
@@ -24,7 +24,7 @@ description: 先核对来源和版本，再了解 macOS 的安全提示。
 只下载 DMG 时，在文件所在目录执行，并将结果与 `SHA256SUMS.txt` 中的同名条目对照：
 
 ```sh
-shasum -a 256 MoeKit-v0.1.0-preview.7-macOS.dmg
+shasum -a 256 MoeKit-v0.1.0-preview.8-macOS.dmg
 ```
 
 如果 DMG、ZIP、`BUILD_INFO.json` 和校验和文件全部已下载到同一目录，可一次检查全部：
@@ -50,6 +50,12 @@ MoeKit 不附带或自动安装 Mole。先确认已有分析器与 [官方 V1.57
 分析使用普通用户权限，不是 OS 沙箱；确认会说明私有副本、缓存和临时目录写入。Mole 分析本身不会修改或删除所选内容。preview.7 另有独立复查并确认的原生文件操作：从当前真实 Downloads 分析中选择一个受支持的直属 `.dmg`，移到废纸篓或凭记录另行确认恢复；不覆盖、不清空废纸篓，不提供广域 Mole 清理。
 
 使用该操作前，先将 App 安装到 Applications，并只自行推出自己打开的磁盘映像；系统管理的映像不要触碰。首版要求完整空映像清单，系统映像存在时可能持续不可用。完整范围、取消与恢复限制见 [Mole 空间分析与报告](/docs/mole)。
+
+## 使用本版的缓存与进程操作
+
+缓存操作从 **Tools → Mole → Cleanup** 主动检查开始，每批最多 16 项。支持用户缓存直属目录，或当前用户主目录内带有效 `CACHEDIR.TAG` 的受支持直属候选目录；完整清单、项目保护与本地 APFS 检查通过后，仍须确认相关工作已停止且内容可重新生成，才能移入原生废纸篓。恢复不覆盖；永久删除只针对本应用已完成的缓存记录，另行确认且不可恢复。永久删除也不保证立即等量释放物理空间。详见 [Mole 页面](/docs/mole)。
+
+**Tools → Processes & Ports** 支持主动扫描后复查 1–16 个精确、非受保护的当前用户身份，单次确认 SIGTERM；仍运行的同一身份才可重新复查并确认 SIGKILL。浏览器／共享服务等仍受保护，不按名称、组或父子关系扩展选择。发送信号可能影响未保存工作和依赖任务；详见 [进程与端口](/docs/processes)。
 
 ## 签名和公证是不同的事
 

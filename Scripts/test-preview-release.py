@@ -4,6 +4,7 @@ import ast
 import importlib.util
 from contextlib import redirect_stderr, redirect_stdout
 import io
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -54,13 +55,35 @@ def write_notes(context):
 def signed_metadata(context, *, digest="c" * 64, artifacts=None, notes_hash="d" * 64):
     info = release.metadata(context)
     info.update(signing="Apple Development", signature_verified=True, expected_team_verified=True,
-                entitlements={}, app_content_sha256=digest,
+                entitlements={}, hardened_runtime=True, code_objects_verified=[release.HELPER_PATH, "."],
+                app_content_sha256=digest,
                 artifacts=artifacts or {name: "e" * 64 for name in release.package_names(context)},
                 release_notes_sha256=notes_hash,
                 package_verification={"dmg_integrity": True, "dmg_read_only": True,
                                       "dmg_app_signature_verified": True, "zip_app_signature_verified": True,
                                       "identical_app_content": True})
     return info
+
+
+SYNTHETIC_MACHO = bytes.fromhex("cffaedfe") + b"synthetic fixture, never executed"
+
+
+def write_zip_code(archive):
+    for relative in sorted(release.EXECUTABLE_PATHS):
+        item = zipfile.ZipInfo("MoeKit.app/" + relative)
+        item.create_system = 3
+        item.external_attr = 0o100755 << 16
+        archive.writestr(item, SYNTHETIC_MACHO)
+
+
+def synthetic_app(parent):
+    app = parent / "MoeKit.app"
+    (app / "Contents/MacOS").mkdir(parents=True)
+    (app / "Contents/Info.plist").write_bytes(plistlib.dumps(valid_plist()))
+    for relative in release.EXECUTABLE_PATHS:
+        (app / relative).write_bytes(SYNTHETIC_MACHO)
+        (app / relative).chmod(0o755)
+    return app
 
 
 def compile_native_fixture(temporary, executable):
@@ -140,6 +163,7 @@ class Artifacts(unittest.TestCase):
         path = self.directory / "app.zip"
         with zipfile.ZipFile(path, "w") as archive:
             archive.writestr("MoeKit.app/Contents/Info.plist", plistlib.dumps(info or valid_plist()))
+            write_zip_code(archive)
             if extra:
                 archive.writestr(*extra)
         return path
@@ -199,6 +223,240 @@ class Artifacts(unittest.TestCase):
             release.check_metadata(info, self.context, signed=True)
 
 
+class BundleCodeLayout(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp.name)
+        self.app = synthetic_app(self.root)
+        self.context = release.validate_inputs(valid_environment())
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def verify(self):
+        with patch.object(release, "text_run", return_value="arm64 x86_64") as command:
+            release.verify_app(self.app, self.context)
+        return command
+
+    def test_only_two_exact_executables_and_both_architectures(self):
+        command = self.verify()
+        self.assertEqual({call.args[2] for call in command.call_args_list},
+                         {str(self.app / relative) for relative in release.EXECUTABLE_PATHS})
+        self.assertEqual(len(command.call_args_list), 2)
+        for bad_architectures in ("arm64", "x86_64", "arm64 x86_64 i386", ""):
+            with self.subTest(architectures=bad_architectures):
+                for broken in release.EXECUTABLE_PATHS:
+                    def architectures(*args, operation):
+                        return bad_architectures if args[2] == str(self.app / broken) else "arm64 x86_64"
+                    with patch.object(release, "text_run", side_effect=architectures), self.assertRaises(release.ReleaseError):
+                        release.verify_app(self.app, self.context)
+
+    def test_missing_renamed_text_or_nonexecutable_helper_fails(self):
+        helper = self.app / release.HELPER_PATH
+        helper.unlink()
+        with self.assertRaises(release.ReleaseError):
+            self.verify()
+        helper.write_bytes(b"#!/bin/sh\nexit 0\n")
+        helper.chmod(0o755)
+        with self.assertRaises(release.ReleaseError):
+            self.verify()
+        helper.write_bytes(SYNTHETIC_MACHO)
+        helper.chmod(0o644)
+        with self.assertRaises(release.ReleaseError):
+            self.verify()
+        helper.chmod(0o755)
+        helper.rename(helper.with_name("OtherSupervisor"))
+        with self.assertRaises(release.ReleaseError):
+            self.verify()
+
+    def test_additional_code_and_nested_bundles_fail_closed(self):
+        for relative, data, mode in (("Contents/MacOS/analyze-go", SYNTHETIC_MACHO, 0o755),
+                                     ("Contents/Resources/helper", SYNTHETIC_MACHO, 0o644),
+                                     ("Contents/Resources/script", b"#!/bin/sh", 0o755),
+                                     ("Contents/Helpers/helper", b"plain", 0o644),
+                                     ("Contents/embedded.provisionprofile", b"plain", 0o644),
+                                     ("unexpected.txt", b"plain", 0o644)):
+            with self.subTest(path=relative):
+                path = self.app / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(data)
+                path.chmod(mode)
+                with self.assertRaises(release.ReleaseError):
+                    self.verify()
+                path.unlink()
+                if relative.startswith("Contents/Helpers/"):
+                    path.parent.rmdir()
+        for relative in ("Contents/Frameworks", "Contents/Resources/Hidden.app", "Contents/Resources/Hidden.bundle"):
+            path = self.app / relative
+            path.mkdir(parents=True)
+            with self.subTest(path=relative), self.assertRaises(release.ReleaseError):
+                self.verify()
+            path.rmdir()
+
+    def test_helper_symlink_and_parent_directory_symlink_fail_before_tool_use(self):
+        helper = self.app / release.HELPER_PATH
+        helper.unlink()
+        helper.symlink_to(self.app / "Contents/MacOS/MoeKit")
+        with patch.object(release, "text_run") as command, self.assertRaises(release.ReleaseError):
+            release.verify_app(self.app, self.context)
+        command.assert_not_called()
+        helper.unlink()
+        macos = self.app / "Contents/MacOS"
+        macos.rename(self.root / "foreign")
+        macos.symlink_to(self.root / "foreign", target_is_directory=True)
+        with patch.object(release, "text_run") as command, self.assertRaises(release.ReleaseError):
+            release.verify_app(self.app, self.context)
+        command.assert_not_called()
+
+    def test_zip_rejects_missing_helper_extra_code_and_nonexecutable_helper(self):
+        for variant in ("missing", "extra", "not-executable", "not-macho"):
+            archive_path = self.root / "fixture.zip"
+            with zipfile.ZipFile(archive_path, "w") as archive:
+                archive.writestr("MoeKit.app/Contents/Info.plist", plistlib.dumps(valid_plist()))
+                for relative in sorted(release.EXECUTABLE_PATHS):
+                    if variant == "missing" and relative == release.HELPER_PATH:
+                        continue
+                    item = zipfile.ZipInfo("MoeKit.app/" + relative)
+                    item.create_system = 3
+                    item.external_attr = (0o100644 if variant == "not-executable" and relative == release.HELPER_PATH
+                                          else 0o100755) << 16
+                    archive.writestr(item, b"text" if variant == "not-macho" and relative == release.HELPER_PATH
+                                     else SYNTHETIC_MACHO)
+                if variant == "extra":
+                    archive.writestr("MoeKit.app/Contents/Resources/hidden", SYNTHETIC_MACHO)
+            with self.subTest(variant=variant), self.assertRaises(release.ReleaseError):
+                release.inspect_zip(archive_path, self.context)
+
+    def test_metadata_requires_exact_helper_provenance_and_verification(self):
+        original = signed_metadata(self.context)
+        for field, value in (("embedded_code", {}), ("code_objects_verified", ["."]),
+                             ("code_objects_verified", [release.HELPER_PATH, ".", "other"]),
+                             ("hardened_runtime", False)):
+            with self.subTest(field=field), self.assertRaises(release.ReleaseError):
+                release.check_metadata(original | {field: value}, self.context, signed=True)
+
+    def test_helper_bytes_participate_in_zip_and_dmg_equality(self):
+        digest = release.app_content_digest(self.app)
+        (self.root / "Applications").symlink_to("/Applications")
+        (self.app / release.HELPER_PATH).write_bytes(SYNTHETIC_MACHO + b"modified")
+        self.assertNotEqual(digest, release.app_content_digest(self.app))
+        with patch.object(release, "verify_app"), patch.object(release, "verify_code_objects") as verify:
+            with self.assertRaises(release.ReleaseError):
+                release.verify_dmg_contents(self.root, self.context, digest)
+            verify.assert_not_called()
+
+
+class CodeObjectSigning(unittest.TestCase):
+    def setUp(self):
+        self.app = Path("synthetic/MoeKit.app")
+        self.identity = hashlib.sha1(b"synthetic certificate").hexdigest().upper()
+        self.team = "A1B2C3D4E5"
+
+    def display(self, *args, operation):
+        identifier = release.HELPER_ID if args[-1].endswith("MoleAnalysisSupervisor") else release.BUNDLE_ID
+        details = (f"Identifier={identifier}\nCodeDirectory v=20500 size=10 flags=0x10000(runtime) hashes=1+0\n"
+                   f"Authority=Apple Development: Synthetic Fixture\nTeamIdentifier={self.team}\n")
+        return subprocess.CompletedProcess(args, 0, stdout=b"", stderr=details.encode())
+
+    def test_explicit_inside_out_signing_uses_same_identity_and_no_entitlements(self):
+        keychain = Path("synthetic/preview.keychain-db")
+        with patch.object(release, "run") as command:
+            release.sign_code_objects(self.app, self.identity, keychain)
+        self.assertEqual(len(command.call_args_list), 2)
+        for call, (path, identifier) in zip(command.call_args_list, release.code_objects(self.app)):
+            self.assertEqual(call.args, ("/usr/bin/codesign", "--force", "--sign", self.identity,
+                                        "--keychain", str(keychain), "--identifier", identifier,
+                                        "--options", "runtime", "--timestamp=none", str(path)))
+            self.assertEqual(call.kwargs, {"operation": "codesign-sign"})
+            self.assertNotIn("--deep", call.args)
+            self.assertNotIn("--preserve-metadata", call.args)
+            self.assertNotIn("--entitlements", call.args)
+
+    def test_each_architecture_has_identifier_runtime_entitlements_and_strict_requirement_checks(self):
+        with patch.object(release, "run", return_value=b"") as command, patch.object(release, "captured_run", side_effect=self.display) as display:
+            release.verify_code_objects(self.app)
+        self.assertEqual(len(display.call_args_list), 4)
+        pairs = {(call.args[-1], call.args[3]) for call in display.call_args_list}
+        self.assertEqual(pairs, {(str(path), architecture) for path, _ in release.code_objects(self.app)
+                                 for architecture in release.ARCHITECTURES})
+        verifications = [call for call in command.call_args_list if call.kwargs["operation"] == "codesign-verify"]
+        self.assertEqual(len(verifications), 2)
+        for call, (path, identifier) in zip(verifications, release.code_objects(self.app)):
+            self.assertEqual(call.args, ("/usr/bin/codesign", "--verify", "--strict", "--all-architectures",
+                                        f'-R=identifier "{identifier}"', str(path)))
+        entitlements = [call for call in command.call_args_list if call.kwargs["operation"] == "entitlements-read"]
+        self.assertEqual({(call.args[-1], call.args[3]) for call in entitlements}, pairs)
+
+    def test_bad_identifier_runtime_or_nonhost_entitlements_fail(self):
+        for variant in ("identifier", "runtime", "entitlements"):
+            def display(*args, operation):
+                result = self.display(*args, operation=operation)
+                if args[-1].endswith("MoleAnalysisSupervisor") and args[3] == "x86_64":
+                    if variant == "identifier":
+                        result.stderr = result.stderr.replace(release.HELPER_ID.encode(), b"com.invalid.helper")
+                    elif variant == "runtime":
+                        result.stderr = result.stderr.replace(b"flags=0x10000(runtime)", b"flags=0x0(none)")
+                return result
+            def command(*args, operation):
+                if (variant == "entitlements" and operation == "entitlements-read" and
+                        args[-1].endswith("MoleAnalysisSupervisor") and args[3] == "x86_64"):
+                    return plistlib.dumps({"com.apple.security.get-task-allow": True})
+                return b""
+            with self.subTest(variant=variant), patch.object(release, "run", side_effect=command), patch.object(release, "captured_run", side_effect=display):
+                with self.assertRaises(release.ReleaseError):
+                    release.verify_code_objects(self.app)
+
+    def verify_development(self, temporary, *, wrong_certificate=False, display=None, reject_requirement=False):
+        calls = []
+        def command(*args, operation):
+            calls.append((args, operation))
+            if operation == "codesign-verify" and reject_requirement and "certificate leaf" in args[-2]:
+                raise release.ReleaseError("Synthetic requirement mismatch.")
+            if operation == "certificate-extract":
+                prefix = next(argument.split("=", 1)[1] for argument in args if argument.startswith("--extract-certificates="))
+                data = b"synthetic certificate"
+                if wrong_certificate and args[-1].endswith("MoleAnalysisSupervisor") and args[3] == "x86_64":
+                    data = b"different synthetic certificate"
+                Path(prefix + "0").write_bytes(data)
+            return b""
+        with patch.object(release, "run", side_effect=command), patch.object(release, "captured_run", side_effect=display or self.display):
+            release.verify_development_signatures(self.app, self.identity, self.team, temporary)
+        return calls
+
+    def test_exact_development_signer_requirement_and_certificate_checked_for_both_slices(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            calls = self.verify_development(Path(temporary))
+        extractions = [args for args, operation in calls if operation == "certificate-extract"]
+        self.assertEqual(len(extractions), 4)
+        self.assertEqual(len({args[4] for args in extractions}), 4)
+        requirements = [args[-2] for args, operation in calls
+                        if operation == "codesign-verify" and "certificate leaf" in args[-2]]
+        self.assertEqual(requirements, [f'-R=identifier "{identifier}" and anchor apple generic '
+                                      f'and certificate leaf = H"{self.identity}" and certificate leaf[subject.OU] = "{self.team}"'
+                                      for _, identifier in release.code_objects(self.app)])
+
+    def test_wrong_helper_certificate_or_failed_requirement_is_fatal(self):
+        for kwargs in ({"wrong_certificate": True}, {"reject_requirement": True}):
+            with tempfile.TemporaryDirectory() as temporary, self.subTest(kwargs=kwargs), self.assertRaises(release.ReleaseError):
+                self.verify_development(Path(temporary), **kwargs)
+
+    def test_wrong_helper_team_or_ad_hoc_signature_is_fatal(self):
+        for replacement in (b"TeamIdentifier=WRONGTEAM1", b"Signature=adhoc"):
+            def display(*args, operation):
+                result = self.display(*args, operation=operation)
+                if args[-1].endswith("MoleAnalysisSupervisor") and args[3] == "x86_64":
+                    result.stderr = result.stderr.replace(f"TeamIdentifier={self.team}".encode(), replacement)
+                return result
+            with tempfile.TemporaryDirectory() as temporary, self.subTest(replacement=replacement), self.assertRaises(release.ReleaseError):
+                self.verify_development(Path(temporary), display=display)
+
+    def test_invalid_identity_inputs_never_reach_codesign(self):
+        with patch.object(release, "run") as command:
+            for identity, team in (("not-a-hash", self.team), (self.identity, 'bad"team')):
+                with self.assertRaises(release.ReleaseError):
+                    release.verify_development_signatures(self.app, identity, team, Path("synthetic"))
+        command.assert_not_called()
+
 class TagSafety(unittest.TestCase):
     class API:
         def __init__(self, responses):
@@ -240,6 +498,7 @@ class Publication(unittest.TestCase):
         self.dmg_name, self.zip_name = release.package_names(self.context)
         with zipfile.ZipFile(directory / self.zip_name, "w") as archive:
             archive.writestr("MoeKit.app/Contents/Info.plist", plistlib.dumps(valid_plist()))
+            write_zip_code(archive)
         (directory / self.dmg_name).write_bytes(b"Synthetic DMG fixture; native validation is tested on macOS.")
         notes = write_notes(self.context)
         info = signed_metadata(self.context, digest=release.inspect_zip(directory / self.zip_name, self.context),
@@ -468,12 +727,7 @@ class DmgSafety(unittest.TestCase):
         self.temp.cleanup()
 
     def app(self, parent):
-        app = parent / "MoeKit.app"
-        (app / "Contents/MacOS").mkdir(parents=True)
-        (app / "Contents/Info.plist").write_bytes(plistlib.dumps(valid_plist()))
-        (app / "Contents/MacOS/MoeKit").write_bytes(b"synthetic executable fixture")
-        (app / "Contents/MacOS/MoeKit").chmod(0o755)
-        return app
+        return synthetic_app(parent)
 
     def test_content_digest_covers_signature_and_all_paths(self):
         app = self.app(Path(self.temp.name))
@@ -491,9 +745,9 @@ class DmgSafety(unittest.TestCase):
         app = self.app(root)
         digest = release.app_content_digest(app)
         (root / "Applications").symlink_to("/Applications")
-        with patch.object(release, "verify_app"), patch.object(release, "run") as run:
+        with patch.object(release, "verify_app"), patch.object(release, "verify_code_objects") as verify:
             release.verify_dmg_contents(root, self.context, digest)
-            self.assertEqual(run.call_args.kwargs["operation"], "codesign-verify-dmg")
+            verify.assert_called_once_with(app)
             (app / "Contents/MacOS/MoeKit").write_bytes(b"different app")
             with self.assertRaises(release.ReleaseError):
                 release.verify_dmg_contents(root, self.context, digest)
@@ -675,9 +929,10 @@ class NativeDmgIntegration(unittest.TestCase):
                 (app / "Contents/MacOS").mkdir(parents=True)
                 (app / "Contents/Info.plist").write_bytes(plistlib.dumps(valid_plist()))
                 compile_native_fixture(temporary, app / "Contents/MacOS/MoeKit")
-                release.run("/usr/bin/codesign", "--force", "--sign", "-", "--options", "runtime",
-                            "--timestamp=none", str(app), operation="codesign-sign")
+                compile_native_fixture(temporary, app / release.HELPER_PATH)
+                release.sign_code_objects(app, "-")
                 release.verify_app(app, context)
+                release.verify_code_objects(app)
                 digest = release.app_content_digest(app)
                 dmg_name, zip_name = release.package_names(context)
                 release.run("/usr/bin/ditto", "-c", "-k", "--sequesterRsrc", "--keepParent", str(app),
@@ -687,8 +942,8 @@ class NativeDmgIntegration(unittest.TestCase):
                             operation="archive-round-trip")
                 unpacked = temporary / "round-trip/MoeKit.app"
                 self.assertEqual(release.app_content_digest(unpacked), digest)
-                release.run("/usr/bin/codesign", "--verify", "--deep", "--strict", "--all-architectures", str(unpacked),
-                            operation="codesign-verify-packaged")
+                release.verify_app(unpacked, context)
+                release.verify_code_objects(unpacked)
                 release.package_dmg(unpacked, temporary / dmg_name, temporary, context, digest)
                 self.assertTrue((temporary / dmg_name).is_file())
                 self.assertFalse(release.dmg_mountpoint().exists())
@@ -698,6 +953,70 @@ class NativeDmgIntegration(unittest.TestCase):
                 release.cleanup_dmg_mount()
                 if not release.dmg_mountpoint().exists():
                     shutil.rmtree(temporary)
+
+    def test_native_helper_failures_are_not_hidden_by_parent_signature(self):
+        # Every input is compiled here and never launched. No keychain or network.
+        with tempfile.TemporaryDirectory(prefix="moekit-code-test-") as name:
+            temporary = Path(name)
+            app = temporary / "MoeKit.app"
+            (app / "Contents/MacOS").mkdir(parents=True)
+            (app / "Contents/Info.plist").write_bytes(plistlib.dumps(valid_plist()))
+            for relative in release.EXECUTABLE_PATHS:
+                compile_native_fixture(temporary, app / relative)
+            release.sign_code_objects(app, "-")
+            release.verify_code_objects(app)
+            entitlements = temporary / "fixture-entitlements.plist"
+            entitlements.write_bytes(plistlib.dumps({"com.apple.security.get-task-allow": True}))
+            context = release.validate_inputs(valid_environment())
+            for variant in ("identifier", "runtime", "entitlements", "tampered", "thin", "unsigned"):
+                with self.subTest(variant=variant):
+                    altered = temporary / variant / "MoeKit.app"
+                    shutil.copytree(app, altered)
+                    helper = altered / release.HELPER_PATH
+                    if variant in {"identifier", "runtime", "entitlements"}:
+                        extra = ("--entitlements", str(entitlements)) if variant == "entitlements" else ()
+                        release.run("/usr/bin/codesign", "--force", "--sign", "-", "--identifier",
+                                    "com.invalid.helper" if variant == "identifier" else release.HELPER_ID,
+                                    "--options", "0" if variant == "runtime" else "runtime", "--timestamp=none",
+                                    *extra, str(helper), operation="codesign-sign")
+                    elif variant == "tampered":
+                        with helper.open("r+b") as stream:
+                            # Flip a signed Mach-O header flag in the first
+                            # universal slice, not unsealed signature padding.
+                            header = stream.read(24)
+                            self.assertIn(header[:4], {bytes.fromhex("cafebabe"), bytes.fromhex("cafebabf")})
+                            width = 8 if header[:4] == bytes.fromhex("cafebabf") else 4
+                            offset = int.from_bytes(header[16:16 + width], "big") + 24
+                            stream.seek(offset)
+                            original = stream.read(1)
+                            stream.seek(offset)
+                            stream.write(bytes([original[0] ^ 0x01]))
+                    elif variant == "thin":
+                        thin = temporary / "thin-helper"
+                        release.run("/usr/bin/lipo", str(helper), "-thin", "arm64", "-output", str(thin),
+                                    operation="app-architectures")
+                        thin.replace(helper)
+                    else:
+                        release.run("/usr/bin/codesign", "--remove-signature", str(helper), operation="codesign-sign")
+                    # Re-seal the parent for valid but wrongly-configured helper
+                    # signatures. The verifier must still inspect helper policy.
+                    if variant in {"identifier", "runtime", "entitlements", "thin"}:
+                        release.run("/usr/bin/codesign", "--force", "--sign", "-", "--identifier", release.BUNDLE_ID,
+                                    "--options", "runtime", "--timestamp=none", str(altered), operation="codesign-sign")
+                    if variant == "thin":
+                        with self.assertRaises(release.ReleaseError):
+                            release.verify_app(altered, context)
+                    else:
+                        release.verify_app(altered, context)
+                        with self.assertRaises(release.ReleaseError):
+                            release.verify_code_objects(altered)
+                    if variant == "entitlements":
+                        # Production re-signing must remove the old helper's
+                        # entitlements, rather than preserve them implicitly.
+                        release.sign_code_objects(altered, "-")
+                        release.verify_app(altered, context)
+                        release.verify_code_objects(altered)
+
 
 
 class SafeCommandDiagnostics(unittest.TestCase):
@@ -979,8 +1298,8 @@ class KeychainSearchRegistration(unittest.TestCase):
                                   if isinstance(node, ast.Expr) and isinstance(node.value, ast.Call) and
                                   isinstance(node.value.func, ast.Name) and node.value.func.id == "register_signing_keychain")
         following = guarded.body[registration_index + 1].value
-        self.assertEqual(following.func.id, "run")
-        self.assertEqual(next(item.value.value for item in following.keywords if item.arg == "operation"), "codesign-sign")
+        self.assertEqual(following.func.id, "sign_code_objects")
+        self.assertEqual([node.id for node in following.args], ["app", "identity", "keychain"])
         self.assertEqual(len(guarded.finalbody), 1)
         self.assertEqual(guarded.finalbody[0].value.func.id, "cleanup")
 

@@ -45,12 +45,13 @@ struct MoleAnalysisFilesTests {
         try fixture { base in
             let source = base.appendingPathComponent("fixture-binary")
             let bytes = Data("synthetic binary bytes only; never executed".utf8)
-            try bytes.write(to: source); #expect(chmod(source.path, 0o500) == 0)
+            try bytes.write(to: source); try #require(chmod(source.path, 0o700) == 0)
             let fd = try MoleAnalysisFiles.openPath(source, directory: false)
             defer { close(fd) }
             let marker = Data("preserved".utf8)
             let set = marker.withUnsafeBytes { fsetxattr(fd, "com.moekit.test-origin", $0.baseAddress, $0.count, 0, 0) }
-            #expect(set == 0)
+            try #require(set == 0)
+            try #require(fchmod(fd, 0o500) == 0)
             let release = fixtureRelease(bytes)
             let session = try MolePrivateSession(parent: base.appendingPathComponent("private"), sourceFD: fd, release: release)
             let staged = try MoleAnalysisFiles.openPath(session.executable, directory: false)
@@ -69,16 +70,66 @@ struct MoleAnalysisFilesTests {
         }
     }
 
+    @Test("Staging refuses a source that grew or truncated after its pin and caps target bytes", arguments: [false, true])
+    func boundedCopy(grew: Bool) throws {
+        try fixture { base in
+            let original = Data(repeating: 65, count: 1024)
+            let changed = grew ? original + Data(repeating: 66, count: 1024) : Data(original.prefix(100))
+            let source = base.appendingPathComponent("source")
+            let target = base.appendingPathComponent("target")
+            try changed.write(to: source)
+            let sourceFD = try MoleAnalysisFiles.openPath(source, directory: false)
+            defer { close(sourceFD) }
+            let targetFD = open(target.path, O_CREAT | O_EXCL | O_RDWR | O_CLOEXEC, 0o600)
+            try #require(targetFD >= 0)
+            defer { close(targetFD) }
+            #expect(throws: MoleAnalysisFailure.changedSelection) {
+                try MoleAnalysisFiles.copyPinnedBytesAndAttributes(from: sourceFD, to: targetFD, release: fixtureRelease(original))
+            }
+            var info = stat()
+            try #require(fstat(targetFD, &info) == 0)
+            #expect(info.st_size <= original.count)
+        }
+    }
+
+    @Test("Cancelled staging creates no copied payload")
+    func cancelledCopy() async throws {
+        let base = (try MoleAnalysisFiles.canonicalURL(FileManager.default.temporaryDirectory)).appendingPathComponent("MoeKit-cancel-copy-\(UUID())")
+        try FileManager.default.createDirectory(at: base, withIntermediateDirectories: false)
+        defer { try? FileManager.default.removeItem(at: base) }
+        let source = base.appendingPathComponent("source")
+        let target = base.appendingPathComponent("target")
+        let data = Data(repeating: 65, count: 128 * 1024)
+        try data.write(to: source)
+        let release = fixtureRelease(data)
+        let sourceFD = try MoleAnalysisFiles.openPath(source, directory: false)
+        let targetFD = open(target.path, O_CREAT | O_EXCL | O_RDWR | O_CLOEXEC, 0o600)
+        try #require(targetFD >= 0)
+        defer { close(sourceFD); close(targetFD) }
+        let cancelled = await Task.detached {
+            withUnsafeCurrentTask { $0?.cancel() }
+            do {
+                try MoleAnalysisFiles.copyPinnedBytesAndAttributes(from: sourceFD, to: targetFD, release: release)
+                return false
+            } catch { return error is CancellationError }
+        }.value
+        #expect(cancelled)
+        var info = stat()
+        try #require(fstat(targetFD, &info) == 0)
+        #expect(info.st_size == 0)
+    }
+
     @Test("Quarantine is refused and never removed")
     func quarantine() throws {
         try fixture { base in
             let file = base.appendingPathComponent("binary")
             let bytes = Data("synthetic".utf8)
-            try bytes.write(to: file); #expect(chmod(file.path, 0o500) == 0)
+            try bytes.write(to: file); try #require(chmod(file.path, 0o700) == 0)
             let fd = try MoleAnalysisFiles.openPath(file, directory: false)
             defer { close(fd) }
             let attr = Data("0081;fixture;MoeKitTest;".utf8)
-            #expect(attr.withUnsafeBytes { fsetxattr(fd, "com.apple.quarantine", $0.baseAddress, $0.count, 0, 0) } == 0)
+            try #require(attr.withUnsafeBytes { fsetxattr(fd, "com.apple.quarantine", $0.baseAddress, $0.count, 0, 0) } == 0)
+            try #require(fchmod(fd, 0o500) == 0)
             #expect(throws: MoleAnalysisFailure.quarantinedBinary) { try MoleAnalysisFiles.verifyAnalyzer(fd, release: fixtureRelease(bytes)) }
             #expect(fgetxattr(fd, "com.apple.quarantine", nil, 0, 0, 0) == attr.count)
         }
@@ -89,7 +140,7 @@ struct MoleAnalysisFilesTests {
         try fixture { base in
             let source = base.appendingPathComponent("fixture")
             let bytes = Data("fixture".utf8)
-            try bytes.write(to: source); #expect(chmod(source.path, 0o500) == 0)
+            try bytes.write(to: source); try #require(chmod(source.path, 0o700) == 0)
             let fd = try MoleAnalysisFiles.openPath(source, directory: false)
             defer { close(fd) }
             let session = try MolePrivateSession(parent: base.appendingPathComponent("private"), sourceFD: fd, release: fixtureRelease(bytes))

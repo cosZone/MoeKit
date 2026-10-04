@@ -233,7 +233,7 @@ final class MolePrivateSession {
             let tempMade = mkdirat(homeFD, "tmp", 0o700)
             close(homeFD)
             guard tempMade == 0 else { throw MoleAnalysisFailure.unsafePrivateDirectory }
-            let targetFD = openat(directoryFD, "analyze-go", O_CREAT | O_EXCL | O_RDWR | O_NOFOLLOW | O_CLOEXEC, 0o500)
+            let targetFD = openat(directoryFD, "analyze-go", O_CREAT | O_EXCL | O_RDWR | O_NOFOLLOW | O_CLOEXEC, 0o600)
             guard targetFD >= 0 else { throw MoleAnalysisFailure.unsafePrivateDirectory }
             defer { close(targetFD) }
             try MoleAnalysisFiles.copyPinnedBytesAndAttributes(from: sourceFD, to: targetFD, release: release)

@@ -7,6 +7,7 @@ struct MoleAnalysisView: View {
     private var analysis: MoleAnalysisStore { workspace.moleAnalysis }
 
     var body: some View {
+        ScrollView {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
                 Label("Analyze with Mole", systemImage: "internaldrive").font(.title2.weight(.semibold))
@@ -21,6 +22,8 @@ struct MoleAnalysisView: View {
             }
             Text("Choose analyze-go from Mole’s official release installation. Homebrew and custom-built analyzers are not supported by this version check. MoeKit does not install or update tools.")
                 .font(.caption).foregroundStyle(.secondary)
+            Link("Official Mole V1.57.0 release", destination: URL(string: "https://github.com/tw93/Mole/releases/tag/V1.57.0")!)
+                .font(.caption)
             HStack {
                 if analysis.isBusy {
                     ProgressView().controlSize(.small)
@@ -42,7 +45,9 @@ struct MoleAnalysisView: View {
                     Text("Selections do not start a process. Review the plan, then explicitly start analysis."))
             }
         }
-        .padding(20).frame(minWidth: 720, minHeight: 560)
+        .padding(20)
+        }
+        .frame(minWidth: 720, minHeight: 560)
         .onDisappear { analysis.cancel() }
     }
 

@@ -26,7 +26,7 @@ with path.open("xb") as output: output.write(data)
 path.chmod(0o500)
 # Do not clear quarantine or re-sign. Native validation must accept/reject as-is.
 # The test bundle receives only this path; no upstream executable is embedded
-# in either app or test bundle. The checked-in resource is empty outside this job.
+# in either app or test bundle. The resource is generated and git-ignored; it is absent outside this job.
 resource = Path(__file__).resolve().parents[1] / "Tests/Resources/MoleAnalyzerFixturePath.txt"
 resource.write_text(str(path) + "\n")
 print(f"Prepared exact official V1.57.0 {platform.machine()} fixture; no user paths scanned.")

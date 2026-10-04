@@ -11,7 +11,7 @@ description: 先核对来源和版本，再了解 macOS 的安全提示。
 
 ## 获取可用产物
 
-当前已交付 [0.1.0-preview.8 开发签名预览](https://github.com/cosZone/MoeKit/releases/tag/v0.1.0-preview.8)，提供 DMG 与 ZIP，包内是同一份 universal Release App，并附校验和与构建信息。本版新增逐次确认的精确进程停止、原生多缓存废纸篓、原路径恢复和另行确认的记录内缓存永久删除；保留官方固定版本 Mole 分析、精确下载指引与单个 Downloads 磁盘映像操作。使用 Apple Development 签名，未公证。精确测试与下载验证见 [版本记录](/changelog/0.1.0-preview.8)；文档网站独立构建，不是安装包组件。
+当前已交付 [0.1.0-preview.9 开发签名预览](https://github.com/cosZone/MoeKit/releases/tag/v0.1.0-preview.9)：[下载 DMG](https://github.com/cosZone/MoeKit/releases/download/v0.1.0-preview.9/MoeKit-v0.1.0-preview.9-macOS.dmg) · [下载 ZIP](https://github.com/cosZone/MoeKit/releases/download/v0.1.0-preview.9/MoeKit-v0.1.0-preview.9-macOS.zip)。包内是同一份 universal Release App，并附校验和与构建信息。本版新增保留恢复数据的 Git 整理、独立 Dock／菜单栏图标设置及手动版本检查；保留此前 Mole、缓存、精确进程与 Downloads 磁盘映像工作流。使用 Apple Development 签名，未公证。精确测试与公开下载验证见 [版本记录](/changelog/0.1.0-preview.9)；文档网站独立构建，不是安装包组件。
 
 先查看 [GitHub Releases](https://github.com/cosZone/MoeKit/releases)。只有实际发布页中附带的文件才是已交付版本；文档中的版本计划或示例号不构成下载承诺。
 
@@ -24,7 +24,7 @@ description: 先核对来源和版本，再了解 macOS 的安全提示。
 只下载 DMG 时，在文件所在目录执行，并将结果与 `SHA256SUMS.txt` 中的同名条目对照：
 
 ```sh
-shasum -a 256 MoeKit-v0.1.0-preview.8-macOS.dmg
+shasum -a 256 MoeKit-v0.1.0-preview.9-macOS.dmg
 ```
 
 如果 DMG、ZIP、`BUILD_INFO.json` 和校验和文件全部已下载到同一目录，可一次检查全部：
@@ -40,6 +40,14 @@ shasum -a 256 -c SHA256SUMS.txt
 健康且为空的真实项目列表首次启动时会显示上手引导，可以先看示例、进入项目工作区或进入进程与端口页。进入页面不会自动扫描；选择自己的文件夹或点击 Start scan / Refresh 后才开始对应读取。
 
 引导可跳过，并可从 **Help → Getting started** 或 **Settings → General → Getting started** 重新打开。已有项目、列表读取错误或显式 Demo 启动时不会自动弹出。跳过只额外保存本地引导版本号，不会清空项目列表。
+
+## 图标、重开与手动检查更新
+
+Settings → App icons 分别设置 Dock 与菜单栏图标。两者均隐藏时，可从 Finder 或 Spotlight 再次打开 MoeKit 恢复工作区；关闭窗口不等于退出应用，各项任务仍遵守自身取消规则。
+
+应用菜单、菜单栏与 Settings 可主动检查 GitHub 新版本；检查不发送项目／任务数据，但 GitHub 会收到请求 IP。发现版本后打开本仓库 Release 页面，由你手动下载安装；没有后台检查或 Sparkle 自动安装。详细边界见 [preview.9 说明](/changelog/0.1.0-preview.9)。
+
+Git 整理需要受支持的本地仓库和固定位置已安装的 Apple 签名 Git；工具缺失或不支持时拒绝，不自动下载安装。每个目标需检查与独立确认，移动到恢复目录不释放空间。使用与恢复限制见 [项目管理](/docs/projects)。
 
 ## 使用本版的 Mole 分析
 

@@ -1,6 +1,6 @@
 # 逐次确认的 Git 整理
 
-本改动是未发布源码。它不复用暂停的 XPC／bookmark 原型，也不声称存在 OS 沙箱。准确构建、测试和签名结果以本提交 CI 为准。
+本工作流已随 [0.1.0-preview.9](https://github.com/cosZone/MoeKit/releases/tag/v0.1.0-preview.9) 交付；preview.8 不包含。精确源码、测试、签名与下载验证见 [版本记录](../website/content/changelog/0.1.0-preview.9.md)，后续源码改动不自动进入已发布安装包。它不复用暂停的 XPC／bookmark 原型，也不声称存在 OS 沙箱。
 
 ## 可执行的两个独立操作
 

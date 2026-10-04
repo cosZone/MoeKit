@@ -1,4 +1,17 @@
+import Foundation
 import ProjectDescription
+
+private struct SparklePublicConfiguration: Decodable {
+    let publicEDKey: String
+}
+
+// Only the public verification key is consumed by project generation. The
+// release helper separately validates every dependency/feed/security pin.
+private let sparkleConfiguration = try JSONDecoder().decode(
+    SparklePublicConfiguration.self,
+    from: Data(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        .appendingPathComponent("Configurations/Sparkle.json"))
+)
 
 let project = Project(
     name: "MoeKit",
@@ -13,7 +26,7 @@ let project = Project(
         "ENABLE_USER_SCRIPT_SANDBOXING": "YES",
         "DEVELOPMENT_TEAM": "",
         // Public verification key only. Missing setup keeps the updater inactive.
-        "SPARKLE_PUBLIC_ED_KEY": "",
+        "SPARKLE_ED_PUBLIC_KEY": .string(sparkleConfiguration.publicEDKey),
     ]),
     targets: [
         .target(
@@ -42,7 +55,7 @@ let project = Project(
                 "NSPrincipalClass": "NSApplication",
                 "LSApplicationCategoryType": "public.app-category.developer-tools",
                 "SUFeedURL": "https://raw.githubusercontent.com/cosZone/MoeKit/updates/appcast.xml",
-                "SUPublicEDKey": "$(SPARKLE_PUBLIC_ED_KEY)",
+                "SUPublicEDKey": "$(SPARKLE_ED_PUBLIC_KEY)",
                 "SURequireSignedFeed": true,
                 "SUVerifyUpdateBeforeExtraction": true,
                 "SUSignedFeedFailureExpirationInterval": 0,

@@ -110,6 +110,7 @@ jobs:
                           set(app.parent.parent.iterdir()) == {app.parent},
                           "The archive must install only MoeKit.app.")
           release.verify_app(app, {"marketing_version": "0.1.0", "run_number": "1"}, provenance=False)
+          release.verify_upstream_sparkle(app)
           print(json.dumps({"source_sha": os.environ["SOURCE_SHA"],
                             "script_sandboxing": True,
                             "architectures_per_code_object": list(release.ARCHITECTURES),
@@ -159,6 +160,8 @@ jobs:
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
           python3 Scripts/verify-source.py
           python3 Scripts/test-preview-release.py
+          python3 Scripts/test-sparkle-appcast.py
+          python3 Scripts/test-sparkle-appcast.py --native-signer
           python3 Scripts/test-ui-render-artifacts.py
           python3 Scripts/test-sparkle-render-artifacts.py
           python3 Scripts/test-mole-supervisor.py
@@ -385,6 +388,7 @@ jobs:
                         -only-testing:MoeKitTests/ReleaseCheckStoreTests
                         -only-testing:MoeKitTests/SparkleUpdateTests
                         -only-testing:MoeKitTests/UpdateInstallationSafetyTests
+                        -only-testing:MoeKitTests/AppUpdateTerminationTests
                         -only-testing:MoeKitTests/AppEntryPointTests
                         -only-testing:MoeKitTests/ProcessTerminationTests
                         -only-testing:MoeKitTests/ProcessTerminationStoreTests
@@ -428,7 +432,7 @@ jobs:
                       "GitPlainIndexTests", "GitCleanupInspectionTests", "GitCleanupAuthorityTests", "GitCleanupStoreTests", "GitCleanupExecutorTests",
                       "CleanupExecutorTests", "CleanupStoreTests", "ProcessTerminationTests", "ProcessTerminationStoreTests", "NativeProcessTerminationTests",
                       "ReleaseVersionTests", "ReleaseCheckStoreTests", "ReleaseTransportTests", "AppEntryPointTests",
-                      "SparkleUpdateTests", "UpdateInstallationSafetyTests")
+                      "SparkleUpdateTests", "UpdateInstallationSafetyTests", "AppUpdateTerminationTests")
           if summary.get("passedTests", 0) < 27 or summary.get("failedTests") != 0 or summary.get("skippedTests") != 0:
               raise SystemExit(f"Optimized catalog tests must execute and pass without skips: {summary}")
           if any(suite not in inventory for suite in required):

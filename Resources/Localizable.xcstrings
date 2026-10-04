@@ -8547,12 +8547,12 @@
         }
       }
     },
-    "Wait for the current operation to finish before quitting or installing an update. Your existing app has not been replaced.": {
+    "Wait for the current operation to finish before quitting or installing an update.": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "请等待当前操作完成，再退出或安装更新。现有应用尚未被替换。"
+            "value": "请等待当前操作完成，再退出或安装更新。"
           }
         }
       }

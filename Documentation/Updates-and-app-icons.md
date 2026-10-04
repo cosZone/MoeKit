@@ -1,8 +1,8 @@
 # 更新检查与应用入口
 
-本页的手动检查是 preview.9 的行为；后续真实 Sparkle 集成见 [自动更新](Automatic-updates.md)，生产签名配置和实机验证仍是启用前提。
+本页的菜单栏、独立图标设置和手动版本检查已随 [0.1.0-preview.9](https://github.com/cosZone/MoeKit/releases/tag/v0.1.0-preview.9) 交付；preview.8 不包含。精确源码、测试与下载验证见 [版本记录](../website/content/changelog/0.1.0-preview.9.md)。
 
-本页描述源码；编译、测试和渲染是否通过以精确提交的 Native CI 为准，不把 Linux 源码检查或自有视图渲染当作人工原生交互验收。
+后续真实 Sparkle 集成见 [自动更新](Automatic-updates.md)。生产签名配置和原生验证仍是启用前提；当前公开 preview.9 没有自动安装。CI 与自有视图渲染不替代人工原生交互验收。
 
 ## 已实现的范围
 

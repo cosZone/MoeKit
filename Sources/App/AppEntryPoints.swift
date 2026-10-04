@@ -133,16 +133,26 @@ final class MoeKitAppDelegate: NSObject, NSApplicationDelegate {
     let entryPoints: AppEntryPointController
     let updates: ReleaseCheckStore
     let automaticUpdates: SparkleUpdateStore
+    private let mayTerminate: () -> Bool
+    private let presentBusyAlert: () -> Void
 
     override convenience init() {
         self.init(entryPoints: AppEntryPointController(preferences: AppVisibilityPreferences(defaults: .standard)),
                   updates: ReleaseCheckStore())
     }
 
-    init(entryPoints: AppEntryPointController, updates: ReleaseCheckStore, automaticUpdates: SparkleUpdateStore? = nil) {
+    init(entryPoints: AppEntryPointController, updates: ReleaseCheckStore, automaticUpdates: SparkleUpdateStore? = nil,
+         mayTerminate: (() -> Bool)? = nil, presentBusyAlert: (() -> Void)? = nil) {
         self.entryPoints = entryPoints
         self.updates = updates
         self.automaticUpdates = automaticUpdates ?? SparkleUpdateStore()
+        self.mayTerminate = mayTerminate ?? { UpdateInstallationSafety.shared.canTerminate }
+        self.presentBusyAlert = presentBusyAlert ?? {
+            let alert = NSAlert()
+            alert.messageText = String(localized: "MoeKit is finishing an operation")
+            alert.informativeText = String(localized: "Wait for the current operation to finish before quitting or installing an update.")
+            alert.runModal()
+        }
         super.init()
     }
 
@@ -155,11 +165,8 @@ final class MoeKitAppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        guard UpdateInstallationSafety.shared.canTerminate else {
-            let alert = NSAlert()
-            alert.messageText = String(localized: "MoeKit is finishing an operation")
-            alert.informativeText = String(localized: "Wait for the current operation to finish before quitting or installing an update. Your existing app has not been replaced.")
-            alert.runModal()
+        guard mayTerminate() else {
+            presentBusyAlert()
             return .terminateCancel
         }
         return .terminateNow

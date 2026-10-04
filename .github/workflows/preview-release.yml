@@ -27,6 +27,8 @@ env:
   DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
   WORKFLOW_SOURCE_SHA: ${{ github.workflow_sha }}
   DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+  # Public half only; checked against the committed public key before builds.
+  SPARKLE_ED_PUBLIC_KEY: ${{ secrets.SPARKLE_ED_PUBLIC_KEY }}
 
 jobs:
   build-and-test:
@@ -41,7 +43,10 @@ jobs:
       - name: Validate dispatch and exact reviewed source
         run: python3 Scripts/preview-release.py validate
       - name: Test release safety helpers
-        run: python3 Scripts/test-preview-release.py
+        run: |
+          python3 Scripts/test-preview-release.py
+          python3 Scripts/test-sparkle-appcast.py
+          python3 Scripts/test-sparkle-appcast.py --native-signer
       - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
         with:
           version: '2026.3.10'
@@ -52,12 +57,13 @@ jobs:
           python3 Scripts/verify-source.py
           test "$(tuist version)" = '4.148.3'
           xcodebuild -version
+          tuist install
           tuist generate --no-open
-      - name: Prepare official Mole synthetic fixture without signing secrets
+      - name: Prepare official Mole synthetic fixture without private signing secrets
         run: |
           python3 Scripts/prepare-mole-ci-fixture.py
           tuist generate --no-open
-      - name: Build and run Release-configuration unit tests without signing secrets
+      - name: Build and run Release-configuration unit tests without private signing secrets
         run: |
           set -euo pipefail
           args=(-workspace MoeKit.xcworkspace -scheme MoeKit -configuration Release
@@ -70,13 +76,18 @@ jobs:
         run: |
           set -euo pipefail
           version="${PREVIEW_VERSION%%-preview.*}"
+          python3 Scripts/preview-release.py build-settings > "$RUNNER_TEMP/moekit-release-build-settings.json"
+          build_number="$(python3 -c 'import json,os; print(json.load(open(os.environ["RUNNER_TEMP"] + "/moekit-release-build-settings.json"))["build_number"])')"
+          public_key="$(python3 -c 'import json,os; print(json.load(open(os.environ["RUNNER_TEMP"] + "/moekit-release-build-settings.json"))["public_key"])')"
           xcodebuild archive -workspace MoeKit.xcworkspace -scheme MoeKit \
             -configuration Release -destination 'generic/platform=macOS' \
             -derivedDataPath DerivedDataArchive -archivePath build/MoeKit.xcarchive \
             'ARCHS=arm64 x86_64' ONLY_ACTIVE_ARCH=NO \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY= DEVELOPMENT_TEAM= \
-            "MARKETING_VERSION=$version" "CURRENT_PROJECT_VERSION=$GITHUB_RUN_NUMBER"
+            COPY_PHASE_STRIP=NO \
+            "MARKETING_VERSION=$version" "CURRENT_PROJECT_VERSION=$build_number" \
+            "SPARKLE_ED_PUBLIC_KEY=$public_key"
           python3 Scripts/preview-release.py prepare
       - name: Transfer only the unsigned app and provenance to the signing job
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -109,8 +120,10 @@ jobs:
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
-      - name: Revalidate exact source before secrets become available
+      - name: Revalidate exact source before private secrets become available
         run: python3 Scripts/preview-release.py validate
+      - name: Fetch and verify the pinned official Sparkle signing utility without private secrets
+        run: python3 Scripts/preview-release.py sparkle-tools
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: unsigned-preview-${{ github.sha }}-${{ github.run_attempt }}
@@ -120,11 +133,15 @@ jobs:
           SIGNING_CERTIFICATE_P12: ${{ secrets.SIGNING_CERTIFICATE_P12 }}
           SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.SIGNING_CERTIFICATE_PASSWORD }}
           DEVELOPMENT_TEAM: ${{ secrets.DEVELOPMENT_TEAM }}
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
         run: python3 Scripts/preview-release.py sign
       - name: Always remove temporary signing material
         if: always()
         run: python3 Scripts/preview-release.py cleanup
-      - name: Upload only the verified DMG and ZIP, checksums, and safe provenance
+      - name: Remove only the verified owned Sparkle utility directory
+        if: always()
+        run: python3 Scripts/preview-release.py sparkle-cleanup
+      - name: Upload only verified packages, signed appcast, checksums, and safe provenance
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: signed-preview-${{ github.sha }}-${{ github.run_attempt }}
@@ -133,6 +150,7 @@ jobs:
             Preview/MoeKit-v${{ inputs.version }}-macOS.zip
             Preview/SHA256SUMS.txt
             Preview/BUILD_INFO.json
+            Preview/appcast.xml
           if-no-files-found: error
           retention-days: 14
           compression-level: 0

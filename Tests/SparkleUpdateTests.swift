@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Testing
 import Sparkle
@@ -38,7 +39,7 @@ struct SparkleUpdateTests {
             var invalid = Self.info; invalid.removeValue(forKey: key)
             #expect(SparkleUpdateConfiguration(info: invalid) == nil)
         }
-        for key in ["", "$(SPARKLE_PUBLIC_ED_KEY)", String(repeating: "A", count: 44),
+        for key in ["", "$(SPARKLE_ED_PUBLIC_KEY)", String(repeating: "A", count: 44),
                     "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=", Self.info["SUPublicEDKey"] as! String + "\n"] {
             var invalid = Self.info; invalid["SUPublicEDKey"] = key
             #expect(SparkleUpdateConfiguration(info: invalid) == nil)
@@ -162,4 +163,37 @@ struct UpdateInstallationSafetyTests {
 
 @MainActor private final class UpdateActivityFixture: AppUpdateBlocking {
     var blocksAppUpdate = false
+}
+
+@MainActor
+struct AppUpdateTerminationTests {
+    @Test func realBusyStoreRefusesTerminationUntilSettlement() async throws {
+        let store = MoleAnalysisStore(executor: TerminationAnalysisFixture())
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("MoeKit-termination-\(UUID().uuidString)")
+        store.selectExecutable(root.appendingPathComponent("Analyzer"), ticket: try #require(store.selectionTicket()))
+        store.selectDirectory(root.appendingPathComponent("Selected"), ticket: try #require(store.selectionTicket()))
+        var alerts = 0
+        let delegate = MoeKitAppDelegate(
+            entryPoints: AppEntryPointController(preferences: AppVisibilityPreferences(), managesStatusItem: false,
+                                                  applyDock: { _ in }, activate: {}, quit: {}),
+            updates: ReleaseCheckStore(installedVersion: nil),
+            automaticUpdates: SparkleUpdateStore(configuration: nil, isolated: true, defaults: nil),
+            mayTerminate: { !store.blocksAppUpdate }, presentBusyAlert: { alerts += 1 })
+        let application = NSApplication.shared
+        #expect(delegate.applicationShouldTerminate(application) == .terminateNow)
+        store.prepare()
+        #expect(store.isBusy)
+        #expect(delegate.applicationShouldTerminate(application) == .terminateCancel)
+        #expect(alerts == 1)
+        let deadline = ContinuousClock.now + .seconds(5)
+        while store.isBusy && ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(5)) }
+        #expect(!store.isBusy)
+        #expect(delegate.applicationShouldTerminate(application) == .terminateNow)
+        #expect(alerts == 1)
+    }
+}
+
+private struct TerminationAnalysisFixture: MoleAnalysisExecuting {
+    func prepare(executable: URL, directory: URL) async throws -> MoleAnalysisPlan { throw CocoaError(.fileReadUnknown) }
+    func run(_ plan: MoleAnalysisPlan) async throws -> MoleAnalysisResult { throw CocoaError(.fileReadUnknown) }
 }

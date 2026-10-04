@@ -1,0 +1,38 @@
+name: Native Sparkle fixture
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: sparkle-fixture-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  owned-update:
+    name: Signed update E2E (${{ matrix.runner }})
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-15, macos-15-intel]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Exercise verified download, installation, relaunch and rejection in owned synthetic apps
+        run: python3 Scripts/run-sparkle-fixture.py
+      - name: Preserve exact-source native updater evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: native-sparkle-${{ matrix.runner }}-${{ env.SOURCE_SHA }}
+          path: SparkleFixtureEvidence/
+          if-no-files-found: error
+          retention-days: 14

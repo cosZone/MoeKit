@@ -15,7 +15,8 @@
     "lint": "eslint . --max-warnings=0",
     "test": "node --test scripts/*.test.mjs",
     "check": "npm run lint && npm run typecheck && npm test && npm run build",
-    "smoke": "node scripts/smoke.mjs"
+    "smoke": "node scripts/smoke.mjs",
+    "audit:dependencies": "node scripts/audit.mjs"
   },
   "dependencies": {
     "fumadocs-core": "16.15.18",

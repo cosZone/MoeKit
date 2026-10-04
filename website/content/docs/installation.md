@@ -11,7 +11,7 @@ description: 先核对来源和版本，再了解 macOS 的安全提示。
 
 ## 获取可用产物
 
-当前已交付 [0.1.0-preview.4 开发签名预览](https://github.com/cosZone/MoeKit/releases/tag/v0.1.0-preview.4)，提供 DMG 与 ZIP，包内是同一份 universal Release App，并附校验和与构建信息。本版加固文件读取与项目列表保存，保留多根目录项目复查、进程筛选和 About、Feedback 与 Give a Star 入口；使用 Apple Development 签名，未公证。文档网站独立构建，不是安装包组件。
+当前已交付 [0.1.0-preview.5 开发签名预览](https://github.com/cosZone/MoeKit/releases/tag/v0.1.0-preview.5)，提供 DMG 与 ZIP，包内是同一份 universal Release App，并附校验和与构建信息。本版新增可跳过、可重开的上手引导和更明确的空状态，保留此前的只读工作区与可靠性改进；使用 Apple Development 签名，未公证。文档网站独立构建，不是安装包组件。
 
 先查看 [GitHub Releases](https://github.com/cosZone/MoeKit/releases)。只有实际发布页中附带的文件才是已交付版本；文档中的版本计划或示例号不构成下载承诺。
 
@@ -24,7 +24,7 @@ description: 先核对来源和版本，再了解 macOS 的安全提示。
 只下载 DMG 时，在文件所在目录执行，并将结果与 `SHA256SUMS.txt` 中的同名条目对照：
 
 ```sh
-shasum -a 256 MoeKit-v0.1.0-preview.4-macOS.dmg
+shasum -a 256 MoeKit-v0.1.0-preview.5-macOS.dmg
 ```
 
 如果 DMG、ZIP、`BUILD_INFO.json` 和校验和文件全部已下载到同一目录，可一次检查全部：
@@ -34,6 +34,12 @@ shasum -a 256 -c SHA256SUMS.txt
 ```
 
 校验和验证文件是否与发布者提供的字节一致，不能替代对发布来源的信任判断。
+
+## 第一次打开
+
+健康且为空的真实项目列表首次启动时会显示上手引导，可以先看示例、进入项目工作区或进入进程与端口页。进入页面不会自动扫描；选择自己的文件夹或点击 Start scan / Refresh 后才开始对应读取。
+
+引导可跳过，并可从 **Help → Getting started** 或 **Settings → General → Getting started** 重新打开。已有项目、列表读取错误或显式 Demo 启动时不会自动弹出。跳过只额外保存本地引导版本号，不会清空项目列表。
 
 ## 签名和公证是不同的事
 

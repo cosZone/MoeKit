@@ -83,6 +83,11 @@ def verify(directory: Path, language: str) -> int:
         for appearance in ("light", "dark")
         for width, height in ((520, 480), (620, 580))
     })
+    expected.update({
+        f"settings-{mode}-{language}-{appearance}-520x600": (520, 600)
+        for mode in ("real", "demo")
+        for appearance in ("light", "dark")
+    })
     manifest = json.loads((directory / "manifest.json").read_text())
     images, scopes = {}, {}
     for test in manifest:

@@ -8456,6 +8456,106 @@
           }
         }
       }
+    },
+    "Automatic updates are not configured in this build. Download releases from GitHub until a signed update build is available.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此构建尚未配置自动更新。在签名更新版本就绪前，请从 GitHub 下载发布版本。"
+          }
+        }
+      }
+    },
+    "Automatic updates could not start. You can still download a release from GitHub.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自动更新无法启动。你仍可从 GitHub 下载发布版本。"
+          }
+        }
+      }
+    },
+    "Automatically check for updates": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自动检查更新"
+          }
+        }
+      }
+    },
+    "Automatically download and install updates": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自动下载并安装更新"
+          }
+        }
+      }
+    },
+    "Check releases on GitHub…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在 GitHub 检查发布版本…"
+          }
+        }
+      }
+    },
+    "Last checked": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上次检查"
+          }
+        }
+      }
+    },
+    "MoeKit is finishing an operation": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MoeKit 正在完成操作"
+          }
+        }
+      }
+    },
+    "Sparkle verifies signed updates before installation. Automatic installation happens when MoeKit quits; you can also review and install an update now.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sparkle 会在安装前验证更新签名。自动安装在 MoeKit 退出时进行；你也可以立即查看并安装更新。"
+          }
+        }
+      }
+    },
+    "Update requests go to GitHub and may include your app version and IP address. Project data and system profiling are not sent. Project lists, preferences and recovery receipts stay outside the app bundle.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更新请求会发送至 GitHub，可能包含应用版本和 IP 地址，不会发送项目数据或系统概况。项目列表、偏好设置和恢复凭据保存在应用包之外。"
+          }
+        }
+      }
+    },
+    "Wait for the current operation to finish before quitting or installing an update. Your existing app has not been replaced.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请等待当前操作完成，再退出或安装更新。现有应用尚未被替换。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

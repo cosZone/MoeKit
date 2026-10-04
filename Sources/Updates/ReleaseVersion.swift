@@ -77,3 +77,13 @@ struct GitHubReleaseRecord: Decodable, Sendable {
         return PublishedRelease(version: version)
     }
 }
+
+extension ReleaseVersion {
+    /// Numeric CFBundleVersion fits Apple's 4/2/2 component bounds. Slot 99 is
+    /// reserved for stable; preview numbering must advance within 1...98.
+    var sparkleBuildVersion: String? {
+        guard (0...98).contains(major), (0...99).contains(minor), (0...99).contains(patch),
+              preview == nil || (1...98).contains(preview!) else { return nil }
+        return "\(major * 100 + minor + 1).\(patch).\(preview ?? 99)"
+    }
+}

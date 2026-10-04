@@ -66,6 +66,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
           test "$(tuist version)" = '4.148.3'
           test "$(xcodebuild -version | head -1)" = 'Xcode 16.4'
+          tuist install
           tuist generate --no-open
       - name: Archive both architectures with script sandboxing enabled
         run: |
@@ -179,7 +180,9 @@ jobs:
       - name: Prepare pinned Mole analyzer for synthetic fixture tests
         run: python3 Scripts/prepare-mole-ci-fixture.py
       - name: Generate Xcode workspace
-        run: tuist generate --no-open
+        run: |
+          tuist install
+          tuist generate --no-open
       - name: Build app and tests, then run the built tests
         run: |
           set -euo pipefail
@@ -337,6 +340,7 @@ jobs:
           test "$(tuist version)" = '4.148.3'
           xcodebuild -version
           swift --version
+          tuist install
           tuist generate --no-open
       - name: Build and test optimized Release without signing secrets
         run: |
@@ -375,6 +379,8 @@ jobs:
                         -only-testing:MoeKitTests/ReleaseVersionTests
                         -only-testing:MoeKitTests/ReleaseTransportTests
                         -only-testing:MoeKitTests/ReleaseCheckStoreTests
+                        -only-testing:MoeKitTests/SparkleUpdateTests
+                        -only-testing:MoeKitTests/UpdateInstallationSafetyTests
                         -only-testing:MoeKitTests/AppEntryPointTests
                         -only-testing:MoeKitTests/ProcessTerminationTests
                         -only-testing:MoeKitTests/ProcessTerminationStoreTests
@@ -417,7 +423,8 @@ jobs:
                       "InstallerFileAccessTests", "InstallerTrashExecutorTests", "InstallerUseEvidenceTests", "InstallerTrashStoreTests",
                       "GitPlainIndexTests", "GitCleanupInspectionTests", "GitCleanupAuthorityTests", "GitCleanupStoreTests", "GitCleanupExecutorTests",
                       "CleanupExecutorTests", "CleanupStoreTests", "ProcessTerminationTests", "ProcessTerminationStoreTests", "NativeProcessTerminationTests",
-                      "ReleaseVersionTests", "ReleaseCheckStoreTests", "ReleaseTransportTests", "AppEntryPointTests")
+                      "ReleaseVersionTests", "ReleaseCheckStoreTests", "ReleaseTransportTests", "AppEntryPointTests",
+                      "SparkleUpdateTests", "UpdateInstallationSafetyTests")
           if summary.get("passedTests", 0) < 27 or summary.get("failedTests") != 0 or summary.get("skippedTests") != 0:
               raise SystemExit(f"Optimized catalog tests must execute and pass without skips: {summary}")
           if any(suite not in inventory for suite in required):

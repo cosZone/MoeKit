@@ -9,8 +9,11 @@ let project = Project(
         "MARKETING_VERSION": "0.1.0",
         "CURRENT_PROJECT_VERSION": "1",
         "CODE_SIGN_STYLE": "Automatic",
+        "COPY_PHASE_STRIP": "NO",
         "ENABLE_USER_SCRIPT_SANDBOXING": "YES",
         "DEVELOPMENT_TEAM": "",
+        // Public verification key only. Missing setup keeps the updater inactive.
+        "SPARKLE_PUBLIC_ED_KEY": "",
     ]),
     targets: [
         .target(
@@ -38,6 +41,14 @@ let project = Project(
                 "NSHighResolutionCapable": true,
                 "NSPrincipalClass": "NSApplication",
                 "LSApplicationCategoryType": "public.app-category.developer-tools",
+                "SUFeedURL": "https://raw.githubusercontent.com/cosZone/MoeKit/updates/appcast.xml",
+                "SUPublicEDKey": "$(SPARKLE_PUBLIC_ED_KEY)",
+                "SURequireSignedFeed": true,
+                "SUVerifyUpdateBeforeExtraction": true,
+                "SUSignedFeedFailureExpirationInterval": 0,
+                "SUAutomaticallyUpdate": false,
+                "SUEnableSystemProfiling": false,
+                "SUEnableJavaScript": false,
             ]),
             sources: ["Sources/**"],
             resources: ["Resources/**"],
@@ -60,7 +71,7 @@ let project = Project(
                 outputPaths: ["$(TARGET_BUILD_DIR)/$(EXECUTABLE_FOLDER_PATH)/GitObjectInspector"],
                 basedOnDependencyAnalysis: true
             )],
-            dependencies: [.target(name: "MoleAnalysisSupervisor"), .target(name: "GitObjectInspector")],
+            dependencies: [.target(name: "MoleAnalysisSupervisor"), .target(name: "GitObjectInspector"), .external(name: "Sparkle")],
             settings: .settings(base: [
                 "ASSETCATALOG_COMPILER_APPICON_NAME": "AppIcon",
                 "ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME": "",

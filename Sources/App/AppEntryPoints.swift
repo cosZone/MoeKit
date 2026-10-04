@@ -29,13 +29,14 @@ final class AppVisibilityPreferences {
 /// destroys the shared WorkspaceStore. Individual views retain their existing
 /// cancellation/revocation rules when a window closes.
 @MainActor
-final class AppEntryPointController: NSObject {
+final class AppEntryPointController: NSObject, NSMenuDelegate {
     let preferences: AppVisibilityPreferences
     private(set) var statusItem: NSStatusItem?
     private(set) var isInstalled = false
     private var openWorkspace: (() -> Void)?
     private var openSettings: (() -> Void)?
     private var checkUpdates: (() -> Void)?
+    private var canCheckUpdates: () -> Bool = { true }
     private var pendingReopen = false
     private let applyDock: (Bool) -> Void
     private let activate: () -> Void
@@ -57,10 +58,11 @@ final class AppEntryPointController: NSObject {
     }
 
     func install(openWorkspace: @escaping () -> Void, openSettings: @escaping () -> Void,
-                 checkUpdates: @escaping () -> Void) {
+                 checkUpdates: @escaping () -> Void, canCheckUpdates: @escaping () -> Bool = { true }) {
         self.openWorkspace = openWorkspace
         self.openSettings = openSettings
         self.checkUpdates = checkUpdates
+        self.canCheckUpdates = canCheckUpdates
         if !isInstalled {
             isInstalled = true
             applyPreferences()
@@ -97,6 +99,7 @@ final class AppEntryPointController: NSObject {
     func makeMenu() -> NSMenu {
         let menu = NSMenu(title: "MoeKit")
         menu.autoenablesItems = false
+        menu.delegate = self
         for (title, action, key) in [
             (String(localized: "Open MoeKit"), #selector(showWorkspace), "o"),
             (String(localized: "Settings…"), #selector(showSettings), ","),
@@ -111,13 +114,17 @@ final class AppEntryPointController: NSObject {
         return menu
     }
 
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        menu.items.first(where: { $0.action == #selector(showUpdates) })?.isEnabled = canCheckUpdates()
+    }
+
     @objc func showWorkspace() {
         guard let openWorkspace else { pendingReopen = true; return }
         openWorkspace()
         activate()
     }
     @objc func showSettings() { openSettings?(); activate() }
-    @objc func showUpdates() { checkUpdates?(); activate() }
+    @objc func showUpdates() { guard canCheckUpdates() else { return }; checkUpdates?(); activate() }
     @objc func quitApp() { quit() }
 }
 
@@ -125,22 +132,37 @@ final class AppEntryPointController: NSObject {
 final class MoeKitAppDelegate: NSObject, NSApplicationDelegate {
     let entryPoints: AppEntryPointController
     let updates: ReleaseCheckStore
+    let automaticUpdates: SparkleUpdateStore
 
     override convenience init() {
         self.init(entryPoints: AppEntryPointController(preferences: AppVisibilityPreferences(defaults: .standard)),
                   updates: ReleaseCheckStore())
     }
 
-    init(entryPoints: AppEntryPointController, updates: ReleaseCheckStore) {
+    init(entryPoints: AppEntryPointController, updates: ReleaseCheckStore, automaticUpdates: SparkleUpdateStore? = nil) {
         self.entryPoints = entryPoints
         self.updates = updates
+        self.automaticUpdates = automaticUpdates ?? SparkleUpdateStore()
         super.init()
     }
+
+    func applicationDidFinishLaunching(_ notification: Notification) { automaticUpdates.start() }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         // Reopen the workspace even if only Settings or About is currently visible.
         entryPoints.showWorkspace()
         return false
+    }
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard UpdateInstallationSafety.shared.canTerminate else {
+            let alert = NSAlert()
+            alert.messageText = String(localized: "MoeKit is finishing an operation")
+            alert.informativeText = String(localized: "Wait for the current operation to finish before quitting or installing an update. Your existing app has not been replaced.")
+            alert.runModal()
+            return .terminateCancel
+        }
+        return .terminateNow
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }

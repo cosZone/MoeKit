@@ -6,7 +6,9 @@ final class ProcessTerminationStore {
     private(set) var review: ProcessStopReview?
     private(set) var acknowledgedReviewID: UUID?
     private(set) var results: [ProcessStopResult] = []
-    private(set) var isBusy = false
+    private(set) var isBusy = false {
+        didSet { UpdateInstallationSafety.shared.changed(self) }
+    }
     private(set) var isExecuting = false
     private(set) var errorMessage: String?
     @ObservationIgnored private let executor: ProcessTerminationExecutor

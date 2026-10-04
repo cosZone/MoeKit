@@ -22,7 +22,9 @@ final class CleanupStore {
     private(set) var irreversibleDeletionAccepted = false
     private(set) var isDemoEnabled = false
     private(set) var catalogIsKnown = false
-    private(set) var isBusy = false
+    private(set) var isBusy = false {
+        didSet { UpdateInstallationSafety.shared.changed(self) }
+    }
     private(set) var isCancelling = false
     private(set) var errorMessage: String?
     private(set) var lastMutationError: String?

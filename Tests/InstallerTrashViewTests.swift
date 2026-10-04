@@ -40,21 +40,24 @@ final class InstallerTrashViewTests: XCTestCase {
                 _ = NSApplication.shared
                 let appearance = try XCTUnwrap(NSAppearance(named: dark ? .darkAqua : .aqua))
                 let size = NSSize(width: 720, height: 1600)
+                let capture = InstallerRenderCapture()
+                XCTAssertNil(EnvironmentValues().installerCaptureCollector)
                 let makeView = { (canvas: NSSize) in
                     ScrollView { InstallerTrashView().padding(20) }.environment(workspace)
                         .environment(\.colorScheme, dark ? .dark : .light)
                         .environment(\.locale, Locale.current)
-                        .environment(\.accessibilityEnabled, true)
                         .frame(width: canvas.width, height: canvas.height)
                         .background(Color(nsColor: .windowBackgroundColor))
+                        .installerCaptureViewport()
+                        .environment(\.installerCaptureCollector, { capture.record($0) })
                 }
                 let hosting = NSHostingView(rootView: makeView(size))
                 hosting.sizingOptions = []; hosting.frame = NSRect(origin: .zero, size: size); hosting.appearance = appearance
                 let window = InstallerCaptureWindow(contentRect: hosting.frame, styleMask: [.titled, .resizable], backing: .buffered, defer: false)
                 window.isReleasedWhenClosed = false; window.appearance = appearance; window.contentView = hosting
                 defer { window.orderOut(nil); window.contentView = nil; window.close() }
-                // A hidden NSWindow need not populate SwiftUI's accessibility
-                // hierarchy. Order only this synthetic owned window.
+                // Order only this synthetic owned window; its test-only
+                // subclass preserves the requested offscreen capture canvas.
                 window.orderFront(nil)
                 for _ in 0..<5 { hosting.layoutSubtreeIfNeeded(); try await Task.sleep(for: .milliseconds(50)); window.setContentSize(size) }
                 // The last setContentSize above can leave layout/display
@@ -66,7 +69,7 @@ final class InstallerTrashViewTests: XCTestCase {
                 hosting.displayIfNeeded()
                 XCTAssertTrue(window.isVisible)
                 let name = "installer-\(scenario)-\(language)-\(dark ? "dark" : "light")-720x1600"
-                let frameEvidence = try await verifyRequiredFrames(in: hosting, window: window, scenario: scenario, store: store, name: name)
+                let frameEvidence = try await verifyRequiredFrames(in: hosting, capture: capture, scenario: scenario, store: store, name: name)
                 hosting.displayIfNeeded()
                 let bitmap = try XCTUnwrap(hosting.bitmapImageRepForCachingDisplay(in: hosting.bounds))
                 appearance.performAsCurrentDrawingAppearance { hosting.cacheDisplay(in: hosting.bounds, to: bitmap) }
@@ -94,13 +97,15 @@ final class InstallerTrashViewTests: XCTestCase {
                 Scope: owned installer view with synthetic paths and receipts only.
                 Scenario: \(scenario). No native executor, process inspection, disk-image inventory or real file moves.
                 The scroll container keeps controls reachable beyond the captured viewport.
-                Accessibility environment enabled only in this owned fixture. No keyboard or VoiceOver interaction performed.
+                Evidence source: public SwiftUI bounds anchors on displayed views
+                No keyboard or VoiceOver interaction performed.
                 These images are review evidence, not native interaction, keyboard or accessibility acceptance.
                 """)
                 metadata.name = name + "-scope.txt"
                 metadata.lifetime = .keepAlways; add(metadata)
                 if scenario == "trash-confirmation" || scenario == "restore-confirmation" {
                     let compactSize = NSSize(width: 720, height: 560)
+                    capture.regions = []
                     hosting.rootView = makeView(compactSize)
                     window.setContentSize(compactSize)
                     for _ in 0..<5 { hosting.layoutSubtreeIfNeeded(); try await Task.sleep(for: .milliseconds(50)) }
@@ -109,9 +114,9 @@ final class InstallerTrashViewTests: XCTestCase {
                     hosting.layoutSubtreeIfNeeded()
                     let prefix = scenario == "trash-confirmation" ? "installer.trash" : "installer.restore"
                     let controls = [CaptureRequirement(id: prefix + ".confirm"), CaptureRequirement(id: prefix + ".cancel")]
-                    let didScroll = await scrollToControls(controls, in: hosting, window: window)
+                    let didScroll = await scrollToControls(controls, in: hosting, capture: capture)
                     let compactName = "installer-\(scenario)-compact-\(language)-\(dark ? "dark" : "light")-720x560"
-                    let compactEvidence = try await verifyRequiredFrames(in: hosting, window: window, scenario: scenario, store: store,
+                    let compactEvidence = try await verifyRequiredFrames(in: hosting, capture: capture, scenario: scenario, store: store,
                                                                          name: compactName, requirements: controls)
                     hosting.displayIfNeeded()
                     let compactBitmap = try XCTUnwrap(hosting.bitmapImageRepForCachingDisplay(in: hosting.bounds))
@@ -137,7 +142,8 @@ final class InstallerTrashViewTests: XCTestCase {
                     Scrollable content exceeds viewport: \(didScroll)
                     Scrolled confirmation/cancel inside capture: \(compactEvidence.count)
                     \(compactEvidence.joined(separator: "\n"))
-                    Accessibility environment enabled only in this owned fixture. No keyboard or VoiceOver interaction performed.
+                    Evidence source: public SwiftUI bounds anchors on displayed views
+                    No keyboard or VoiceOver interaction performed.
                     """)
                     compactScope.name = compactName + "-scope.txt"; compactScope.lifetime = .keepAlways; add(compactScope)
                 }
@@ -199,54 +205,43 @@ final class InstallerTrashViewTests: XCTestCase {
         return requirements
     }
 
-    /// Read metadata from this owned view only. Exact identifiers, displayed
-    /// escaped paths and viewport containment are affirmative capture evidence;
-    /// this does not establish keyboard navigation or VoiceOver acceptance.
-    @MainActor private func verifyRequiredFrames(in hosting: NSView, window: NSWindow, scenario: String, store: InstallerTrashStore, name: String, requirements explicitRequirements: [CaptureRequirement]? = nil) async throws -> [String] {
+    /// Preferences come from the actual displayed views and are resolved in
+    /// the captured viewport. This verifies layout/content, not VoiceOver.
+    @MainActor private func verifyRequiredFrames(in hosting: NSView, capture: InstallerRenderCapture, scenario: String, store: InstallerTrashStore, name: String, requirements explicitRequirements: [CaptureRequirement]? = nil) async throws -> [String] {
         let requirements = explicitRequirements ?? captureRequirements(scenario: scenario, store: store)
-        var elements: [CaptureElement] = []
-        var wasTruncated = false
-        for _ in 0..<10 {
+        for _ in 0..<20 {
             hosting.layoutSubtreeIfNeeded()
-            let snapshot = accessibleElements(in: hosting)
-            elements = snapshot.elements; wasTruncated = snapshot.truncated
-            if requirements.allSatisfy({ requirement in elements.contains { $0.id == requirement.id && validCaptureFrame($0.frame) } }) { break }
+            if requirements.allSatisfy({ requirement in capture.regions.contains { $0.id == requirement.id && validCaptureFrame($0.bounds) } }) { break }
             try await Task.sleep(for: .milliseconds(50))
         }
-        let captured = window.convertToScreen(hosting.convert(hosting.bounds, to: nil))
-        let tree = elements.map { element in
-            let content = element.text.map { InstallerPathDisplay.quoted(String($0.prefix(1_024))) }.joined(separator: " | ")
-            return "\(element.typeName) | id=\(element.id ?? "") | role=\(element.role ?? "") | text=\(content) | frame=\(NSStringFromRect(element.frame)) | \(element.protocols) | children=\(element.childCount)"
+        let captured = CGRect(origin: .zero, size: hosting.bounds.size)
+        let regions = capture.regions
+        let tree = regions.prefix(256).map { region in
+            "id=\(region.id) | displayed content=\(InstallerPathDisplay.quoted(region.text)) | viewport bounds=\(NSStringFromRect(region.bounds))"
         }
-        let diagnostic = XCTAttachment(string: "Owned synthetic window visible: \(window.isVisible)\nCapture frame: \(NSStringFromRect(captured))\nTree truncated: \(wasTruncated)\n" + tree.joined(separator: "\n"))
-        diagnostic.name = name + "-ax-tree.txt"; diagnostic.lifetime = .keepAlways; add(diagnostic)
-        XCTAssertFalse(wasTruncated, "Owned accessibility tree exceeded the capture-check bound")
+        let diagnostic = XCTAttachment(string: "Evidence source: public SwiftUI bounds anchors on displayed views\nCapture viewport: \(NSStringFromRect(captured))\nCoordinates: viewport top-left origin\nReported regions: \(regions.count)\nCollector revision: \(capture.revision)\n" + tree.joined(separator: "\n"))
+        diagnostic.name = name + "-geometry.txt"; diagnostic.lifetime = .keepAlways; add(diagnostic)
+        XCTAssertLessThanOrEqual(regions.count, 256, "Owned geometry evidence exceeded the capture-check bound")
         var evidence: [String] = []
         for requirement in requirements {
-            let matches = elements.filter { $0.id == requirement.id && validCaptureFrame($0.frame) }
-            guard let first = matches.first else {
-                // Fail affirmatively while keeping all screenshots and tree
-                // diagnostics, including the remaining mandatory scenarios.
-                XCTFail("Required capture identifier missing: \(requirement.id); inspect \(name)-ax-tree.txt")
+            let matches = regions.filter { $0.id == requirement.id }
+            guard matches.count == 1, let region = matches.first, validCaptureFrame(region.bounds) else {
+                XCTFail("Required displayed-view anchor missing, duplicate or empty: \(requirement.id); inspect \(name)-geometry.txt")
                 continue
             }
-            // An identifier can be exposed by a Label and its text/icon peers.
-            // Require their entire geometry, never just the smallest child.
-            let frame = matches.dropFirst().reduce(first.frame) { $0.union($1.frame) }
-            guard captured.insetBy(dx: -0.5, dy: -0.5).contains(frame) else {
-                XCTFail("Required content outside captured viewport: \(requirement.id), frame \(frame), capture \(captured)")
+            guard captured.insetBy(dx: -0.5, dy: -0.5).contains(region.bounds) else {
+                XCTFail("Required content outside captured viewport: \(requirement.id), bounds \(region.bounds), capture \(captured)")
                 continue
             }
-            let text = matches.flatMap { $0.text }
-            guard text.contains(where: { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) else {
-                XCTFail("Required captured content is empty: \(requirement.id)")
+            guard !region.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                XCTFail("Required displayed content is empty: \(requirement.id)")
                 continue
             }
-            if let path = requirement.exactPath, !text.contains(where: { $0.contains(path) }) {
-                XCTFail("Exact escaped path missing from \(requirement.id): \(path)")
+            if let path = requirement.exactPath, region.text != path {
+                XCTFail("Exact displayed escaped path differs for \(requirement.id): \(region.text), expected \(path)")
                 continue
             }
-            evidence.append("Captured identifier: \(requirement.id) · screen frame: \(NSStringFromRect(frame))" + (requirement.exactPath.map { " · exact path: " + $0 } ?? ""))
+            evidence.append("Captured identifier: \(requirement.id) · viewport bounds: \(NSStringFromRect(region.bounds)) · displayed content: \(InstallerPathDisplay.quoted(region.text))")
         }
         XCTAssertEqual(evidence.count, requirements.count, "Every mandatory content/control must be visible in this capture")
         return evidence
@@ -256,63 +251,10 @@ final class InstallerTrashViewTests: XCTestCase {
         !frame.isEmpty && frame.origin.x.isFinite && frame.origin.y.isFinite && frame.width.isFinite && frame.height.isFinite
     }
 
-    private struct CaptureElement {
-        let typeName: String
-        let id: String?
-        let role: String?
-        let text: [String]
-        let frame: NSRect
-        let protocols: String
-        let childCount: Int
-    }
-
-    /// SwiftUI navigation children are only guaranteed to implement the small
-    /// NSAccessibilityElementProtocol, not the full NSAccessibilityProtocol.
-    /// Read its frame directly and public object-valued getters by selector;
-    /// never discard semantic children because they lack the full protocol.
-    @MainActor private func accessibleElements(in hosting: NSView) -> (elements: [CaptureElement], truncated: Bool) {
-        var queue: [Any] = [hosting]
-        var seen: Set<ObjectIdentifier> = []
-        var elements: [CaptureElement] = []
-        var visited = 0
-        while !queue.isEmpty, visited < 1_024 {
-            let next = queue.removeFirst()
-            visited += 1
-            let object = next as AnyObject
-            guard seen.insert(ObjectIdentifier(object)).inserted else { continue }
-            var children = objectValue(object, #selector(NSAccessibilityProtocol.accessibilityChildren)) as? [Any] ?? []
-            children += objectValue(object, #selector(NSAccessibilityProtocol.accessibilityChildrenInNavigationOrder)) as? [Any] ?? []
-            if let view = object as? NSView { children += view.subviews }
-            let minimal = object as? any NSAccessibilityElementProtocol
-            let full = object as? any NSAccessibilityProtocol
-            let selectors = [#selector(NSAccessibilityProtocol.accessibilityLabel), #selector(NSAccessibilityProtocol.accessibilityTitle),
-                             #selector(NSAccessibilityProtocol.accessibilityValue)]
-            let text = selectors.compactMap { selector -> String? in
-                let value = objectValue(object, selector)
-                return (value as? String) ?? (value as? NSAttributedString)?.string
-            }
-            elements.append(.init(typeName: String(describing: type(of: object)),
-                                  id: full?.accessibilityIdentifier() ?? minimal?.accessibilityIdentifier?()
-                                      ?? (objectValue(object, #selector(NSAccessibilityProtocol.accessibilityIdentifier)) as? String),
-                                  role: objectValue(object, #selector(NSAccessibilityProtocol.accessibilityRole)) as? String,
-                                  text: text, frame: minimal?.accessibilityFrame() ?? full?.accessibilityFrame() ?? .zero,
-                                  protocols: "NSObject subclass: \(object is NSObject); minimal AX protocol: \(minimal != nil); full AX protocol: \(full != nil)", childCount: children.count))
-            queue += children
-        }
-        return (elements, !queue.isEmpty)
-    }
-
-    /// All selectors passed here are documented, zero-argument, object-valued
-    /// accessibility getters. There is no KVC, private selector or AX mutation.
-    @MainActor private func objectValue(_ object: AnyObject, _ selector: Selector) -> Any? {
-        guard let object = object as? any NSObjectProtocol, object.responds(to: selector) else { return nil }
-        return object.perform(selector)?.takeUnretainedValue()
-    }
-
-    /// A separate 720×560 fixture must actually overflow and scroll. No button
-    /// is pressed: after scrolling, the same ID/frame proof verifies both
-    /// confirmation controls against the compact viewport before PNG capture.
-    @MainActor private func scrollToControls(_ controls: [CaptureRequirement], in hosting: NSView, window: NSWindow) async -> Bool {
+    /// Use actual control anchors to position the compact viewport. Poll fresh
+    /// post-scroll geometry; the initial target coordinates cannot prove that
+    /// scrolling succeeded. Recovery content below the controls is irrelevant.
+    @MainActor private func scrollToControls(_ controls: [CaptureRequirement], in hosting: NSView, capture: InstallerRenderCapture) async -> Bool {
         func scrollViews(_ view: NSView) -> [NSScrollView] {
             (view as? NSScrollView).map { [$0] } ?? view.subviews.flatMap { scrollViews($0) }
         }
@@ -325,41 +267,38 @@ final class InstallerTrashViewTests: XCTestCase {
             return false
         }
         let before = scroll.contentView.bounds.origin
-        let documentBounds = document.bounds
-        let viewportHeight = scroll.contentView.bounds.height
-        let maximumY = max(documentBounds.minY, documentBounds.maxY - viewportHeight)
-        for attempt in 0..<16 {
+        for _ in 0..<20 {
             hosting.layoutSubtreeIfNeeded()
-            let snapshot = accessibleElements(in: hosting)
-            let frames = controls.compactMap { control -> NSRect? in
-                let matches = snapshot.elements.filter { $0.id == control.id && validCaptureFrame($0.frame) }
-                guard let first = matches.first else { return nil }
-                return matches.dropFirst().reduce(first.frame) { $0.union($1.frame) }
-            }
-            if frames.count == controls.count, let first = frames.first {
-                let screenTarget = frames.dropFirst().reduce(first) { $0.union($1) }
-                let windowTarget = window.convertFromScreen(screenTarget)
-                let hostingTarget = hosting.convert(windowTarget, from: nil)
+            let targets = controls.compactMap { control in capture.regions.first { $0.id == control.id && validCaptureFrame($0.bounds) }?.bounds }
+            if targets.count == controls.count, let first = targets.first {
+                let target = targets.dropFirst().reduce(first) { $0.union($1) }
+                // SwiftUI anchor coordinates are top-left based. Convert only
+                // when an AppKit hosting view uses bottom-left coordinates.
+                let hostingTarget = hosting.isFlipped ? target : CGRect(x: target.minX, y: hosting.bounds.height - target.maxY, width: target.width, height: target.height)
                 let documentTarget = document.convert(hostingTarget, from: hosting)
-                let centeredY = min(max(documentTarget.midY - viewportHeight / 2, documentBounds.minY), maximumY)
-                document.scroll(NSPoint(x: documentBounds.minX, y: centeredY))
+                let viewportHeight = scroll.contentView.bounds.height
+                let maximumY = max(document.bounds.minY, document.bounds.maxY - viewportHeight)
+                let centeredY = min(max(documentTarget.midY - viewportHeight / 2, document.bounds.minY), maximumY)
+                let beforeRevision = capture.revision
+                document.scroll(NSPoint(x: document.bounds.minX, y: centeredY))
                 scroll.reflectScrolledClipView(scroll.contentView)
-                hosting.layoutSubtreeIfNeeded()
-                try? await Task.sleep(for: .milliseconds(50))
-                XCTAssertNotEqual(scroll.contentView.bounds.origin, before, "Compact confirmation controls must require a real scroll")
-                return scroll.contentView.bounds.origin != before
+                for _ in 0..<20 {
+                    hosting.layoutSubtreeIfNeeded()
+                    let viewport = CGRect(origin: .zero, size: hosting.bounds.size).insetBy(dx: -0.5, dy: -0.5)
+                    let current = controls.compactMap { control in capture.regions.first { $0.id == control.id }?.bounds }
+                    if capture.revision > beforeRevision, current.count == controls.count,
+                       current.allSatisfy({ validCaptureFrame($0) && viewport.contains($0) }) {
+                        XCTAssertNotEqual(scroll.contentView.bounds.origin, before, "Compact confirmation controls must require a real scroll")
+                        return scroll.contentView.bounds.origin != before
+                    }
+                    try? await Task.sleep(for: .milliseconds(50))
+                }
+                XCTFail("Fresh control anchors did not enter the compact viewport after scrolling")
+                return false
             }
-            // Some accessibility trees expose only the visible descendants.
-            // Traverse bounded overlapping viewports until both exact IDs can
-            // be located, then center their union rather than assuming they
-            // are the final content (recovery receipts follow them).
-            let distance = min(CGFloat(attempt + 1) * viewportHeight / 2, maximumY - documentBounds.minY)
-            let y = document.isFlipped ? documentBounds.minY + distance : maximumY - distance
-            document.scroll(NSPoint(x: documentBounds.minX, y: y))
-            scroll.reflectScrolledClipView(scroll.contentView)
             try? await Task.sleep(for: .milliseconds(50))
         }
-        XCTFail("Compact confirmation controls not found during bounded viewport traversal")
+        XCTFail("Compact confirmation control anchors not reported")
         return false
     }
 
@@ -450,4 +389,14 @@ private actor RenderInstallerExecutor: InstallerTrashExecuting {
 /// Preserve the owned capture size without changing application window policy.
 @MainActor private final class InstallerCaptureWindow: NSWindow {
     override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect { frameRect }
+}
+
+@MainActor private final class InstallerRenderCapture {
+    var regions: [InstallerCaptureRegion] = []
+    private(set) var revision = 0
+
+    func record(_ value: [InstallerCaptureRegion]) {
+        regions = value
+        revision += 1
+    }
 }

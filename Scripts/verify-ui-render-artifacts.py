@@ -161,6 +161,7 @@ def verify(directory: Path, language: str) -> int:
                 f"Attestation title: {'我已完成此磁盘映像的安装和使用' if language == 'zh-Hans' else 'I have finished installing and using this disk image'}",
                 f"Unknown recovery title: {'恢复记录不可用；结果未知' if language == 'zh-Hans' else 'Recovery record unavailable; outcome unknown'}",
                 "Mutation calls: 0",
+                "Evidence source: public SwiftUI bounds anchors on displayed views",
                 "Scope: owned installer view with synthetic paths and receipts only.",
             })
             if "-compact-" in name:

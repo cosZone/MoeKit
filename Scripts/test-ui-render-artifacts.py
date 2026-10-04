@@ -63,7 +63,7 @@ class RenderArtifactTests(unittest.TestCase):
                             stream.write(f"Restore action title: {'恢复到原路径' if language == 'zh-Hans' else 'Restore to original path'}\n")
                             stream.write(f"Attestation title: {'我已完成此磁盘映像的安装和使用' if language == 'zh-Hans' else 'I have finished installing and using this disk image'}\n")
                             stream.write(f"Unknown recovery title: {'恢复记录不可用；结果未知' if language == 'zh-Hans' else 'Recovery record unavailable; outcome unknown'}\n")
-                            stream.write("Mutation calls: 0\nScope: owned installer view with synthetic paths and receipts only.\n")
+                            stream.write("Mutation calls: 0\nScope: owned installer view with synthetic paths and receipts only.\nEvidence source: public SwiftUI bounds anchors on displayed views\n")
                             if scenario.endswith("-compact"):
                                 stream.write("Capture mode: compact confirmation controls after explicit scroll\nScrollable content exceeds viewport: true\nScrolled confirmation/cancel inside capture: 2\n")
                     attachments.extend([

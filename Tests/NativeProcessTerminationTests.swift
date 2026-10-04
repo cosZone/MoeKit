@@ -14,7 +14,7 @@ struct NativeProcessTerminationTests {
         // Retain this small private fixture directory. Never recursively remove
         // a path that may have changed while subprocess tests were suspended.
         let source = try #require(Bundle(for: ProcessFixtureBundle.self).url(forResource: "ProcessTerminationFixtureSource", withExtension: "txt"))
-        let executable = root.resolvingSymlinksInPath().appendingPathComponent("owned-worker")
+        let executable = root.appendingPathComponent("owned-worker")
         let compiler = Process()
         compiler.executableURL = URL(fileURLWithPath: "/usr/bin/clang")
         compiler.arguments = ["-x", "c", "-Wall", "-Wextra", "-Werror", source.path, "-o", executable.path]
@@ -199,7 +199,16 @@ private final class OwnedStopFixtureDirectory {
     init() throws {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("moekit-stop-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
-        root = url.resolvingSymlinksInPath()
+        var physical = [CChar](repeating: 0, count: Int(PATH_MAX))
+        let resolved = url.path.withCString { source in
+            physical.withUnsafeMutableBufferPointer { realpath(source, $0.baseAddress) != nil }
+        }
+        guard resolved, let path = physical.withUnsafeBytes(NativeProcessInventoryParsing.decodeCString) else {
+            throw ProcessTerminationError.unavailable
+        }
+        // Foundation path standardization strips /private on macOS. Compare
+        // the actual physical spelling returned by the same API as libproc.
+        root = URL(fileURLWithPath: path, isDirectory: true)
         let descriptor = open(root.path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
         guard descriptor >= 0 else { throw ProcessTerminationError.unavailable }
         var info = stat()
@@ -225,7 +234,7 @@ private final class OwnedStopFixtureDirectory {
               pinned.st_dev == identity.st_dev, pinned.st_ino == identity.st_ino,
               named.st_dev == identity.st_dev, named.st_ino == identity.st_ino,
               named.st_mode & S_IFMT == S_IFDIR, named.st_mode & 0o777 == 0o700, named.st_uid == geteuid() else { return false }
-        let file = openat(descriptor, "owner-marker", O_RDONLY | O_NOFOLLOW | O_CLOEXEC)
+        let file = openat(descriptor, "owner-marker", O_RDONLY | O_NONBLOCK | O_NOFOLLOW | O_CLOEXEC)
         guard file >= 0 else { return false }
         defer { close(file) }
         var info = stat()

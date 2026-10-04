@@ -57,7 +57,7 @@ final class ProcessStopViewTests: XCTestCase {
                 window.orderFront(nil)
                 for _ in 0..<5 { hosting.layoutSubtreeIfNeeded(); try await Task.sleep(for: .milliseconds(50)) }
                 XCTAssertEqual(hosting.bounds.size, size)
-                let required = ["process.mode", "process.targets", "process.identity.1234", "process.acknowledgement", "process.confirm", "process.cancel"]
+                let required = ["process.mode", "process.targets", "process.identity.1234", "process.consequences", "process.acknowledgement", "process.confirm", "process.cancel"]
                 for id in required {
                     let region = try XCTUnwrap(capture.regions.first { $0.id == id })
                     XCTAssertGreaterThan(region.bounds.width, 0)
@@ -83,7 +83,7 @@ final class ProcessStopViewTests: XCTestCase {
                 Partial-result title: \(TaskStatus.partial.title)
                 Content size: 740 × 780 points
                 Native signals: 0
-                Visible required controls: 6
+                Visible required controls: 7
                 Confirmation initially acknowledged: false
                 Evidence source: public SwiftUI bounds anchors on displayed views
                 Synthetic confirmation only. Mock signals: \(signals). No keyboard/VoiceOver acceptance claimed.

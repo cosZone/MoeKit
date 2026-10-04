@@ -387,10 +387,12 @@ struct ProcessStopPlanView: View {
                             }
                         }
                     }.frame(maxHeight: 80)
-                    Text(review.mode == .graceful
-                         ? "These processes may stop immediately and lose unsaved work. A process may also stop its own children in response. MoeKit sends no group or descendant signals. This confirmation expires after 60 seconds."
-                         : "Force stop prevents cleanup and may lose or corrupt unsaved work. Only the listed still-running identities receive SIGKILL. This confirmation expires after 60 seconds.")
-                        .font(.caption).foregroundStyle(.secondary)
+                    let consequences = review.mode == .graceful
+                        ? String(localized: "These processes may stop immediately and lose unsaved work. A process may also stop its own children in response. MoeKit sends no group or descendant signals. This confirmation expires after 60 seconds.")
+                        : String(localized: "Force stop prevents cleanup and may lose or corrupt unsaved work. Only the listed still-running identities receive SIGKILL. This confirmation expires after 60 seconds.")
+                    Text(consequences).font(.caption).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .installerCaptureIdentity("process.consequences", text: consequences)
                     Toggle("I checked each listed target and accept these consequences", isOn: Binding(
                         get: { termination.acknowledgedReviewID == review.id },
                         set: { termination.acknowledge(reviewID: review.id, value: $0) }
@@ -421,7 +423,7 @@ struct ProcessStopPlanView: View {
                             .keyboardShortcut(.cancelAction).disabled(termination.isBusy)
                     }
                 }
-            }.font(.callout).padding(20)
+            }.font(.callout).padding(20).layoutPriority(1)
         }.frame(minWidth: 620, idealWidth: 740, minHeight: 480, idealHeight: 720)
             .interactiveDismissDisabled(termination.isBusy)
             .onDisappear { termination.cancelReview() }

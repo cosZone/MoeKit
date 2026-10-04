@@ -58,7 +58,7 @@ class RenderArtifactTests(unittest.TestCase):
                     (root / text).write_text(f"Bundle language: {language}\nProjects title: {'项目' if language == 'zh-Hans' else 'Projects'}\nPartial-result title: {'部分结果' if language == 'zh-Hans' else 'Partial result'}\nContent size: {width} × {height} points\nProcess locale: {'zh_CN' if language == 'zh-Hans' else 'en_US'}\n")
                     if scenario.startswith("process-stop-"):
                         with (root / text).open("a") as stream:
-                            stream.write("Native signals: 0\nVisible required controls: 6\nConfirmation initially acknowledged: false\nEvidence source: public SwiftUI bounds anchors on displayed views\n")
+                            stream.write("Native signals: 0\nVisible required controls: 7\nConfirmation initially acknowledged: false\nEvidence source: public SwiftUI bounds anchors on displayed views\n")
                     if scenario.startswith("tool-preparation-"):
                         with (root / text).open("a") as stream:
                             stream.write(f"Download copy title: {'复制下载命令' if language == 'zh-Hans' else 'Copy download command'}\n")

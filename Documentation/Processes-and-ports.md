@@ -27,7 +27,7 @@ Browser/app, shared-service, system, self and ancestor protections fail closed. 
 
 ## Lifetime and privacy
 
-Snapshot/selection/preview data lives only in memory and is cleared across Demo-mode changes. Actual submitted-signal results remain in session memory until app exit and are shown only in real mode; cancellation cannot erase knowledge of an irreversible action. Demo mode never scans or shows a real process snapshot. Task entries retain only scan status and a count, not process names, executable paths or arguments. No process history is persisted or uploaded. Projects → Related processes opens a filtered view; it does not scan implicitly.
+Snapshot/selection/preview data lives only in memory and is cleared across Demo-mode changes. The latest actual stop results remain in session memory until replaced by the next stop results or app exit and are shown only in real mode; cancellation cannot erase knowledge of an irreversible action. Demo mode never scans or shows a real process snapshot. Task entries retain only scan status and a count, not process names, executable paths or arguments. No process history is persisted or uploaded. Projects → Related processes opens a filtered view; it does not scan implicitly.
 
 ## Verification
 

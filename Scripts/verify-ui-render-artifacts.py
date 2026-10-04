@@ -156,7 +156,7 @@ def verify(directory: Path, language: str) -> int:
             f"Content size: {width} × {height} points",
         }
         if name.startswith("process-stop-"):
-            required.update({"Native signals: 0", "Visible required controls: 6",
+            required.update({"Native signals: 0", "Visible required controls: 7",
                 "Confirmation initially acknowledged: false",
                 "Evidence source: public SwiftUI bounds anchors on displayed views"})
         if name.startswith("tool-preparation-"):

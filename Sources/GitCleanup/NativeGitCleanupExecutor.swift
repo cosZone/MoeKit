@@ -19,7 +19,7 @@ actor NativeGitCleanupExecutor {
     func discard() { prepared = nil; preparedCatalog = nil; preparedDeadline = nil }
     func prepare(_ request: GitCleanupRequest) throws -> GitCleanupPlan {
         discard()
-        let catalog = try catalogSnapshot(request)
+        let catalog = try GitCleanupInspectionStage.check("catalog protection") { try catalogSnapshot(request) }
         let evidence = try GitCleanupInspection.inspect(request)
         let id = UUID()
         let plan = GitCleanupPlan(id: id, request: request, commonDirectory: evidence.common.url,
@@ -34,13 +34,14 @@ actor NativeGitCleanupExecutor {
               plan.id == id, ProcessInfo.processInfo.systemUptime < deadline else { throw GitCleanupFailure.expired }
         discard()
         let fresh = try GitCleanupInspection.inspect(plan.request)
+        defer { withExtendedLifetime(fresh) {} }
         guard fresh.fingerprint == plan.fingerprint, fresh.targetOID == plan.targetOID, fresh.baseOID == plan.baseOID,
               fresh.common.url == plan.commonDirectory else { throw GitCleanupFailure.changed }
         guard ProcessInfo.processInfo.systemUptime < deadline else { throw GitCleanupFailure.expired }
         try Task.checkCancellation(); try permit.consume()
         let lease = try InstallerCatalogLease(app: InstallerDirectoryAnchor.open(catalogDirectory))
         defer { withExtendedLifetime(lease) {} }
-        try lease.requireSnapshot(catalog)
+        try GitCleanupInspectionStage.check("catalog lease") { try lease.requireSnapshot(catalog) }
         // No cancellation after the first mutation: finish the bounded pair or
         // leave an explicit recovery record. Cancellation never triggers deletion.
         let recoveryRoot = try ensurePrivateChild(fresh.common, "moekit-recovery")
@@ -147,6 +148,7 @@ actor NativeGitCleanupExecutor {
         try lease.requireSnapshot(catalog)
         let common = try InstallerDirectoryAnchor.open(plan.commonDirectory)
         let scope = try InstallerDirectoryAnchor.open(plan.request.scope)
+        defer { withExtendedLifetime((common, scope, recovery)) {} }
         guard receipt.commonIdentity.matchesDirectory(try InstallerFileAccess.snapshot(common.fd)),
               receipt.scopeIdentity.matchesDirectory(try InstallerFileAccess.snapshot(scope.fd)) else { throw GitCleanupFailure.changed }
         let payload = plan.request.action == .retireWorktree ? "worktree" : "branch"
@@ -156,15 +158,18 @@ actor NativeGitCleanupExecutor {
         let name: String
         if plan.request.action == .retireWorktree {
             destination = try InstallerDirectoryAnchor.open(plan.request.project.url.deletingLastPathComponent()); name = plan.request.project.url.lastPathComponent
+            defer { withExtendedLifetime(destination) {} }
             try destination.validateTrustedMutationAncestry()
             guard let registrationURL = plan.registration, let identity = receipt.registrationIdentity,
                   identity.matchesDirectory(try InstallerFileAccess.snapshotAt(recovery.fd, "registration")) else { throw GitCleanupFailure.changed }
             let registrations = try InstallerDirectoryAnchor.open(registrationURL.deletingLastPathComponent())
+            defer { withExtendedLifetime(registrations) {} }
             try registrations.validateTrustedMutationAncestry()
             guard receipt.destinationParentIdentity.matchesDirectory(try InstallerFileAccess.snapshot(destination.fd)),
                   receipt.registrationParentIdentity?.matchesDirectory(try InstallerFileAccess.snapshot(registrations.fd)) == true else { throw GitCleanupFailure.changed }
             let registration = try recovery.child("registration")
             let worktree = try recovery.child("worktree")
+            defer { withExtendedLifetime((registration, worktree)) {} }
             let retainedFiles = GitCleanupCapture(); try retainedFiles.collect(worktree)
             let retainedRegistration = GitCleanupCapture(); try retainedRegistration.collect(registration)
             guard try GitCleanupInspection.read(worktree, ".git", maximum: 4096) == Data(("gitdir: " + registrationURL.path + "\n").utf8),
@@ -202,6 +207,7 @@ actor NativeGitCleanupExecutor {
                 try InstallerFileAccess.exclusiveMove(from: recovery, name: payload, to: destination, destinationName: name)
                 guard receipt.payloadIdentity.matchesDirectory(try InstallerFileAccess.snapshotAt(destination.fd, name)) else { throw GitCleanupFailure.changed }
                 let restoredRegistration = try registrations.child(registrationURL.lastPathComponent)
+                defer { withExtendedLifetime(restoredRegistration) {} }
                 let marker = Data(("MoeKit retirement " + id.uuidString + "\n").utf8)
                 guard try GitCleanupInspection.read(restoredRegistration, "locked", maximum: 256) == marker,
                       unlinkat(restoredRegistration.fd, "locked", 0) == 0 else { throw GitCleanupFailure.changed }
@@ -212,6 +218,7 @@ actor NativeGitCleanupExecutor {
             var parent = try common.child("refs").child("heads")
             for component in parts.dropLast() { parent = try parent.child(component) }
             destination = parent; name = parts.last!
+            defer { withExtendedLifetime(destination) {} }
             try destination.validateTrustedMutationAncestry()
             let retainedBranch = try InstallerFileDescriptor(parent: recovery, name: payload)
             defer { withExtendedLifetime(retainedBranch) {} }

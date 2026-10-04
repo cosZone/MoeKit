@@ -7,7 +7,7 @@ struct CleanupWorkspaceView: View {
     @Environment(WorkspaceStore.self) private var workspace
     @State private var store: CleanupStore
 
-    init() { _store = State(initialValue: CleanupStore()) }
+    init(store: CleanupStore? = nil) { _store = State(initialValue: store ?? CleanupStore()) }
 
     private var workspaceContext: CleanupWorkspaceContext {
         Self.context(workspace)

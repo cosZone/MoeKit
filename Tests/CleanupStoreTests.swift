@@ -267,7 +267,7 @@ private final class CleanupTestClock: @unchecked Sendable {
     func set(_ value: Date) { lock.lock(); defer { lock.unlock() }; date = value }
 }
 
-private actor CleanupStoreFixture: CleanupExecuting {
+actor CleanupStoreFixture: CleanupExecuting {
     private(set) var inspectCount = 0
     private(set) var prepareCount = 0
     private(set) var moveCount = 0

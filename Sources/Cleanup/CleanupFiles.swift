@@ -83,11 +83,14 @@ enum CleanupFiles {
         }
         return String(localized: "Standard CACHEDIR.TAG signature found. The tag is a claim by the folder creator, not permission or proof that every file is disposable.")
     }
-    static func protect(_ target: URL, paths: [String]) throws {
+    static func protect(_ target: URL, paths: [String], originalIdentity: InstallerFileSnapshot? = nil) throws {
         guard paths.count <= 2_002 else { throw CleanupFailure.limit }
         let selected = try InstallerFileAccess.components(target)
         let selectedFolded = selected.map(foldedComponent)
-        let candidate = try InstallerDirectoryAnchor.open(target)
+        // Recovery targets are normally absent after Trash. Anchor their original
+        // parent, while retaining the receipt-bound original root identity.
+        let candidate = try InstallerDirectoryAnchor.open(originalIdentity == nil ? target : target.deletingLastPathComponent())
+        let selectedIdentity = originalIdentity ?? candidate.identity
         for path in paths {
             let url = URL(fileURLWithPath: path)
             let protected = try InstallerFileAccess.components(url)
@@ -120,7 +123,7 @@ enum CleanupFiles {
                 }
                 return false
             }
-            guard !containsIdentity(candidate, protectedDirectory.identity), !containsIdentity(protectedDirectory, candidate.identity) else {
+            guard !containsIdentity(candidate, protectedDirectory.identity), !containsIdentity(protectedDirectory, selectedIdentity) else {
                 throw CleanupFailure.refused(String(localized: "A saved project, worktree, or protected control location overlaps this cache."))
             }
             try protectedDirectory.validate()

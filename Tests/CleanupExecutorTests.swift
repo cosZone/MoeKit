@@ -26,14 +26,19 @@ private struct VerifiedCacheNativeSink: InstallerTrashSink {
     let marker: Data
     func trash(_ url: URL) throws -> URL {
         let root = try InstallerDirectoryAnchor.open(fixtureRoot)
-        try #require(fixtureRootIdentity.matchesDirectory(InstallerFileAccess.snapshot(root.fd)))
+        let rootActual = try InstallerFileAccess.snapshot(root.fd)
+        try #require(fixtureRootIdentity.matchesDirectory(rootActual))
         let directory = try InstallerDirectoryAnchor.open(url)
-        try #require(identity.matchesCaptured(InstallerFileAccess.snapshot(directory.fd)))
-        try #require(CleanupFiles.names(directory) == ["owned.bin"])
+        let directoryActual = try InstallerFileAccess.snapshot(directory.fd)
+        try #require(identity.matchesCaptured(directoryActual))
+        let names = try CleanupFiles.names(directory)
+        try #require(names == ["owned.bin"])
         let file = try InstallerFileDescriptor(parent: directory, name: "owned.bin")
-        try #require(markerIdentity == InstallerFileAccess.snapshot(file.fd))
-        try #require(markerIdentity == InstallerFileAccess.snapshotAt(directory.fd, "owned.bin"))
-        try #require(BoundedRegularFileReader.read(descriptor: file.fd, maximumBytes: 1024) == marker)
+        let opened = try InstallerFileAccess.snapshot(file.fd)
+        let named = try InstallerFileAccess.snapshotAt(directory.fd, "owned.bin")
+        let bytes = try BoundedRegularFileReader.read(descriptor: file.fd, maximumBytes: 1024)
+        try #require(markerIdentity == opened && markerIdentity == named)
+        try #require(bytes == marker)
         return try NativeInstallerTrashSink().trash(url)
     }
 }
@@ -72,7 +77,7 @@ private struct CacheFixture: Sendable {
                   hook: @escaping @Sendable (CleanupCheckpoint) throws -> Void = { _ in }) -> NativeCleanupExecutor {
         .init(environment: environment, sink: sink ?? CacheFixtureSink(trash), checkpoint: hook)
     }
-    func sentinelUnchanged() throws { #expect(try Data(contentsOf: sentinel) == marker) }
+    func sentinelUnchanged() throws { let bytes = try Data(contentsOf: sentinel); try #require(bytes == marker) }
     func plan(_ executor: NativeCleanupExecutor, selected: [URL], context: CleanupContext) async throws -> CleanupPlan {
         let report = try await executor.inspect(root: caches, context: context)
         return try await executor.prepare(inspectionID: report.id, selectedPaths: Set(selected.map(\.path)), context: context)
@@ -129,16 +134,18 @@ struct CleanupExecutorTests {
         let plan = try await f.plan(executor, selected: [a], context: context)
         let moved = try await executor.moveToTrash(planID: plan.id, context: context)
         let receipt = try #require(moved.items.first?.receipt)
-        #expect(receipt.canDeletePermanently)
+        try #require(receipt.canDeletePermanently)
         let deletion = try await executor.prepareRecovery(receiptID: receipt.id, action: .deletePermanently, context: context)
         #expect(FileManager.default.fileExists(atPath: try #require(receipt.payloadURL).path))
         let removed = try await executor.applyRecovery(planID: deletion.id, context: context)
-        #expect(removed.items.first?.succeeded == true)
-        #expect(removed.items.first?.receipt?.state == .deleted)
-        #expect(removed.items.first?.receipt?.canRestore == false)
-        #expect(!FileManager.default.fileExists(atPath: try #require(receipt.payloadURL).path))
+        try #require(removed.items.first?.succeeded == true)
+        try #require(removed.items.first?.receipt?.state == .deleted)
+        try #require(removed.items.first?.receipt?.canRestore == false)
+        let removedURL = try #require(receipt.payloadURL)
+        try #require(!FileManager.default.fileExists(atPath: removedURL.path))
         await #expect(throws: (any Error).self) { try await executor.applyRecovery(planID: deletion.id, context: context) }
-        #expect(try Data(contentsOf: unrelatedTrash) == f.marker)
+        let neighborBytes = try Data(contentsOf: unrelatedTrash)
+        try #require(neighborBytes == f.marker)
         try f.sentinelUnchanged()
     }
     @Test("Changed selection, unknown catalog and protected project roots never authorize cleanup")
@@ -350,6 +357,30 @@ struct CleanupExecutorTests {
         try f.sentinelUnchanged()
     }
 
+    @Test("Case and Unicode equivalent protection never widens selected scope")
+    func aliasProtection() async throws {
+        let f = try CacheFixture(), a = try f.folder("Café"), executor = f.executor()
+        let alias = f.caches.appendingPathComponent("CAFE\u{301}")
+        let scope = CleanupContext(generation: UUID(), protectedPaths: [alias.path], catalogIsKnown: true)
+        let report = try await executor.inspect(root: f.caches, context: scope)
+        #expect(report.candidates.first(where: { $0.url.path == a.path })?.isEligible == false)
+        #expect(try Data(contentsOf: a.appendingPathComponent("owned.bin")) == f.marker)
+    }
+    @Test("Complete manifest and permanent-directory budgets fail before authorization")
+    func boundedInventory() throws {
+        let f = try CacheFixture(), a = try f.folder("cache")
+        let directory = try InstallerDirectoryAnchor.open(a)
+        #expect(throws: (any Error).self) {
+            try CleanupFiles.manifest(directory, environment: f.environment, maximumEntries: 1)
+        }
+        let identity = try InstallerFileAccess.snapshot(directory.fd)
+        let tooMany = CleanupManifest(entries: (0...CleanupPermanentRemoval.maximumDirectories).map {
+            CleanupEntry(relativePath: String($0), kind: .directory, identity: identity, linkDestination: nil)
+        }, logicalBytes: 0)
+        #expect(throws: (any Error).self) { try CleanupPermanentRemoval.preflight(tooMany) }
+        #expect(!FileManager.default.fileExists(atPath: f.recovery.path))
+    }
+
     @Test("Actual native Trash and restore use only a uniquely owned fixture", .enabled(if: ProcessInfo.processInfo.environment["MOEKIT_CACHE_NATIVE_FIXTURE"] == "1"))
     func actualNativeTrash() async throws {
         let f = try CacheFixture(realTrash: true), a = try f.folder("Owned-Cache-\(UUID().uuidString)")
@@ -362,12 +393,13 @@ struct CleanupExecutorTests {
         let plan = try await f.plan(executor, selected: [a], context: context)
         let result = try await executor.moveToTrash(planID: plan.id, context: context)
         let receipt = try #require(result.items.first?.receipt)
-        #expect(receipt.state == .trashed)
-        #expect(receipt.payloadURL?.deletingLastPathComponent().path == f.trash.path)
+        try #require(receipt.state == .trashed)
+        try #require(receipt.payloadURL?.deletingLastPathComponent().path == f.trash.path)
         let restore = try await executor.prepareRecovery(receiptID: receipt.id, action: .restore, context: context)
         let restored = try await executor.applyRecovery(planID: restore.id, context: context)
-        #expect(restored.items.first?.succeeded == true)
-        #expect(try Data(contentsOf: a.appendingPathComponent("owned.bin")) == f.marker)
+        try #require(restored.items.first?.succeeded == true)
+        let restoredBytes = try Data(contentsOf: a.appendingPathComponent("owned.bin"))
+        try #require(restoredBytes == f.marker)
         try f.sentinelUnchanged()
         try await permanentConfirmedManifest()
         let env = ProcessInfo.processInfo.environment

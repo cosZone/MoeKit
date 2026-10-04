@@ -27,6 +27,10 @@ Swift 6 · SwiftUI / AppKit · macOS 15+ · Tuist 4.148.3 · SPM
 
 **预览验证记录：** `0.1.0-preview.7` 的精确源码 [`a420ade`](https://github.com/cosZone/MoeKit/commit/a420ade54c8a251688072af70345f1bc18db8da3) 已完成 [发布运行](https://github.com/cosZone/MoeKit/actions/runs/37215418463)，提供通过公开下载字节、校验和、来源与 App 内容摘要核对的 DMG／ZIP。主 App 与原创监督辅助程序均已完成双架构开发签名验证。发布 Swift Testing 报告 406 项，其中 6 项 opt-in 原生检查跳过，另有 12 项 XCTest 与 89 项发布辅助测试通过；实际 Trash／恢复与拒绝 fixture 在同源码 [Native CI](https://github.com/cosZone/MoeKit/actions/runs/37214748071) 验证。该 CI 的使用证据 job 正确拒绝当前非空映像环境，未建立当前 `noUseObserved`。完整验证边界见 [preview.7 记录](website/content/changelog/0.1.0-preview.7.md)；完整窗口、键盘、VoiceOver、双架构实机与真实目录权限仍需手动验收。
 
+## 下一版源码：真实缓存清理
+
+Tools → Mole → Cleanup 新增原生批量缓存清理：主动检查用户缓存目录 → 选择多个精确缓存 → 复查完整清单并确认 → 移入废纸篓；每项记录可独立确认原路径恢复，或另行确认不可恢复的永久移除。移动到废纸篓不释放空间，永久移除也不保证等量物理空间立即回收。此工作流未包含在 preview.7；当前验证以对应 PR 精确提交 CI 为准。支持范围、限制和使用方式见 [原生缓存清理](Documentation/Native-cache-cleanup.md)。
+
 ## 构建
 
 需要 macOS 15+、Xcode 16.4 和 [Mise](https://mise.jdx.dev/getting-started.html)。以下是待在 macOS 执行的命令：

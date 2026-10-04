@@ -200,7 +200,7 @@ actor NativeCleanupExecutor: CleanupExecuting {
         guard action == .restore ? receipt.canRestore : receipt.canDeletePermanently,
               let source = receipt.payloadURL else { throw CleanupFailure.expired }
         let catalog = try catalogSnapshot()
-        try CleanupFiles.protect(receipt.target.originalURL, paths: try protectedPaths(context, catalog: catalog))
+        try CleanupFiles.protect(receipt.target.originalURL, paths: try protectedPaths(context, catalog: catalog), originalIdentity: receipt.target.manifest.entries[0].identity)
         let parent = try InstallerDirectoryAnchor.open(receipt.target.originalURL.deletingLastPathComponent())
         try CleanupFiles.validateRoot(parent, environment: environment)
         guard receipt.originalParent.matchesDirectory(parent.identity) else { throw CleanupFailure.changed }

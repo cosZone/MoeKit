@@ -156,6 +156,7 @@ jobs:
           python3 Scripts/test-ui-render-artifacts.py
           python3 Scripts/test-mole-supervisor.py
           python3 Scripts/test-installer-fixture-evidence.py
+          python3 Scripts/test-cache-fixture-evidence.py
           python3 Scripts/test-installer-conditional-evidence.py
           xcodebuild -version
           xcodebuild -help > XcodeHelp.txt 2>&1
@@ -201,6 +202,7 @@ jobs:
             -only-testing:MoeKitTests/ToolPreparationViewTests/testToolPreparationRenders \
             -only-testing:MoeKitTests/MoleAnalysisViewTests/testAnalysisSheetRenders \
             -only-testing:MoeKitTests/InstallerTrashViewTests/testInstallerConfirmationRenders \
+            -only-testing:MoeKitTests/CleanupViewTests/testCleanupConfirmationRenders \
             -resultBundlePath ChineseRenderResults.xcresult
       - name: Check SwiftUI bundle and smoke-launch explicit demo
         run: |

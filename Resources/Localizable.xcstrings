@@ -6056,7 +6056,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "凭据 %@ · 第 %lld 条记录"
+            "value": "记录 %@ · 第 %lld 条记录"
           }
         }
       }
@@ -6447,6 +6447,1076 @@
           "stringUnit": {
             "state": "translated",
             "value": "磁盘映像清单不完整或无法读取；未移动任何文件。你可以推出自己打开的映像后重新检查，但请勿处理系统管理的映像。MoeKit 不会对映像进行分类或代为推出；不受支持的系统映像清单可能使此操作持续不可用。"
+          }
+        }
+      }
+    },
+    "1. Choose a folder and inspect": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1. 选择文件夹并检查"
+          }
+        }
+      }
+    },
+    "2. Select caches to review": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2. 选择要复查的缓存"
+          }
+        }
+      }
+    },
+    "3. Confirm these exact caches": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "3. 确认这些精确缓存"
+          }
+        }
+      }
+    },
+    "A filename could not be displayed without changing its bytes.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "某个文件名无法在保留原始字节的情况下准确显示。"
+          }
+        }
+      }
+    },
+    "A readable project catalog is required before cache cleanup.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清理缓存前需要可读取的项目目录。"
+          }
+        }
+      }
+    },
+    "A readable project catalog is required before cleanup can be reviewed.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复查清理操作前需要可读取的项目目录。"
+          }
+        }
+      }
+    },
+    "A saved project, worktree, or protected control location overlaps this cache.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此缓存与已保存的项目、工作树或受保护的控制文件位置重叠。"
+          }
+        }
+      }
+    },
+    "A socket, device, pipe, or unsupported entry is present. Close the owning app and inspect again.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发现套接字、设备、管道或不支持的项目。请关闭所属应用后重新检查。"
+          }
+        }
+      }
+    },
+    "Actual operations from this session, not example data": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本次会话的真实操作，非示例数据"
+          }
+        }
+      }
+    },
+    "After confirmation, MoeKit may create private parent directories, coordination locks, per-item staging directories and numbered recovery records here. Records disclose these original paths and persist after the operation. Closing this plan creates none of them.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "确认后，MoeKit 可能在此创建私有父目录、协调锁、各项目的暂存目录和编号恢复记录。记录包含原始路径，并在操作后保留。关闭此计划不会创建这些内容。"
+          }
+        }
+      }
+    },
+    "Another cleanup operation is active. Wait for its actual result.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "另一项清理操作仍在进行，请等待实际结果。"
+          }
+        }
+      }
+    },
+    "Cache": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缓存"
+          }
+        }
+      }
+    },
+    "Cache Trash operation requires review": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缓存废纸篓操作需要复查"
+          }
+        }
+      }
+    },
+    "Cache candidates, select one or more eligible rows": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缓存候选项，请选择一个或多个可用行"
+          }
+        }
+      }
+    },
+    "Cache moved to Trash": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缓存已移入废纸篓"
+          }
+        }
+      }
+    },
+    "Cache outcome uncertain; review recovery records": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缓存操作结果不确定，请复查恢复记录"
+          }
+        }
+      }
+    },
+    "Cache permanently deleted": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缓存已永久删除"
+          }
+        }
+      }
+    },
+    "Cache recovery receipts": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缓存恢复记录"
+          }
+        }
+      }
+    },
+    "Cache restore requires review": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缓存恢复需要复查"
+          }
+        }
+      }
+    },
+    "Cache restored": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缓存已恢复"
+          }
+        }
+      }
+    },
+    "Cache retained for recovery": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缓存已保留以便恢复"
+          }
+        }
+      }
+    },
+    "Cancel stops before the next mutation when possible. A started native operation may finish; its actual per-item outcomes and recovery records remain available.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消会尽可能在下一次更改前停止。已开始的原生操作仍可能完成，其实际逐项结果和恢复记录会被保留。"
+          }
+        }
+      }
+    },
+    "Cancelled before this item was changed.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已在更改此项目之前取消。"
+          }
+        }
+      }
+    },
+    "Choose a cache location inside your own home folder.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请选择你自己个人文件夹中的缓存位置。"
+          }
+        }
+      }
+    },
+    "Choose a folder whose direct-child cache directories you want to inspect.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择包含要检查的直属缓存子目录的文件夹。"
+          }
+        }
+      }
+    },
+    "Choose folder containing caches…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择包含缓存的文件夹…"
+          }
+        }
+      }
+    },
+    "Choose user caches": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择用户缓存"
+          }
+        }
+      }
+    },
+    "Choose your user cache folder, or a folder containing directories with a valid CACHEDIR.TAG. Only eligible direct-child directories are offered. A cache name or marker does not prove the contents are disposable.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择用户缓存文件夹，或包含有效 CACHEDIR.TAG 目录的文件夹。仅提供符合条件的直属子目录。缓存名称或标记不代表其中内容一定可以丢弃。"
+          }
+        }
+      }
+    },
+    "Choosing a folder does not scan it. Inspect reads a bounded, complete inventory without following symbolic links or changing cache contents.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择文件夹不会扫描它。检查会在预算范围内读取完整清单，不跟随符号链接，也不更改缓存内容。"
+          }
+        }
+      }
+    },
+    "Cleanup could not be verified. Read recovery records before retrying; no automatic retry will occur.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法验证清理结果。重试前请读取恢复记录；不会自动重试。"
+          }
+        }
+      }
+    },
+    "Cleanup recovery records could not be verified. Retained data will not be removed automatically.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法验证清理恢复记录。保留的数据不会被自动删除。"
+          }
+        }
+      }
+    },
+    "Cleanup stopped. The receipt shows retained or uncertain data; nothing is retried automatically.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清理已停止。记录显示数据已保留或结果不确定；不会自动重试。"
+          }
+        }
+      }
+    },
+    "Cleanup was cancelled. Review any actual outcomes before trying again.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清理已取消。再次尝试前请复查已经发生的实际结果。"
+          }
+        }
+      }
+    },
+    "Close apps, builds, sync jobs and other workloads using these caches first. Inventory and identity checks cannot prove global non-use or prevent every same-user race.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请先关闭使用这些缓存的应用、构建、同步任务和其他工作负载。清单与身份检查无法证明全局未使用，也无法防止所有同用户并发变化。"
+          }
+        }
+      }
+    },
+    "Complete reviewed path inventory": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完整复查路径清单"
+          }
+        }
+      }
+    },
+    "Direct child of your macOS user Caches folder. This location suggests cache data; review the contents and confirm that you can regenerate them.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这是 macOS 用户 Caches 文件夹的直属子目录。此位置提示其可能为缓存数据；请复查内容并确认可以重新生成。"
+          }
+        }
+      }
+    },
+    "Explicit read-only listing of MoeKit’s cache receipts. No broad Trash scan or automatic recovery occurs. Restore and permanent deletion each require a fresh review and separate confirmation.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "主动以只读方式列出 MoeKit 的缓存记录。不广泛扫描废纸篓，也不自动恢复。恢复和永久删除均需重新复查并分别确认。"
+          }
+        }
+      }
+    },
+    "Explicit selection · native macOS Trash": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "明确选择 · 原生 macOS 废纸篓"
+          }
+        }
+      }
+    },
+    "Git metadata or a protected credential/configuration name was found inside this candidate.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此候选项内发现 Git 元数据或受保护的凭据／配置文件名。"
+          }
+        }
+      }
+    },
+    "Git projects, worktrees and unverified build artifacts are protected. No Mole cleanup command, package removal, project deletion or broad Trash emptying runs here.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Git 项目、工作树和未验证的构建产物受到保护。这里不运行 Mole 清理命令、软件包卸载、项目删除或整体清空废纸篓。"
+          }
+        }
+      }
+    },
+    "I have stopped the apps and workloads using every selected cache": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "我已停止使用所有选中缓存的应用和工作负载"
+          }
+        }
+      }
+    },
+    "I reviewed the full paths and can regenerate all selected content": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "我已复查完整路径，并能重新生成所有选中内容"
+          }
+        }
+      }
+    },
+    "I understand this exact cache will be permanently deleted and cannot be restored": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "我理解此精确缓存将被永久删除，且无法恢复"
+          }
+        }
+      }
+    },
+    "Incomplete records cannot authorize restore or deletion. Retained data is preserved.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不完整的记录不能授权恢复或删除。保留的数据不会被移除。"
+          }
+        }
+      }
+    },
+    "Inspect selected folder": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查所选文件夹"
+          }
+        }
+      }
+    },
+    "Latest actual per-item outcomes": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最近一次实际逐项结果"
+          }
+        }
+      }
+    },
+    "Logical bytes are not guaranteed physically reclaimed space. Open files, APFS snapshots, clones and filesystem behavior can retain storage.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "逻辑字节数不保证等于实际释放空间。打开的文件、APFS 快照、克隆和文件系统行为可能继续占用存储。"
+          }
+        }
+      }
+    },
+    "Logical size": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "逻辑大小"
+          }
+        }
+      }
+    },
+    "Logical sizes are not a physical-space recovery estimate": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "逻辑大小不是实际可释放空间的估算"
+          }
+        }
+      }
+    },
+    "MoeKit will move this exact recorded cache back to its original path after rechecking it. An occupied destination refuses the restore; nothing is overwritten.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MoeKit 将重新检查并把记录中的精确缓存移回原路径。目标已存在时会拒绝恢复，不会覆盖任何内容。"
+          }
+        }
+      }
+    },
+    "MoeKit will recheck and move only these reviewed cache directories to native macOS Trash. Files remain stored in Trash; this step does not free their storage.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MoeKit 将重新检查，并仅把这些已复查的缓存目录移入原生 macOS 废纸篓。文件仍存储在废纸篓中；此步骤不会释放其占用空间。"
+          }
+        }
+      }
+    },
+    "Move selected caches to Trash": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将所选缓存移入废纸篓"
+          }
+        }
+      }
+    },
+    "Moved to Trash. No disk-space release is claimed; restore or permanent deletion requires another review.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已移入废纸篓。这不代表磁盘空间已释放；恢复或永久删除需要另一次复查。"
+          }
+        }
+      }
+    },
+    "Native cache cleanup": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "原生缓存清理"
+          }
+        }
+      }
+    },
+    "Native cleanup is unavailable in Demo. Actual operation receipts from this session remain visible.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "示例模式下无法执行原生清理。本次会话的真实操作记录仍会显示。"
+          }
+        }
+      }
+    },
+    "No eligible cache candidates were found in this folder. This does not prove the folder is empty.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此文件夹中未找到符合条件的缓存候选项。这不代表文件夹为空。"
+          }
+        }
+      }
+    },
+    "No folder selected": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚未选择文件夹"
+          }
+        }
+      }
+    },
+    "Not attempted. An earlier item stopped or the batch was cancelled.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未尝试执行。之前的项目已停止，或批次已取消。"
+          }
+        }
+      }
+    },
+    "Ownership, volume, file flags, or write permissions make this cache unsupported. Permissions were not changed.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所有权、卷、文件标志或写入权限不满足此缓存操作的条件。未更改权限。"
+          }
+        }
+      }
+    },
+    "Permanent cache deletion interrupted": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缓存永久删除已中断"
+          }
+        }
+      }
+    },
+    "Permanent deletion did not begin. The file tree is retained at its recorded recovery location; inspect it before any new action.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚未开始永久删除。文件树保留在记录的恢复位置；再次操作前请先检查。"
+          }
+        }
+      }
+    },
+    "Permanent deletion stopped after it began. Some confirmed entries may already be removed; remaining data is retained. No automatic retry is allowed.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "永久删除开始后已停止。部分已确认项目可能已移除，其余数据已保留。不允许自动重试。"
+          }
+        }
+      }
+    },
+    "Permanently delete this cache": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "永久删除此缓存"
+          }
+        }
+      }
+    },
+    "Permanently removed the confirmed cache entries. Restore is no longer available. Open files, hard links and APFS snapshots may delay or reduce physical space reclaimed.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已永久移除确认的缓存项目，无法再恢复。打开的文件、硬链接和 APFS 快照可能延迟或减少实际释放的空间。"
+          }
+        }
+      }
+    },
+    "Read cache recovery records": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "读取缓存恢复记录"
+          }
+        }
+      }
+    },
+    "Restore stopped. The exact recovery location is retained in the receipt; no destination was overwritten.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复已停止。精确恢复位置保留在记录中，未覆盖任何目标。"
+          }
+        }
+      }
+    },
+    "Restore this cache": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复此缓存"
+          }
+        }
+      }
+    },
+    "Restored to its original location without replacing any existing file.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已恢复到原位置，未替换任何现有文件。"
+          }
+        }
+      }
+    },
+    "Review cache restore…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复查缓存恢复…"
+          }
+        }
+      }
+    },
+    "Review caches before changing files": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更改文件前先复查缓存"
+          }
+        }
+      }
+    },
+    "Review permanent deletion…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复查永久删除…"
+          }
+        }
+      }
+    },
+    "Review selected caches…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复查所选缓存…"
+          }
+        }
+      }
+    },
+    "Review status": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复查状态"
+          }
+        }
+      }
+    },
+    "Standard CACHEDIR.TAG signature found. The tag is a claim by the folder creator, not permission or proof that every file is disposable.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已找到标准 CACHEDIR.TAG 签名。此标记是文件夹创建者的声明，不是授权，也不能证明每个文件都可以丢弃。"
+          }
+        }
+      }
+    },
+    "Symbolic links are included as links only. Their destinations are not followed or included.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "符号链接仅作为链接处理，不跟随或包含其目标。"
+          }
+        }
+      }
+    },
+    "The cache tag is missing, changed, or does not contain the standard signature.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缓存标记缺失、发生变化或不包含标准签名。"
+          }
+        }
+      }
+    },
+    "The complete cache inventory exceeded its safety budget. Nothing was authorized; choose a smaller cache folder.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完整缓存清单超出安全预算。未授权任何操作；请选择更小的缓存文件夹。"
+          }
+        }
+      }
+    },
+    "The selected cache, contents, or containing folder changed. Inspect again; the old confirmation cannot be reused.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所选缓存、内容或包含它的文件夹发生了变化。请重新检查；旧确认无法再次使用。"
+          }
+        }
+      }
+    },
+    "This cache could not be fully verified. Git ancestry, ownership, links in containing folders, cloud metadata, active writes, or inaccessible contents may make it unsupported.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法完整验证此缓存。Git 上级目录、所有权、父目录链接、云端元数据、正在写入或无法访问的内容可能使其不受支持。"
+          }
+        }
+      }
+    },
+    "This cleanup confirmation expired or was already used. Review a new plan.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此清理确认已过期或已使用。请复查新计划。"
+          }
+        }
+      }
+    },
+    "This cleanup receipt is incomplete or unreadable. Its data is retained; no restore or deletion can be authorized from it.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此清理记录不完整或无法读取。数据已保留，不能据此授权恢复或删除。"
+          }
+        }
+      }
+    },
+    "This operation appends private recovery records. If interrupted or only partly completed, inspect the per-item outcome and read recovery records before deciding what to do next.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此操作会追加私有恢复记录。如中断或仅部分完成，请先检查逐项结果并读取恢复记录，再决定下一步。"
+          }
+        }
+      }
+    },
+    "This permanently deletes only this receipt’s validated cache and the complete contents listed above. It cannot be undone through Trash or MoeKit. Other Trash items are not selected or emptied.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这将永久删除此记录中已验证的缓存及上方列出的全部内容，无法通过废纸篓或 MoeKit 撤销。不选择或清空废纸篓中的其他项目。"
+          }
+        }
+      }
+    },
+    "This system, security, or MoeKit cache is protected in this version.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此版本保护系统、安全或 MoeKit 自身的缓存。"
+          }
+        }
+      }
+    },
+    "This tree exceeds the bounded directory-descriptor budget for permanent removal. Restore it or manage it in Finder; no deletion was authorized.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此文件树超出永久移除的目录描述符预算。请恢复它或在 Finder 中管理；未授权删除。"
+          }
+        }
+      }
+    },
+    "Use Command-click or Shift-click to select multiple eligible rows. Blocked rows cannot be selected for cleanup.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用 Command 点按或 Shift 点按选择多个符合条件的行。无法选择被阻止的行进行清理。"
+          }
+        }
+      }
+    },
+    "Confirm permanent deletion of this cache": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "确认永久删除此缓存"
+          }
+        }
+      }
+    },
+    "Confirm original-path cache restore": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "确认缓存原路径恢复"
+          }
+        }
+      }
+    },
+    "Checking the selected cleanup operation…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在检查所选清理操作…"
+          }
+        }
+      }
+    },
+    "Waiting for the actual cleanup outcome…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在等待清理的实际结果…"
+          }
+        }
+      }
+    },
+    "Original cache path": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "原始缓存路径"
+          }
+        }
+      }
+    },
+    "Private operation records": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "私有操作记录"
+          }
+        }
+      }
+    },
+    "Selected cache": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所选缓存"
+          }
+        }
+      }
+    },
+    "Selected folder": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所选文件夹"
+          }
+        }
+      }
+    },
+    "Exact target": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "精确目标"
+          }
+        }
+      }
+    },
+    "Recorded cache location": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "记录的缓存位置"
+          }
+        }
+      }
+    },
+    "No cache recovery records found": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未找到缓存恢复记录"
+          }
+        }
+      }
+    },
+    "Cache recovery records have not been read": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚未读取缓存恢复记录"
+          }
+        }
+      }
+    },
+    "Review selected user caches, move them to Trash, restore them, or separately confirm permanent removal.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复查所选用户缓存，移入废纸篓、恢复，或另行确认永久移除。"
+          }
+        }
+      }
+    },
+    "This Mole command is not connected. Confirmed analysis and the separate native cache adapter are available.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此 Mole 命令尚未连接。已提供逐次确认的分析和独立原生缓存适配器。"
+          }
+        }
+      }
+    },
+    "%lld inventory entries · %lld logical bytes": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 个清单项目 · %lld 逻辑字节"
+          }
+        }
+      }
+    },
+    "%lld caches · %@ of logical content": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 个缓存 · %@ 逻辑内容"
+          }
+        }
+      }
+    },
+    "%lld selected": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已选择 %lld 项"
+          }
+        }
+      }
+    },
+    "Receipt %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "记录 %@"
+          }
+        }
+      }
+    },
+    "Mole Space can import reports or analyze a folder with the supported official V1.57.0 analyzer after confirmation. Native cache cleanup requires exact selection and confirmation. Other tools show their available actions.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mole Space 可导入报告，或在确认后使用受支持的官方 V1.57.0 分析器分析文件夹。原生缓存清理需要精确选择并确认。其他工具会显示各自可用的操作。"
+          }
+        }
+      }
+    },
+    "No validated cache recovery records found": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未找到已验证的缓存恢复记录"
+          }
+        }
+      }
+    },
+    "Recorded payload path": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "记录的内容路径"
           }
         }
       }

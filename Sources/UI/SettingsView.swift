@@ -48,6 +48,7 @@ struct SettingsView: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("Tools") {
+                Button("Tool preparation…") { openWindow(id: "tool-preparation") }
                 ForEach(store.registry.descriptors) { module in
                     LabeledContent(module.title, value: module.readiness.canExecute ? String(localized: "Available") : String(localized: "Adapter not connected"))
                 }

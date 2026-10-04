@@ -88,6 +88,12 @@ def verify(directory: Path, language: str) -> int:
         for mode in ("real", "demo")
         for appearance in ("light", "dark")
     })
+    expected.update({
+        f"tool-preparation-{scenario}-{language}-{appearance}-{width}x{height}": (width, height)
+        for scenario in ("unchecked", "observed", "demo")
+        for appearance in ("light", "dark")
+        for width, height in ((580, 520), (680, 720))
+    })
     manifest = json.loads((directory / "manifest.json").read_text())
     images, scopes = {}, {}
     for test in manifest:
@@ -125,6 +131,8 @@ def verify(directory: Path, language: str) -> int:
             f"Partial-result title: {'部分结果' if language == 'zh-Hans' else 'Partial result'}",
             f"Content size: {width} × {height} points",
         }
+        if name.startswith("tool-preparation-"):
+            required.add(f"Tool candidate title: {'已找到 · 未验证' if language == 'zh-Hans' else 'Found · unverified'}")
         if not required.issubset(lines):
             raise ValueError(f"Missing runtime localization/size evidence: {name}")
         locale_prefix = "zh" if language == "zh-Hans" else "en"

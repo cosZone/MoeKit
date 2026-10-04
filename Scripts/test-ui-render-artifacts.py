@@ -31,9 +31,12 @@ class RenderArtifactTests(unittest.TestCase):
         scenarios += ["first-use-projects", "first-use-processes", "first-use-tasks", "first-use-mole-space"]
         scenarios += ["getting-started-" + page for page in ("welcome", "projects", "processes", "demo")]
         scenarios += ["settings-real", "settings-demo"]
+        scenarios += ["tool-preparation-" + state for state in ("unchecked", "observed", "demo")]
         attachments = []
         for scenario in scenarios:
             sizes = ((520, 600),) if scenario.startswith("settings-") else (((520, 480), (620, 580)) if scenario.startswith("getting-started-") else ((960, 620), (1280, 800)))
+            if scenario.startswith("tool-preparation-"):
+                sizes = ((580, 520), (680, 720))
             for appearance in ("light", "dark"):
                 for width, height in sizes:
                     name = f"{scenario}-{language}-{appearance}-{width}x{height}"
@@ -41,6 +44,9 @@ class RenderArtifactTests(unittest.TestCase):
                     (root / image).write_bytes(png(width, height))
                     text = name + ".txt"
                     (root / text).write_text(f"Bundle language: {language}\nProjects title: {'项目' if language == 'zh-Hans' else 'Projects'}\nPartial-result title: {'部分结果' if language == 'zh-Hans' else 'Partial result'}\nContent size: {width} × {height} points\nProcess locale: {'zh_CN' if language == 'zh-Hans' else 'en_US'}\n")
+                    if scenario.startswith("tool-preparation-"):
+                        with (root / text).open("a") as stream:
+                            stream.write(f"Tool candidate title: {'已找到 · 未验证' if language == 'zh-Hans' else 'Found · unverified'}\n")
                     attachments.extend([
                         {"exportedFileName": image, "suggestedHumanReadableName": name + "_0_UUID.png"},
                         {"exportedFileName": text, "suggestedHumanReadableName": name + "-scope_0_UUID.txt"},
@@ -50,7 +56,7 @@ class RenderArtifactTests(unittest.TestCase):
         return manifest
 
     def test_complete_english_and_chinese(self):
-        for language, count in [("en", 52), ("zh-Hans", 44)]:
+        for language, count in [("en", 64), ("zh-Hans", 56)]:
             with self.subTest(language=language), tempfile.TemporaryDirectory() as path:
                 root = Path(path)
                 self.fixture(root, language)
@@ -71,7 +77,7 @@ class RenderArtifactTests(unittest.TestCase):
             manifest = self.fixture(root, "zh-Hans")
             manifest[0]["attachments"].pop()
             (root / "manifest.json").write_text(json.dumps(manifest))
-            with self.assertRaisesRegex(ValueError, "Expected 44"):
+            with self.assertRaisesRegex(ValueError, "Expected 56"):
                 module.verify(root, "zh-Hans")
 
     def test_rejects_wrong_dimensions(self):

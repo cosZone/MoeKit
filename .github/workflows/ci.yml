@@ -67,6 +67,7 @@ jobs:
             -only-testing:MoeKitTests/UISnapshotTests/testGettingStartedDestinationsRender \
             -only-testing:MoeKitTests/UISnapshotTests/testFirstUseWorkspacesRender \
             -only-testing:MoeKitTests/UISnapshotTests/testSettingsModeGuidanceRenders \
+            -only-testing:MoeKitTests/ToolPreparationViewTests/testToolPreparationRenders \
             -resultBundlePath ChineseRenderResults.xcresult
       - name: Check SwiftUI bundle and smoke-launch explicit demo
         run: |
@@ -189,7 +190,9 @@ jobs:
                         -only-testing:MoeKitTests/AnchoredDirectoryTests
                         -only-testing:MoeKitTests/RepositoryScannerTests
                         -only-testing:MoeKitTests/BoundedRegularFileReaderTests
-                        -only-testing:MoeKitTests/WorkspaceOperationPrivacyTests)
+                        -only-testing:MoeKitTests/WorkspaceOperationPrivacyTests
+                        -only-testing:MoeKitTests/ToolPreparationTests
+                        -only-testing:MoeKitTests/ToolPreparationStoreTests)
           fi
           xcodebuild -project MoeKit.xcodeproj -alltargets -configuration Release \
             ENABLE_TESTABILITY=YES CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= \
@@ -216,7 +219,8 @@ jobs:
           json.loads(inventory)
           required = ("CatalogPersistenceTests", "WorkspacePersistenceTests", "CatalogRecoveryLifetimeTests",
                       "AnchoredDirectoryTests", "RepositoryScannerTests", "BoundedRegularFileReaderTests",
-                      "CatalogWriteCoordinatorTests", "WorkspaceOperationPrivacyTests")
+                      "CatalogWriteCoordinatorTests", "WorkspaceOperationPrivacyTests",
+                      "ToolPreparationTests", "ToolPreparationStoreTests")
           if summary.get("passedTests", 0) < 27 or summary.get("failedTests") != 0 or summary.get("skippedTests") != 0:
               raise SystemExit(f"Optimized catalog tests must execute and pass without skips: {summary}")
           if any(suite not in inventory for suite in required):

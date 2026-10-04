@@ -58,3 +58,7 @@ Swift Testing 测试覆盖扫描边界、取消、异常元数据、模块注册
 ## Git status 准备
 
 纯 porcelain-v2/NUL 解析器与 session-only 结果模型已独立准备，包含系统 Git 的合成参考输出与格式/预算测试；没有连接到发现器或 UI，也没有启用 Git 进程。真实工作树仍为未检查，清理仍不可执行。[执行设计与激活前安全门槛](Git-status-execution-design.md) 记录后续实现必须解决的配置执行、属性语义、路径竞态和资源边界。
+
+## 工具准备
+
+`ToolPreparationStore` 管理本次会话的主动元数据检查，`NativeToolCandidateInspector` 在独立 actor 中对固定数量的明确路径使用 `lstat`。不打开文件内容，不跟随末端符号链接，不运行版本探测、不查找 PATH；存在可执行权限位也不授予执行能力。取消保留任务所有权直至读取结束，Demo 切换丢弃旧结果；文件选择后仍复核模式与请求代次。[完整边界](Tool-preparation.md)。

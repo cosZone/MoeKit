@@ -10,6 +10,7 @@ final class WorkspaceStore {
     var selectedCapability: MoleCapability = .space
     var selectedToolID = MoleModule.id
     let processes = ProcessInventoryStore()
+    let toolPreparation: ToolPreparationStore
     let gettingStarted: GettingStartedState
     var projectSearch = "" { didSet { reconcileProjectSelection() } }
     var taskSearch = "" { didSet { reconcileTaskSelection() } }
@@ -23,6 +24,7 @@ final class WorkspaceStore {
         didSet {
             guard isDemoEnabled != oldValue else { return }
             modeID = UUID()
+            toolPreparation.setDemoEnabled(isDemoEnabled)
             processes.resetForModeChange()
             cancelScan()
             cancelMoleReportImport()
@@ -65,12 +67,18 @@ final class WorkspaceStore {
     init(isDemoEnabled: Bool = ProcessInfo.processInfo.arguments.contains("--demo"), persistence: CatalogPersistence = .init(),
          gettingStarted: GettingStartedState = .init(),
          scanner: any WorkspaceRepositoryScanning = RepositoryScanner(),
-         reportImporter: any WorkspaceReportImporting = MoleReportImporter()) {
+         reportImporter: any WorkspaceReportImporting = MoleReportImporter(),
+         toolPreparation: ToolPreparationStore? = nil) {
         self.isDemoEnabled = isDemoEnabled
         self.persistence = persistence
         self.gettingStarted = gettingStarted
         self.scanner = scanner
         self.reportImporter = reportImporter
+        // Construct the MainActor model in this initializer, not in a nested
+        // actor-isolated default argument inside SwiftUI State initialization.
+        let preparation = toolPreparation ?? ToolPreparationStore()
+        self.toolPreparation = preparation
+        preparation.setDemoEnabled(isDemoEnabled)
         processes.onEvent = { [weak self] event in self?.recordProcessEvent(event) }
         do { projects = try persistence.load() }
         catch {

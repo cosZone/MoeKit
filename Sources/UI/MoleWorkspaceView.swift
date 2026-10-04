@@ -2,6 +2,7 @@ import SwiftUI
 
 struct MoleWorkspaceView: View {
     @Environment(WorkspaceStore.self) private var store
+    @Environment(\.openWindow) private var openWindow
     var body: some View {
         if store.selectedCapability == .space {
             MoleSpaceView()
@@ -18,6 +19,7 @@ struct MoleWorkspaceView: View {
                 } description: {
                     Text(store.selectedCapability.readiness.explanation ?? String(localized: "This capability is not connected yet."))
                 } actions: {
+                    Button("Tool preparation…") { openWindow(id: "tool-preparation") }
                     Button("Open Space", systemImage: "internaldrive") { store.selectedCapability = .space }
                 }
                 StatusBar(leading: String(localized: "No process has been started"), trailing: "Mole")
@@ -43,6 +45,7 @@ private struct SpaceRow: Identifiable {
 }
 
 private struct MoleSpaceView: View {
+    @Environment(\.openWindow) private var openWindow
     @Environment(WorkspaceStore.self) private var store
     @State private var selection: SpaceRow.ID?
     @State private var sortOrder = [KeyPathComparator(\SpaceRow.sortBytes, order: .reverse)]
@@ -77,6 +80,8 @@ private struct MoleSpaceView: View {
         VStack(spacing: 0) {
             HStack {
                 Label("Space", systemImage: "internaldrive").fontWeight(.medium)
+                Button("Tool preparation…") { openWindow(id: "tool-preparation") }
+                    .buttonStyle(.borderless)
                 Spacer()
                 if store.isImporting {
                     ProgressView().controlSize(.mini)

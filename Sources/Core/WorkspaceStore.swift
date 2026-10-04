@@ -21,8 +21,14 @@ final class WorkspaceStore {
     var isInspectorPresented = false
     var isDemoEnabled: Bool {
         didSet {
+            guard isDemoEnabled != oldValue else { return }
+            modeID = UUID()
             processes.resetForModeChange()
-            if isDemoEnabled { scanTask?.cancel(); importTask?.cancel() }
+            cancelScan()
+            cancelMoleReportImport()
+            // A mode boundary discards operation errors, but a catalog warning
+            // remains actionable when returning to the real workspace.
+            errorMessage = isDemoEnabled ? nil : catalogWarning
             selectedProjectID = nil
             cleanupReviewProjectID = nil
             selectedTaskID = nil
@@ -45,23 +51,32 @@ final class WorkspaceStore {
     private(set) var isScanning = false
     private(set) var isImporting = false
     let registry = ToolModuleRegistry.builtIn
-    @ObservationIgnored private let scanner = RepositoryScanner()
-    @ObservationIgnored private let reportImporter = MoleReportImporter()
+    @ObservationIgnored private let scanner: any WorkspaceRepositoryScanning
+    @ObservationIgnored private let reportImporter: any WorkspaceReportImporting
+    @ObservationIgnored private var modeID = UUID()
+    @ObservationIgnored private var activeScanID: UUID?
+    @ObservationIgnored private var activeImportID: UUID?
+    @ObservationIgnored private var catalogWarning: String?
     @ObservationIgnored private var importTask: Task<Void, Never>?
     @ObservationIgnored private let persistence: CatalogPersistence
     @ObservationIgnored private var catalogIsWritable = true
     @ObservationIgnored private var scanTask: Task<Void, Never>?
 
     init(isDemoEnabled: Bool = ProcessInfo.processInfo.arguments.contains("--demo"), persistence: CatalogPersistence = .init(),
-         gettingStarted: GettingStartedState = .init()) {
+         gettingStarted: GettingStartedState = .init(),
+         scanner: any WorkspaceRepositoryScanning = RepositoryScanner(),
+         reportImporter: any WorkspaceReportImporting = MoleReportImporter()) {
         self.isDemoEnabled = isDemoEnabled
         self.persistence = persistence
         self.gettingStarted = gettingStarted
+        self.scanner = scanner
+        self.reportImporter = reportImporter
         processes.onEvent = { [weak self] event in self?.recordProcessEvent(event) }
         do { projects = try persistence.load() }
         catch {
             catalogIsWritable = false
-            errorMessage = String(localized: "The project catalog could not be read. Existing data was not replaced.")
+            catalogWarning = String(localized: "The project catalog could not be read. Existing data was not replaced.")
+            errorMessage = isDemoEnabled ? nil : catalogWarning
         }
     }
 
@@ -205,6 +220,7 @@ final class WorkspaceStore {
 
     func chooseProject(scanChildren: Bool) {
         guard !isDemoEnabled, !isScanning else { return }
+        let selectionModeID = modeID
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true; panel.canChooseFiles = false
         panel.allowsMultipleSelection = scanChildren
@@ -212,7 +228,7 @@ final class WorkspaceStore {
         panel.message = scanChildren
             ? String(localized: "Discover repositories in up to 32 selected folders, up to 4 levels each. One shared budget applies. Dependencies and symbolic links are skipped.")
             : String(localized: "Add this folder to MoeKit. Project files will not be changed.")
-        guard panel.runModal() == .OK, !panel.urls.isEmpty else { return }
+        guard panel.runModal() == .OK, !panel.urls.isEmpty, modeID == selectionModeID else { return }
         startDiscovery(roots: panel.urls, scanChildren: scanChildren)
     }
 
@@ -220,33 +236,35 @@ final class WorkspaceStore {
         startDiscovery(roots: [root], scanChildren: scanChildren)
     }
 
-    func startDiscovery(roots: [URL], scanChildren: Bool) {
-        guard !isDemoEnabled, !isScanning, !roots.isEmpty else { return }
+    @discardableResult
+    func startDiscovery(roots: [URL], scanChildren: Bool) -> Task<Void, Never>? {
+        guard !isDemoEnabled, !isScanning, !roots.isEmpty else { return nil }
         isScanning = true
         scanProgress = nil
         pendingDiscovery = nil
         importSelection = []
         let taskID = UUID()
+        activeScanID = taskID
         tasks.insert(TaskRecord(id: taskID, title: String(localized: "Discover projects"),
             target: roots.map(\.path).joined(separator: "\n"), status: .running), at: 0)
         scanTask = Task { [weak self, scanner] in
             guard let self else { return }
-            let scopedRoots = roots.filter { $0.startAccessingSecurityScopedResource() }
-            defer {
-                for root in scopedRoots { root.stopAccessingSecurityScopedResource() }
-                self.isScanning = false; self.scanTask = nil; self.scanProgress = nil
-            }
+            defer { self.finishDiscovery(taskID) }
             do {
+                try Task.checkCancellation()
+                guard self.activeScanID == taskID, !self.isDemoEnabled else { return }
+                let scopedRoots = roots.filter { $0.startAccessingSecurityScopedResource() }
+                defer { for root in scopedRoots { root.stopAccessingSecurityScopedResource() } }
                 let result: RepositoryScanResult
                 if scanChildren {
                     result = try await scanner.scan(roots: roots, options: ScanOptions(), progress: { [weak self] progress in
-                        await self?.receiveDiscoveryProgress(progress)
+                        await self?.receiveDiscoveryProgress(progress, id: taskID)
                     })
                 } else {
                     result = try await scanner.inspectFolder(roots[0])
                 }
                 try Task.checkCancellation()
-                guard !self.isDemoEnabled else { throw CancellationError() }
+                guard self.activeScanID == taskID, !self.isDemoEnabled else { return }
                 if scanChildren {
                     self.pendingDiscovery = result
                     self.importSelection = Set(result.items.map(\.id))
@@ -258,22 +276,42 @@ final class WorkspaceStore {
                                 items: result.issues.map { TaskItemResult(path: $0.url.path, outcome: String(localized: "Not fully read"), detail: $0.message, hasIssue: true) },
                                 diagnostics: "Visited directories: \(result.visitedDirectories)\nEnumerated entries: \(result.enumeratedEntries)\nSelected roots: \(roots.count)\nLimit reached: \(result.wasLimited)\nRead-only. No Git status, scripts, hooks or processes were run.")
             } catch is CancellationError {
+                guard self.activeScanID == taskID else { return }
                 self.finishTask(taskID, status: .cancelled, summary: String(localized: "Discovery cancelled. No files were changed."))
             } catch {
-                self.finishTask(taskID, status: .failed, summary: error.localizedDescription)
-                self.errorMessage = error.localizedDescription
+                guard self.activeScanID == taskID, !self.isDemoEnabled else { return }
+                if Task.isCancelled {
+                    self.finishTask(taskID, status: .cancelled, summary: String(localized: "Discovery cancelled. No files were changed."))
+                    return
+                }
+                let message = String(localized: "The selected folders could not be read. Choose accessible folders and try again. No files were changed.")
+                self.finishTask(taskID, status: .failed, summary: message)
+                self.errorMessage = message
             }
+        }
+        return scanTask
+    }
+
+    func cancelScan() {
+        scanTask?.cancel()
+        if let id = activeScanID {
+            finishTask(id, status: .cancelled, summary: String(localized: "Discovery cancelled. No files were changed."))
+            finishDiscovery(id)
         }
     }
 
-    func cancelScan() { scanTask?.cancel() }
+    private func finishDiscovery(_ id: UUID) {
+        guard activeScanID == id else { return }
+        activeScanID = nil
+        isScanning = false; scanTask = nil; scanProgress = nil
+    }
     func importDiscoveredProjects() {
         guard let result = pendingDiscovery, !isDemoEnabled else { return }
         addDiscovered(result.items.filter { importSelection.contains($0.id) })
         pendingDiscovery = nil
     }
-    private func receiveDiscoveryProgress(_ progress: RepositoryScanProgress) {
-        guard isScanning, !isDemoEnabled, !Task.isCancelled else { return }
+    private func receiveDiscoveryProgress(_ progress: RepositoryScanProgress, id: UUID) {
+        guard activeScanID == id, !isDemoEnabled, scanTask?.isCancelled == false, !Task.isCancelled else { return }
         scanProgress = progress
     }
 
@@ -300,12 +338,23 @@ final class WorkspaceStore {
         }
     }
     private func saveCatalog() {
+        guard !isDemoEnabled else { return }
         guard catalogIsWritable else {
-            errorMessage = String(localized: "The existing catalog could not be read. Changes are temporary until the catalog is recovered; the original file was not overwritten.")
+            catalogWarning = String(localized: "The existing catalog could not be read. Changes are temporary until the catalog is recovered; the original file was not overwritten.")
+            errorMessage = catalogWarning
             return
         }
-        do { try persistence.save(projects) }
-        catch { errorMessage = String(localized: "Changes could not be saved: \(error.localizedDescription)") }
+        do {
+            try persistence.save(projects)
+            if errorMessage == catalogWarning { errorMessage = nil }
+            catalogWarning = nil
+        } catch {
+            // Known catalog errors contain fixed recovery guidance. Arbitrary
+            // filesystem errors can contain user paths and are never displayed.
+            catalogWarning = (error as? CatalogPersistence.CatalogError)?.errorDescription
+                ?? String(localized: "Changes could not be saved. They are temporary; check available disk space and folder access, then try again.")
+            errorMessage = catalogWarning
+        }
     }
     private func finishTask(_ id: UUID, status: TaskStatus, summary: String, items: [TaskItemResult] = [], diagnostics: String = "") {
         guard let index = tasks.firstIndex(where: { $0.id == id }) else { return }
@@ -314,25 +363,61 @@ final class WorkspaceStore {
     }
     func chooseMoleReport() {
         guard !isDemoEnabled, !isImporting else { return }
+        let selectionModeID = modeID
         let panel = NSOpenPanel()
         panel.canChooseDirectories = false; panel.canChooseFiles = true
         panel.allowsMultipleSelection = false
         panel.prompt = String(localized: "Import report")
         panel.message = String(localized: "Choose a Mole analyze --json report. Importing does not execute Mole or modify the reported files.")
-        guard panel.runModal() == .OK, let url = panel.url else { return }
+        guard panel.runModal() == .OK, let url = panel.url, modeID == selectionModeID else { return }
+        startMoleReportImport(url)
+    }
+
+    /// The explicit file selection is separate from asynchronous coordination so
+    /// cancelled and delayed importer completions can be tested without a panel.
+    @discardableResult
+    func startMoleReportImport(_ url: URL) -> Task<Void, Never>? {
+        guard !isDemoEnabled, !isImporting else { return nil }
+        let id = UUID()
+        activeImportID = id
         isImporting = true
         importTask = Task { [weak self, reportImporter] in
             guard let self else { return }
-            defer { self.isImporting = false; self.importTask = nil }
+            defer { self.finishReportImport(id) }
             do {
+                try Task.checkCancellation()
+                guard self.activeImportID == id, !self.isDemoEnabled else { return }
+                let scoped = url.startAccessingSecurityScopedResource()
+                defer { if scoped { url.stopAccessingSecurityScopedResource() } }
                 let report = try await reportImporter.load(url)
                 try Task.checkCancellation()
-                guard !self.isDemoEnabled else { return }
+                guard self.activeImportID == id, !self.isDemoEnabled else { return }
                 self.importedReport = report
                 self.importedAt = .now
             } catch is CancellationError {
                 // Preserve the previous report when an import is cancelled.
-            } catch { self.errorMessage = error.localizedDescription }
+            } catch {
+                guard self.activeImportID == id, !self.isDemoEnabled, !Task.isCancelled else { return }
+                if let known = error as? MoleReportImporter.ImportError {
+                    self.errorMessage = known.errorDescription
+                } else if error is DecodingError {
+                    self.errorMessage = String(localized: "The selected file is not a supported Mole JSON report. Export a new analyze --json report and try again.")
+                } else {
+                    self.errorMessage = String(localized: "The report could not be read. Check access to the selected file and try again.")
+                }
+            }
         }
+        return importTask
+    }
+
+    func cancelMoleReportImport() {
+        importTask?.cancel()
+        if let id = activeImportID { finishReportImport(id) }
+    }
+
+    private func finishReportImport(_ id: UUID) {
+        guard activeImportID == id else { return }
+        activeImportID = nil
+        isImporting = false; importTask = nil
     }
 }

@@ -4300,6 +4300,406 @@
           }
         }
       }
+    },
+    "%lld entries · empty rows do not prove an empty disk": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 个条目 · 空列表不代表磁盘为空"
+          }
+        }
+      }
+    },
+    "Analysis cancelled. No new report was accepted.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分析已取消。未接收新的报告。"
+          }
+        }
+      }
+    },
+    "Analysis exceeded its output limit and was stopped. No complete report is available.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分析输出超出限制，已停止。没有可用的完整报告。"
+          }
+        }
+      }
+    },
+    "Analysis reached its time limit and was stopped. No complete report is available.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分析达到时间限制，已停止。没有可用的完整报告。"
+          }
+        }
+      }
+    },
+    "Analysis stopped, but private-session cleanup could not be verified. No user folder was deleted.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分析已停止，但无法确认私有会话清理情况。未删除用户文件夹。"
+          }
+        }
+      }
+    },
+    "Analyze with Mole": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用 Mole 分析"
+          }
+        }
+      }
+    },
+    "Analyze with Mole…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用 Mole 分析…"
+          }
+        }
+      }
+    },
+    "Analyzing selected folder…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在分析所选文件夹…"
+          }
+        }
+      }
+    },
+    "Choose an existing local folder and the direct installed Mole analyzer. Root, symbolic links and overlapping private-session paths are unsupported.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请选择现有本地文件夹和已安装的直接 Mole 分析器。暂不支持根目录、符号链接及与私有会话重叠的路径。"
+          }
+        }
+      }
+    },
+    "Choose analyze-go from Mole’s official release installation. Homebrew and custom-built analyzers are not supported by this version check. MoeKit does not install or update tools.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请选择 Mole 官方发布安装中的 analyze-go。此版本校验暂不支持 Homebrew 或自行构建的分析器。MoeKit 不会安装或更新工具。"
+          }
+        }
+      }
+    },
+    "Choose one folder for a separately confirmed Mole analysis.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请选择一个文件夹；开始 Mole 分析前还会单独确认。"
+          }
+        }
+      }
+    },
+    "Choose the installed direct analyzer (analyze-go), not the mo shell wrapper.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请选择已安装的直接分析器 analyze-go，不要选择 mo shell 包装脚本。"
+          }
+        }
+      }
+    },
+    "Choose…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择…"
+          }
+        }
+      }
+    },
+    "Confirm folder analysis": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "确认文件夹分析"
+          }
+        }
+      }
+    },
+    "Folder to analyze": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "待分析文件夹"
+          }
+        }
+      }
+    },
+    "Installed analyzer": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已安装的分析器"
+          }
+        }
+      }
+    },
+    "Limits: 120 seconds elapsed, 60 CPU seconds per process, 16 MB report and 64 KB diagnostics. Reports may be partial; sizes are not reclaimable space.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "限制：总用时 120 秒、每个进程 CPU 时间 60 秒、报告 16 MB、诊断 64 KB。报告可能不完整；显示大小不等于可回收空间。"
+          }
+        }
+      }
+    },
+    "Live Mole result · filtered, non-atomic observation · no cleanup action": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mole 实际分析结果 · 按上游规则筛选的非原子观察 · 不执行清理"
+          }
+        }
+      }
+    },
+    "MoeKit could not establish its private analysis directory. No analysis was started.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MoeKit 无法建立私有分析目录。未开始分析。"
+          }
+        }
+      }
+    },
+    "MoeKit will create a verified temporary analyzer copy and a fresh private cache/temp directory below the location shown here, then remove only that session after the process stops. Your existing Mole cache is not used.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MoeKit 会在下方位置创建已校验的临时分析器副本及新的私有缓存和临时目录，进程停止后仅移除本次会话。不会使用你现有的 Mole 缓存。"
+          }
+        }
+      }
+    },
+    "Mole returned an invalid or inconsistent report. It has not replaced the last result.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mole 返回的报告无效或存在矛盾。未用它替换原有结果。"
+          }
+        }
+      }
+    },
+    "Mole runs with your normal user permissions, without an OS sandbox. The reviewed analysis command does not delete or change selected-folder content; incidental metadata reads may extend beyond it.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mole 将使用你的普通用户权限运行，没有操作系统沙箱。已审查的分析命令不会删除或更改所选文件夹内容；附带的元数据读取可能超出该目录。"
+          }
+        }
+      }
+    },
+    "No live analysis result": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚无实时分析结果"
+          }
+        }
+      }
+    },
+    "Not selected": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚未选择"
+          }
+        }
+      }
+    },
+    "Only confirmed analysis with a verified official analyzer is connected. Cleanup and other Mole commands are unavailable.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅接入使用已验证官方分析器、逐次确认的分析功能。清理及其他 Mole 命令不可用。"
+          }
+        }
+      }
+    },
+    "Review analysis…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复查分析计划…"
+          }
+        }
+      }
+    },
+    "Run the verified official Mole V1.57.0 analyzer on one folder after reviewing the scope. Cleanup remains unavailable.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "核对范围后，使用已验证的 Mole V1.57.0 官方分析器分析一个文件夹。清理功能仍不可用。"
+          }
+        }
+      }
+    },
+    "Selections do not start a process. Review the plan, then explicitly start analysis.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择文件不会启动进程。请先复查计划，再明确开始分析。"
+          }
+        }
+      }
+    },
+    "Start analysis": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "开始分析"
+          }
+        }
+      }
+    },
+    "Stopping analysis…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在停止分析…"
+          }
+        }
+      }
+    },
+    "The analysis could not finish. No new report was accepted.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分析未能完成。未接收新的报告。"
+          }
+        }
+      }
+    },
+    "The analyzer exited unsuccessfully or reached a resource limit. No complete report is available.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分析器异常退出或达到资源限制。没有可用的完整报告。"
+          }
+        }
+      }
+    },
+    "The bundled analysis supervisor is unavailable. Reinstall a verified MoeKit build.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "随应用提供的分析管理程序不可用。请重新安装经过验证的 MoeKit 版本。"
+          }
+        }
+      }
+    },
+    "The live report does not identify its scan coverage. It was rejected.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "实时报告未说明扫描覆盖情况。已拒绝该报告。"
+          }
+        }
+      }
+    },
+    "The report contained paths outside the selected scope, or paths changed during validation. It was rejected.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "报告包含所选范围以外的路径，或路径在校验期间发生变化。已拒绝该报告。"
+          }
+        }
+      }
+    },
+    "The selected folder or analyzer changed. Choose them again and review a new analysis plan.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所选文件夹或分析器已变化。请重新选择并复查新的分析计划。"
+          }
+        }
+      }
+    },
+    "This file does not match the supported official Mole V1.57.0 analyzer for this Mac. No tool was run.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此文件与本机受支持的 Mole V1.57.0 官方分析器不匹配。未运行任何工具。"
+          }
+        }
+      }
+    },
+    "Verifying analyzer…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在校验分析器…"
+          }
+        }
+      }
+    },
+    "macOS quarantine is present on this analyzer. MoeKit will not remove it or bypass Gatekeeper.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此分析器带有 macOS 隔离标记。MoeKit 不会移除标记或绕过 Gatekeeper。"
+          }
+        }
+      }
+    },
+    "This Mole command is not connected. Only separately confirmed analysis is available.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此 Mole 命令尚未接入。目前仅提供单独确认后的分析功能。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

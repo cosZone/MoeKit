@@ -4,7 +4,7 @@
 
 `MoeKitApp` 创建共享的 `WorkspaceStore`。SwiftUI `NavigationSplitView` 承载 Projects / Tools / Tasks，项目使用 `Table` 和 inspector，任务详情停靠于底部。AppKit 仅用于原生文件选择器与 Finder 定位。导航与操作图标使用 SF Symbols；应用图标和品牌图像来自 `Resources/Brand`。
 
-`ToolModule` / `ToolModuleDescriptor` / `ToolModuleRegistry` 描述内置集成、稳定 ID、可搜索的模块数据和能力可用性；当前 UI 在 Tools 中选择 Mole 或 Processes & Ports。新增内置模块不改变顶层导航。Mole 执行与进程停止能力均明确不可用；Processes & Ports 仅提供用户主动触发的原生只读快照。它不是动态插件宿主，不加载任意二进制或脚本。
+`ToolModule` / `ToolModuleDescriptor` / `ToolModuleRegistry` 描述内置集成、稳定 ID、可搜索的模块数据和能力可用性；当前 UI 在 Tools 中选择 Mole 或 Processes & Ports。新增内置模块不改变顶层导航。Mole 仅接入精确官方版本、单目录、逐次确认的分析；进程停止能力仍不可用；Processes & Ports 仅提供用户主动触发的原生只读快照。它不是动态插件宿主，不加载任意二进制或脚本。
 
 ## Projects：读取与保存
 
@@ -35,7 +35,11 @@
 
 此预览没有 App Sandbox entitlement。文件选择与范围限制属于应用行为约束，不构成系统强制的沙箱隔离。拒绝读取、路径失效和未读到的元数据均不可伪装成正常或零值。
 
-## Mole：只读报告
+## Mole：报告导入与实际分析
+
+导入和实际执行是分开的入口。`MoleAnalysisStore` 管理会话内选择、准备、逐次确认、运行、取消和结果；模式边界由 `WorkspaceStore` 同步失效，不依赖视图刷新。`MoleAnalysisExecutor` 只校验并临时复制精确官方分析器，固定 JSON argv、私有 HOME/cache/temp 和系统 helper PATH。原生 supervisor 负责输出/时间/CPU 限制及本次拥有的进程生命周期。没有 OS 沙箱或任意 CLI 接口，清理仍关闭。详见 [Mole 执行设计](Mole-analysis-execution-design.md)。
+
+### 报告导入
 
 `MoleAnalyzeReport` 解码 Mole `analyze --json` 报告，限制导入文件为 16 MiB。导入只读取用户选择的 JSON，不运行 Mole，也不按报告路径继续读取或修改文件。
 

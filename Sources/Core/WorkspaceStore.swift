@@ -10,6 +10,7 @@ final class WorkspaceStore {
     var selectedCapability: MoleCapability = .space
     var selectedToolID = MoleModule.id
     let processes = ProcessInventoryStore()
+    let moleAnalysis = MoleAnalysisStore()
     let gettingStarted: GettingStartedState
     var projectSearch = "" { didSet { reconcileProjectSelection() } }
     var taskSearch = "" { didSet { reconcileTaskSelection() } }
@@ -24,6 +25,7 @@ final class WorkspaceStore {
             guard isDemoEnabled != oldValue else { return }
             modeID = UUID()
             processes.resetForModeChange()
+            moleAnalysis.setDemoEnabled(isDemoEnabled)
             cancelScan()
             cancelMoleReportImport()
             // A mode boundary discards operation errors, but a catalog warning
@@ -71,6 +73,7 @@ final class WorkspaceStore {
         self.gettingStarted = gettingStarted
         self.scanner = scanner
         self.reportImporter = reportImporter
+        moleAnalysis.setDemoEnabled(isDemoEnabled)
         processes.onEvent = { [weak self] event in self?.recordProcessEvent(event) }
         do { projects = try persistence.load() }
         catch {

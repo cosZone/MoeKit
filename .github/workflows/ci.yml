@@ -34,6 +34,7 @@ jobs:
           python3 Scripts/verify-source.py
           python3 Scripts/test-preview-release.py
           python3 Scripts/test-ui-render-artifacts.py
+          python3 Scripts/test-mole-supervisor.py
           xcodebuild -version
           xcodebuild -help > XcodeHelp.txt 2>&1
           grep -F -- '-testLanguage' XcodeHelp.txt
@@ -44,6 +45,8 @@ jobs:
         run: |
           set -euo pipefail
           python3 Scripts/test-catalog-concurrency.py --configuration debug | tee CatalogConcurrencyResults.txt
+      - name: Prepare pinned Mole analyzer for synthetic fixture tests
+        run: python3 Scripts/prepare-mole-ci-fixture.py
       - name: Generate Xcode workspace
         run: tuist generate --no-open
       - name: Build app and tests, then run the built tests
@@ -165,6 +168,9 @@ jobs:
       - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
         with:
           version: '2026.3.10'
+      - name: Prepare pinned Mole analyzer for optimized synthetic fixture tests
+        if: matrix.instrumentation == 'none'
+        run: python3 Scripts/prepare-mole-ci-fixture.py
       - name: Verify exact source and generate workspace
         run: |
           set -euo pipefail

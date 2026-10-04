@@ -170,7 +170,8 @@ enum MoleCapability: String, CaseIterable, Identifiable, Sendable {
     }
 
     var readiness: ToolReadiness {
-        .unavailable(reason: String(localized: "Mole execution is not connected in this milestone."))
+        if self == .space { return .available }
+        return .unavailable(reason: String(localized: "This Mole command is not connected. Only separately confirmed analysis is available."))
     }
 
     var descriptor: ToolCapabilityDescriptor {
@@ -195,7 +196,7 @@ struct MoleModule: ToolModule {
             systemImage: "internaldrive",
             category: .system,
             keywords: ["mo", "CLI", "disk", "storage", "analyze", "cleanup", "uninstall", "optimize", "磁盘", "空间", "清理", "应用", "维护", "状态"],
-            readiness: .unavailable(reason: String(localized: "Mole execution is not connected in this milestone.")),
+            readiness: .available,
             capabilities: MoleCapability.allCases.map(\.descriptor)
         )
     }

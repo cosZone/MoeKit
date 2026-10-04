@@ -47,6 +47,7 @@ private struct MoleSpaceView: View {
     @State private var selection: SpaceRow.ID?
     @State private var sortOrder = [KeyPathComparator(\SpaceRow.sortBytes, order: .reverse)]
     @State private var showTreemap = false
+    @State private var showAnalysis = false
 
     private var rows: [SpaceRow] {
         let source: [SpaceRow]
@@ -77,6 +78,7 @@ private struct MoleSpaceView: View {
         VStack(spacing: 0) {
             HStack {
                 Label("Space", systemImage: "internaldrive").fontWeight(.medium)
+                Button("Analyze with Mole…") { showAnalysis = true }.disabled(store.isDemoEnabled)
                 Spacer()
                 if store.isImporting {
                     ProgressView().controlSize(.mini)
@@ -161,6 +163,7 @@ private struct MoleSpaceView: View {
             StatusBar(leading: String(localized: "\(rows.count) entries · unknown sizes are not zero"),
                       trailing: store.isDemoEnabled ? String(localized: "Example data") : String(localized: "Report receipt time is not measurement time"))
         }
+        .sheet(isPresented: $showAnalysis) { MoleAnalysisView() }
         .onChange(of: canShowTreemap) { if !canShowTreemap { showTreemap = false } }
         .onChange(of: store.isDemoEnabled) { selection = nil; showTreemap = false }
         .onChange(of: store.importedAt) { selection = nil; showTreemap = false }

@@ -74,7 +74,8 @@ for path in catalogs:
 
 sources = sorted((ROOT / "Sources").rglob("*.swift"))
 require(bool(sources), "No Swift app sources found")
-# ProcessInfo is allowed; actual process/shell/AppleScript execution is not.
+# Process creation has one reviewed fixed-code adapter; shell and all other
+# execution entry points remain forbidden. The supervisor is audited separately.
 for path in sources:
     text = path.read_text()
     for pattern in (r"\b(?:Process|NSTask|NSAppleScript)\s*\(",
@@ -82,7 +83,10 @@ for path in sources:
                     r"(?<![.\w])system\s*\(", r"\b(?:Darwin|Glibc)\.system\s*\(",
                     r'"/bin/(?:sh|bash|zsh)"', r"\bAuthorizationExecuteWithPrivileges\b",
                     r"\b(?:kill|killpg|raise|proc_signal|proc_signal_with_audittoken)\s*\("):
-        require(not re.search(pattern, text), f"Execution API outside this milestone: {path.relative_to(ROOT)} ({pattern})")
+        allowed_adapter = (path.relative_to(ROOT).as_posix() == "Sources/Mole/MoleAnalysisExecutor.swift"
+                           and pattern == r"\b(?:Process|NSTask|NSAppleScript)\s*\("
+                           and not re.search(r"\b(?:NSTask|NSAppleScript)\s*\(", text))
+        require(allowed_adapter or not re.search(pattern, text), f"Execution API outside reviewed adapter: {path.relative_to(ROOT)} ({pattern})")
 
 process_sources = list((ROOT / "Sources/Processes").glob("*.swift"))
 process_sources += [ROOT / "Sources/Services/NativeProcessInventoryProvider.swift"]

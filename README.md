@@ -8,14 +8,16 @@ Swift 6 · SwiftUI / AppKit · macOS 15+ · Tuist 4.148.3 · SPM
 
 已经写入源码：
 - **Projects**：原生表格、搜索与排序、项目详情 inspector、置顶项目、Finder 定位；多根目录只读发现 Git 项目，复查筛选后导入/刷新；验证 worktree 关系后分组，展示带时间的分支/锁元数据和不可执行的清理安全复查
-- **Tools**：Mole 的 Space / Clean / Apps / Maintenance / Status 工作区；Space 可导入 Mole analyze JSON；Processes & Ports 可由用户主动读取当前用户进程和 TCP 监听端口，按工作目录展示项目关联
+- **Tools**：Mole 的 Space / Clean / Apps / Maintenance / Status 工作区；Space 可导入 Mole analyze JSON，也可选择已安装的官方 V1.57.0 直接分析器与单个文件夹，复查确认后实际分析；Processes & Ports 可由用户主动读取当前用户进程和 TCP 监听端口，按工作目录展示项目关联
 - **Processes & Ports**：原生密集表格、身份与关联证据、部分读取提示、项目相关进程入口，以及不可执行的精确选择停止计划预览；不读取命令参数/环境变量，不自动扫描或发送进程信号
 - **Tasks**：本次会话的发现任务、取消、状态与底部结果详情；可展开 Diagnostics
 - 独立 Demo 开关与明确示例标识；正常启动无虚构项目、运行结果或磁盘测量
 - 可跳过、可重开的上手引导：项目整理、进程查看或示例体验；先说明范围，再由用户主动选择文件夹或开始扫描
 - 原生 NavigationSplitView、Table、工具栏与 SF Symbols；自定义应用图标
 
-尚未实现：CLI 进程执行、停止/强制停止、清理、卸载、维护、实时系统指标、提权、第三方插件加载及持久任务历史。导入报告不运行 Mole，报告数值不等于可回收空间。
+尚未实现：任意 CLI 执行、停止/强制停止其他进程、清理、卸载、维护、实时系统指标、提权、第三方插件加载及持久任务历史。导入报告不运行 Mole，报告数值不等于可回收空间。
+
+**实际 Mole 分析的边界：** 目前只支持匹配精确 SHA-256 的 V1.57.0 官方发布分析器，常见官方脚本安装位置为 `~/.config/mole/bin/analyze-go`；Homebrew 与自编译版本暂不匹配该校验。每次分析前显示范围及私有临时副本/缓存写入并要求确认，可取消，失败或未知覆盖不冒充成功。工具以普通用户权限运行，没有 OS 沙箱；没有自动安装、更新、提权或目标清理。详见 [执行设计与验证](Documentation/Mole-analysis-execution-design.md)。本节描述当前源码，具体构建/测试以对应提交 CI 为准。
 
 **预览验证记录：** `0.1.0-preview.5` 的精确源码 [`c54eb38`](https://github.com/cosZone/MoeKit/commit/c54eb38eaa56aa209c3761cc0d14e4b34caa99ed) 已在 [发布运行](https://github.com/cosZone/MoeKit/actions/runs/37192663888) 通过 246 项 Release Swift 测试、7 项合成视图渲染测试与 74 项发布辅助测试，包括实际 macOS DMG 创建、只读挂载、签名一致性与卸载检查。同源码 [Native CI](https://github.com/cosZone/MoeKit/actions/runs/37192263616) 还通过完整优化 Release、定向 AddressSanitizer 和中文渲染检查。DMG、ZIP 及校验信息已公开下载并核对；完整窗口、键盘、VoiceOver、双架构实机与真实权限仍需手动验收。
 

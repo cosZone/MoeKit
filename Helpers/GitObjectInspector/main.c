@@ -17,6 +17,10 @@
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
+#ifdef __APPLE__
+#include <libproc.h>
+#include <sys/proc_info.h>
+#endif
 
 #ifndef GIT_WALL_SECONDS
 #define GIT_WALL_SECONDS 15
@@ -24,11 +28,14 @@
 #ifndef GIT_CPU_SECONDS
 #define GIT_CPU_SECONDS 10
 #endif
+#ifndef GIT_MEMORY_LIMIT_BYTES
+#define GIT_MEMORY_LIMIT_BYTES (512ULL * 1024 * 1024)
+#endif
 #define OUT_LIMIT 128
 #define ERR_LIMIT (64 * 1024)
 
 enum { INVALID = 64, INTERNAL = 70, OUTPUT_LIMIT = 71, TIME_LIMIT = 72,
-       CHILD_FAILED = 73, CANCELLED = 74, NOT_ANCESTOR = 75 };
+       CHILD_FAILED = 73, CANCELLED = 74, NOT_ANCESTOR = 75, MEMORY_LIMIT = 76 };
 static volatile sig_atomic_t cancelled = 0;
 static void signal_cancel(int sig) { (void)sig; cancelled = 1; }
 static double now(void) {
@@ -184,7 +191,12 @@ int main(int argc, char **argv) {
         if (limit(RLIMIT_CPU, GIT_CPU_SECONDS)) setup_failure(ready[1], 3);
         if (limit(RLIMIT_CORE, 0)) setup_failure(ready[1], 4);
         if (limit(RLIMIT_FSIZE, 0)) setup_failure(ready[1], 5);
-        if (limit(RLIMIT_DATA, 512 * 1024 * 1024)) setup_failure(ready[1], 6);
+#ifndef __APPLE__
+        // Darwin's data-limit accounting includes pre-exec virtual mappings:
+        // a 512 MiB hard limit can fail with EINVAL before a tiny child starts.
+        // macOS instead uses the explicitly scoped resident-memory watchdog below.
+        if (limit(RLIMIT_DATA, GIT_MEMORY_LIMIT_BYTES)) setup_failure(ready[1], 6);
+#endif
         if (limit(RLIMIT_NOFILE, 256)) setup_failure(ready[1], 7);
         int null = open("/dev/null", O_RDONLY);
         if (null < 0 || dup2(null, STDIN_FILENO) < 0 || dup2(out[1], STDOUT_FILENO) < 0 ||
@@ -245,6 +257,22 @@ int main(int argc, char **argv) {
         }
         siginfo_t info; memset(&info, 0, sizeof(info));
         if (waitid(P_PID, (id_t)child, &info, WEXITED | WNOHANG | WNOWAIT) < 0) { result = INTERNAL; break; }
+#ifdef __APPLE__
+        if (child_ready && info.si_pid != child) {
+            struct proc_taskinfo task;
+            int measured = proc_pidinfo(child, PROC_PIDTASKINFO, 0, &task, sizeof(task));
+            if (measured != (int)sizeof(task)) {
+                // Exit between waitid and proc_pidinfo is benign. An unobservable
+                // still-running owned child is stopped; there is no unbounded fallback.
+                siginfo_t after; memset(&after, 0, sizeof(after));
+                if (waitid(P_PID, (id_t)child, &after, WEXITED | WNOHANG | WNOWAIT) < 0 || after.si_pid != child) {
+                    result = INTERNAL; break;
+                }
+            } else if (task.pti_resident_size > GIT_MEMORY_LIMIT_BYTES) {
+                result = MEMORY_LIMIT; break;
+            }
+        }
+#endif
         if (info.si_pid == child) {
             child_exited = true;
             if (!child_ready || info.si_code != CLD_EXITED ||

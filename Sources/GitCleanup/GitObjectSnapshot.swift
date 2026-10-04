@@ -112,6 +112,7 @@ final class GitObjectSnapshot {
         try Task.checkCancellation()
         guard process.terminationReason == .exit, result.count <= 128 else { throw GitCleanupFailure.helper }
         if process.terminationStatus == 75 { throw GitCleanupFailure.uniqueCommits }
+        if [71, 72, 76].contains(process.terminationStatus) { throw GitCleanupFailure.budget }
         guard process.terminationStatus == 0 else { throw GitCleanupFailure.helper }
         return result
     }

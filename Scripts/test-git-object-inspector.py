@@ -34,6 +34,7 @@ FIXTURE = r'''
 #include <stdlib.h>
 #include <string.h>
 #include <sys/resource.h>
+#include <time.h>
 #include <unistd.h>
 static int matches(const char *key, const char *value) {
     const char *got = getenv(key); return got && !strcmp(got, value);
@@ -93,6 +94,15 @@ int main(int argc, char **argv) {
     if (!strcmp(mode, "flood-negative")) { repeated(STDOUT_FILENO, 129); return 1; }
     if (!strcmp(mode, "flush")) return repeated(STDERR_FILENO, 65536);
     if (!strcmp(mode, "cpu")) { for (;;) {} }
+    if (!strcmp(mode, "memory")) {
+        for (int i = 0; i < 128; i++) {
+            volatile unsigned char *page = malloc(1024 * 1024);
+            if (!page) return 91;
+            for (size_t j = 0; j < 1024 * 1024; j += 4096) page[j] = (unsigned char)i;
+            struct timespec pause = {0, 2000000}; nanosleep(&pause, NULL);
+        }
+        return 91;
+    }
     if (!strcmp(mode, "signal")) { raise(SIGABRT); return 91; }
     if (!strcmp(mode, "sleep")) { sleep(10); return 0; }
     if (!strcmp(mode, "descendant") || !strcmp(mode, "orphan")) {
@@ -132,7 +142,7 @@ class InspectorTests(unittest.TestCase):
         source.write_text(FIXTURE, encoding="ascii")
         for input_path, output, definitions in (
             (ROOT / "Helpers/GitObjectInspector/main.c", cls.helper,
-             ["-DGIT_WALL_SECONDS=3", "-DGIT_CPU_SECONDS=1"]),
+             ["-DGIT_WALL_SECONDS=3", "-DGIT_CPU_SECONDS=1", "-DGIT_MEMORY_LIMIT_BYTES=67108864"]),
             (source, cls.fixture, []),
         ):
             subprocess.run(["cc", "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2", *definitions,
@@ -243,6 +253,11 @@ class InspectorTests(unittest.TestCase):
         for mode in ("floodout", "flooderr", "flood-negative"):
             with self.subTest(mode=mode):
                 self.finish(self.start(mode, second=OTHER_SHA), 71)
+
+    def test_memory_budget_stops_owned_allocation_fixture(self):
+        # Darwin watches the owned child's RSS at the poll boundary; Linux uses
+        # a hard data-segment cap, causing this fixture's malloc to fail instead.
+        self.finish(self.start("memory"), 76 if sys.platform == "darwin" else 73)
 
     def test_wall_and_cpu_limits_and_signal_failure(self):
         for mode, status in (("sleep", 72), ("cpu", 73), ("signal", 73)):

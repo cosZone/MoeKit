@@ -130,7 +130,7 @@ private struct GitCleanupNativeFixture: Sendable {
         if linked { #expect(FileManager.default.fileExists(atPath: worktree.path)) }
         try assertSentinel()
     }
-    @discardableResult func git(_ arguments: [String], at directory: URL) throws -> String {
+    @discardableResult func git(_ arguments: [String], at directory: URL, expectSuccess: Bool = true) throws -> String {
         try #require(directory.pathComponents.starts(with: root.pathComponents))
         let process = Process(), output = Pipe()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
@@ -149,7 +149,7 @@ private struct GitCleanupNativeFixture: Sendable {
         let bytes = output.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
         let text = String(decoding: bytes, as: UTF8.self)
-        try #require(process.terminationReason == .exit && process.terminationStatus == 0, "Fixture Git failed: \(text)")
+        try #require(process.terminationReason == .exit && (process.terminationStatus == 0) == expectSuccess, "Unexpected fixture Git result: \(text)")
         return text
     }
 }
@@ -637,5 +637,68 @@ struct GitCleanupExecutorTests {
         }
         #expect(try FileManager.default.contentsOfDirectory(atPath: temporary.path).isEmpty)
         try fixture.assertNoRecovery()
+    }
+
+    @Test("A cooperating pack-refs cannot republish the target while branch removal holds its locks")
+    func packRefsRace() async throws {
+        let fixture = try GitCleanupNativeFixture(linked: false)
+        defer { fixture.remove() }
+        let executor = NativeGitCleanupExecutor(catalogDirectory: fixture.catalog) { checkpoint in
+            if checkpoint == .beforeBranchMove {
+                _ = try fixture.git(["pack-refs", "--all"], at: fixture.main, expectSuccess: false)
+            }
+        }
+        let plan = try await executor.prepare(fixture.request(.deleteBranch))
+        _ = try await executor.execute(plan.id, permit: GitCleanupPermit())
+        #expect(!FileManager.default.fileExists(atPath: fixture.featureRef.path))
+        if FileManager.default.fileExists(atPath: fixture.common.appendingPathComponent("packed-refs").path) {
+            let packed = try Data(contentsOf: fixture.common.appendingPathComponent("packed-refs"))
+            #expect(try !GitCleanupInspection.packedContains(packed, branch: "feature"))
+        }
+        #expect(try Data(contentsOf: plan.recovery.appendingPathComponent("branch")) == Data((plan.targetOID + "\n").utf8))
+        try fixture.assertSentinel()
+    }
+
+    @Test("A last-checkpoint ref advance cannot retire or restore stale worktree state", arguments: [false, true])
+    func checkpointRefAdvance(_ restore: Bool) async throws {
+        let fixture = try GitCleanupNativeFixture()
+        defer { fixture.remove() }
+        let tree = try fixture.git(["rev-parse", "main^{tree}"], at: fixture.main).trimmingCharacters(in: .whitespacesAndNewlines)
+        let unique = try fixture.git(["commit-tree", tree, "-p", "main", "-m", "Unreferenced checkpoint fixture"], at: fixture.main)
+        let executor = NativeGitCleanupExecutor(catalogDirectory: fixture.catalog) { checkpoint in
+            if checkpoint == (restore ? .beforeRestoreMove : .beforeWorktreeMove) {
+                try Data(unique.utf8).write(to: fixture.featureRef, options: .atomic)
+            }
+        }
+        let plan = try await executor.prepare(fixture.request())
+        if restore {
+            let receipt = try await executor.execute(plan.id, permit: GitCleanupPermit())
+            await #expect(throws: GitCleanupFailure.changed) { try await executor.restore(receipt.id, permit: GitCleanupPermit()) }
+            #expect(!FileManager.default.fileExists(atPath: fixture.worktree.path))
+            #expect(try Data(contentsOf: plan.recovery.appendingPathComponent("worktree/tracked.txt")) == fixture.marker)
+        } else {
+            await #expect(throws: GitCleanupFailure.partial(plan.recovery.path)) { try await executor.execute(plan.id, permit: GitCleanupPermit()) }
+            #expect(try Data(contentsOf: fixture.worktree.appendingPathComponent("tracked.txt")) == fixture.marker)
+            #expect(!FileManager.default.fileExists(atPath: plan.recovery.appendingPathComponent("worktree").path))
+        }
+        #expect(try Data(contentsOf: fixture.featureRef) == Data(unique.utf8))
+        try fixture.assertSentinel()
+    }
+
+    @Test("ACL write grants added to retained data or its destination block restore", arguments: [false, true])
+    func changedRestoreACL(_ destination: Bool) async throws {
+        let fixture = try GitCleanupNativeFixture()
+        defer { fixture.remove() }
+        let executor = fixture.executor(), plan = try await executor.prepare(fixture.request())
+        let receipt = try await executor.execute(plan.id, permit: GitCleanupPermit())
+        let url = destination ? fixture.root : plan.recovery.appendingPathComponent("worktree/tracked.txt")
+        let fd = open(url.path, O_RDONLY | O_NOFOLLOW | O_CLOEXEC)
+        try #require(fd >= 0); defer { close(fd) }
+        let acl = try #require(acl_from_text("!#acl 1\ngroup:ABCDEFAB-CDEF-ABCD-EFAB-CDEF0000000C:::allow:write\n"))
+        defer { acl_free(UnsafeMutableRawPointer(acl)) }
+        try #require(acl_set_fd_np(fd, acl, ACL_TYPE_EXTENDED) == 0)
+        await #expect(throws: (any Error).self) { try await executor.restore(receipt.id, permit: GitCleanupPermit()) }
+        #expect(!FileManager.default.fileExists(atPath: fixture.worktree.path))
+        #expect(try Data(contentsOf: plan.recovery.appendingPathComponent("worktree/tracked.txt")) == fixture.marker)
     }
 }

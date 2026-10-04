@@ -28,11 +28,11 @@
 
 ## 为什么 Git 不接触 live 仓库
 
-原生读取器使用 anchored descriptors、`openat`／`O_NOFOLLOW` 和前后身份检查。它自己解析 index 并计算 tracked blob/tree SHA-1，不运行 status、diff、filter 或 hooks。文件集合完全匹配 index 才通过，所以 ignored 文件也受保护。
+原生读取器使用 anchored descriptors、`openat`／`O_NOFOLLOW` 和前后身份检查，逐层检查目录与文件 ACL。临时执行根也经过描述符锚定和私有 ACL 校验，每次执行前重新核对复制二进制身份与 SHA-256，清理前核对原根身份及所有权标记。它自己解析 index 并计算 tracked blob/tree SHA-1，不运行 status、diff、filter 或 hooks。文件集合完全匹配 index 才通过，所以 ignored 文件也受保护。
 
 对象库仅允许标准 loose object 和 pack/idx/rev/keep 文件，普通逐字节复制到独占 0700 临时目录。不会带入 live config、refs、index、HEAD、attributes、alternates、hooks、远端配置或 worktree 路径。新建的是 app 自己的 bare config、占位 HEAD 和空 refs。Git 先执行固定 `--version` 验证，再只执行两个固定对象操作：`rev-parse --verify <sha>^{tree}` 与 `merge-base --is-ancestor <sha> <base-sha>`。引用参数仅接受 40 位小写十六进制。
 
-系统／全局配置关闭，环境从固定 allowlist 新建，无继承 GIT_*／DYLD_*／开发工具变量；协议禁止、lazy fetch 禁止、stdin 关闭，无 shell。原创 `GitObjectInspector` supervisor 负责 15 秒墙钟、10 秒 CPU、512 MiB data、零文件输出、128 B stdout／64 KiB stderr 上限、拥有的子进程组终止与回收。data limit 不是对所有 mmap／内核内存的完整约束。Swift capture 和同步文件系统调用也不是强制可中断系统调用沙箱。
+系统／全局配置关闭，环境从固定 allowlist 新建，无继承 GIT_*／DYLD_*／开发工具变量；协议禁止、lazy fetch 禁止、stdin 关闭，无 shell。原创 `GitObjectInspector` supervisor 负责 15 秒墙钟、10 秒 CPU、零文件输出、128 B stdout／64 KiB stderr 上限、拥有的子进程组终止与回收。macOS 用 `proc_pidinfo(PROC_PIDTASKINFO)` 在 25 ms 轮询边界监视本次拥有的直接子进程 RSS，超过 512 MiB 或无法读取仍在运行的进程指标时停止并回收；退出竞态通过保留 PID 的 waitid 再检查区分。RSS watchdog 可能在采样间隔内超调，不是内核强制的硬上限，也不覆盖全部 mmap、内核内存或后代进程合计。Linux helper fixture 保留独立的 hard data limit，不能把 Linux 证据当作 macOS 的同等内存机制。Swift capture 和同步文件系统调用也不是强制可中断系统调用沙箱。
 
 ### Apple Git 的来源与临时复制
 
@@ -42,12 +42,12 @@
 
 ## 一致性、恢复和明确的不保证
 
-移动使用同卷 `renameatx_np(RENAME_EXCL)`，不覆盖目标；普通 Git ref writer 共享 loose-ref `.lock`，worktree 退役先写入带操作 UUID 的标准 `locked` 标记。应用目录清单的持久 sidecar lease 阻止合作写入者在修改期间改变保护范围。每个阶段在恢复目录记录原路径、登记路径及 commit，失败保留数据并显示恢复位置。
+移动使用同卷 `renameatx_np(RENAME_EXCL)`，不覆盖目标；操作同时持有适用的目标／base loose-ref `.lock` 和 `packed-refs.lock`，在锁内再次复核 ref 与当前 HEAD，避免正常 pack-refs 先发布旧值再尝试 prune 的竞态；worktree 退役先写入带操作 UUID 的标准 `locked` 标记。源对象的持有身份在移动前、捕获后均复核，目标工作树与登记再做移动后的有界内容检查。应用目录清单的持久 sidecar lease 阻止合作写入者在修改期间改变保护范围。每个阶段在恢复目录记录原路径、登记路径及 commit，失败保留数据并显示恢复位置。
 
 两个 rename 不是跨目录事务；程序崩溃／I/O 错误可能留下已移动文件和未移走登记，或恢复中的部分结果。应用不会自动猜测、继续或清空。保留 receipt 与目录，核对记录后人工恢复原位置，必要时再用 Git 的 repair 工作流。此处没有通用防恶意同用户并发写入保证，也没有「所有进程均未使用」证明；用户停止工具的确认与新鲜的有界复核不能替代内核级事务。
 
 ## 验证
 
-纯 parser tests 包含由唯一临时系统 Git 仓库捕获的 index/tree 固定参考；helper tests 只使用 app-owned 合成仓库与固定测试程序。Native fixtures opt-in 在 CI 的唯一用户主目录子文件夹中构建并执行真实退役、branch 移除和恢复；绝不对用户项目运行测试。覆盖 staged／untracked／ignored、独有提交、stale ref/index、锁、跨范围、符号链接、checked-out／主 worktree、packed refs、配置拒绝、重复确认和失败保留。
+纯 parser tests 包含由唯一临时系统 Git 仓库捕获的 index/tree 固定参考；helper tests 只使用 app-owned 合成仓库与固定测试程序。取消检查会阻止后续查询；一个已经运行的私有 Git 查询可能持续到 15 秒退出／超时边界，不把关闭 UI 描述成即时进程终止。Native fixtures opt-in 在 CI 的唯一用户主目录子文件夹中构建并执行真实退役、branch 移除和恢复；绝不对用户项目运行测试。覆盖 staged／untracked／ignored、独有提交、stale ref/index、锁、跨范围、符号链接、checked-out／主 worktree、packed refs、配置拒绝、重复确认和失败保留。
 
 一手格式与命令资料：[index 格式](https://git-scm.com/docs/gitformat-index)、[Git 环境和全局选项](https://git-scm.com/docs/git)、[worktree 管理](https://git-scm.com/docs/git-worktree)。

@@ -159,6 +159,9 @@ enum GitCleanupInspection {
 
     static func inspect(_ request: GitCleanupRequest) throws -> GitCleanupEvidence {
         guard geteuid() != 0, request.project.kind == .worktree || request.project.kind == .repository else { throw GitCleanupFailure.unsupported }
+        guard [request.scope.path, request.project.path, request.project.gitMetadata?.commonDirectoryPath ?? ""].allSatisfy({ path in
+            !path.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) })
+        }) else { throw GitCleanupFailure.scope }
         _ = try branchComponents(request.branch); _ = try branchComponents(request.baseBranch)
         guard request.branch != request.baseBranch, !["main", "master", "develop", "development", "release"].contains(request.branch.lowercased()) else { throw GitCleanupFailure.locked }
         let scope = try InstallerDirectoryAnchor.open(request.scope)
@@ -191,6 +194,7 @@ enum GitCleanupInspection {
         }
         let admin = GitCleanupCapture()
         try admin.collect(common, skip: ["objects", "hooks", "logs", "moekit-recovery"])
+        guard admin.files["worktrees"] == nil else { throw GitCleanupFailure.unsupported }
         guard !admin.files.keys.contains(where: { $0.hasSuffix(".lock") || ["shallow", "MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "BISECT_LOG", "MERGE_MSG", "AUTO_MERGE"].contains(String($0.split(separator: "/").last ?? "")) || ["info/grafts", "info/attributes"].contains($0) }),
               !admin.directories.keys.contains(where: { $0 == "modules" || $0.split(separator: "/").contains(where: { $0.hasPrefix("rebase-") || $0 == "sequencer" }) || $0 == "rr-cache" || $0 == "refs/replace" }) else { throw GitCleanupFailure.locked }
         try strictConfig(admin.files["config"]?.data)
@@ -347,24 +351,31 @@ enum GitCleanupInspection {
         }
         return result
     }
-    static func readRefsUnderLocks(_ common: InstallerDirectoryAnchor, branch: String) throws -> GitCleanupCapture {
+    static func readRefsUnderLocks(_ common: InstallerDirectoryAnchor, branch: String, baseBranch: String? = nil,
+                                   permittedHead: String? = nil) throws -> GitCleanupCapture {
         let admin = GitCleanupCapture()
         try admin.collect(common, skip: ["objects", "hooks", "logs", "moekit-recovery", "packed-refs.lock"])
-        guard !admin.files.keys.contains(where: { $0.hasSuffix(".lock") && $0 != "refs/heads/" + branch + ".lock" }) else { throw GitCleanupFailure.locked }
+        let ownLocks = Set(["refs/heads/" + branch + ".lock"] + (baseBranch.map { ["refs/heads/" + $0 + ".lock"] } ?? []))
+        guard !admin.files.keys.contains(where: { $0.hasSuffix(".lock") && !ownLocks.contains($0) }) else { throw GitCleanupFailure.locked }
         try strictConfig(admin.files["config"]?.data)
-        try validateUnoccupiedHeads(admin, branch: branch)
+        try validateUnoccupiedHeads(admin, branch: branch, permittedHead: permittedHead)
         if let packed = admin.files["packed-refs"]?.data, try packedContains(packed, branch: branch) { throw GitCleanupFailure.occupied }
         return admin
     }
-    static func validateUnoccupiedHeads(_ admin: GitCleanupCapture, branch: String) throws {
+    static func validateUnoccupiedHeads(_ admin: GitCleanupCapture, branch: String, permittedHead: String? = nil) throws {
         guard let head = admin.files["HEAD"]?.data else { throw GitCleanupFailure.unsupported }
         try validateHead(head)
         for (path, file) in admin.files where path == "HEAD" || (path.hasPrefix("worktrees/") && path.hasSuffix("/HEAD") && path.split(separator: "/").count == 3) {
             try validateHead(file.data)
-            guard !headMatches(file.data, branch: branch) else { throw GitCleanupFailure.locked }
+            if headMatches(file.data, branch: branch) {
+                guard path == permittedHead, file.data == Data(("ref: refs/heads/" + branch + "\n").utf8) else { throw GitCleanupFailure.locked }
+            }
         }
         for path in admin.directories.keys where path.hasPrefix("worktrees/") && path.split(separator: "/").count == 2 {
             guard admin.files[path + "/HEAD"] != nil else { throw GitCleanupFailure.unsupported }
+        }
+        if let permittedHead {
+            guard admin.files[permittedHead]?.data == Data(("ref: refs/heads/" + branch + "\n").utf8) else { throw GitCleanupFailure.changed }
         }
     }
 }

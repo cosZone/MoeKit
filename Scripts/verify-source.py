@@ -86,7 +86,10 @@ for path in sources:
         allowed_adapter = (path.relative_to(ROOT).as_posix() in {"Sources/Mole/MoleAnalysisExecutor.swift", "Sources/Installer/InstallerUseEvidence.swift", "Sources/GitCleanup/GitObjectSnapshot.swift"}
                            and pattern == r"\b(?:Process|NSTask|NSAppleScript)\s*\("
                            and not re.search(r"\b(?:NSTask|NSAppleScript)\s*\(", text))
-        require(allowed_adapter or not re.search(pattern, text), f"Execution API outside reviewed adapter: {path.relative_to(ROOT)} ({pattern})")
+        allowed_signal = (path.relative_to(ROOT).as_posix() == "Sources/Services/NativeProcessTerminationSystem.swift"
+                          and pattern == r"\b(?:kill|killpg|raise|proc_signal|proc_signal_with_audittoken)\s*\("
+                          and not re.search(r"\b(?:kill|killpg|raise|proc_signal)\s*\(", text))
+        require(allowed_adapter or allowed_signal or not re.search(pattern, text), f"Execution API outside reviewed adapter: {path.relative_to(ROOT)} ({pattern})")
 
 installer_sources = list((ROOT / "Sources/Installer").glob("*.swift"))
 for path in installer_sources:

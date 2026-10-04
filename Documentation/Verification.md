@@ -59,7 +59,7 @@
 - [ ] IPv4/IPv6 TCP 本地监听端口正确；UDP/已连接 socket 不冒充 TCP listener；权限/数量/时限截断显示未知
 - [ ] 真实 Mac 上验证 libproc 的 SDK 可用性、目录权限与退出/exec 期间的读取行为；不得把 synthetic fixture 测试称作真实进程覆盖
 - [ ] 个人浏览器、IDE、数据库、VM、共享 shell 的风险提示正确；关联不冒充 MoeKit 管理
-- [ ] 停止计划仅列出精确选择项；无自动扩展父子进程/组，无可执行 Stop/Force Stop 按钮
+- [ ] 停止计划仅列出精确选择项；无自动扩展父子进程/组；受保护目标拒绝，SIGTERM 与 SIGKILL 分别复查和确认，过期/重复/取消的确认不执行
 - [ ] 中英文、960×620、深浅色、VoiceOver 和纯键盘下表格/详情/计划可读
 
 

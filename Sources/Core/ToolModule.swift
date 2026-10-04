@@ -202,7 +202,7 @@ struct MoleModule: ToolModule {
     }
 }
 
-/// Read-only native inventory. Stop-plan inspection is not process execution.
+/// Native inventory with independently confirmed identity-bound termination.
 struct ProcessModule: ToolModule {
     static let id = "processes"
 
@@ -220,8 +220,8 @@ struct ProcessModule: ToolModule {
                                          summary: String(localized: "Scan on demand. No automatic polling or process changes."),
                                          systemImage: "magnifyingglass", readiness: .available),
                 ToolCapabilityDescriptor(id: "processes.stop", title: String(localized: "Stop processes"),
-                                         summary: String(localized: "Inspect an exact-selection plan before a future stopping capability."),
-                                         systemImage: "stop.circle", readiness: .unavailable(reason: String(localized: "Stopping and force stopping are not implemented.")))
+                                         summary: String(localized: "Confirm exact unprotected targets for SIGTERM; force stop requires a separate confirmation. Browser ownership remains unverified."),
+                                         systemImage: "stop.circle", readiness: .available)
             ]
         )
     }

@@ -1,14 +1,16 @@
 import Foundation
 
 /// PID is not an identity. Preserve the kernel's full start timestamp and the
-/// executable observed with it. These fields still do not prove ownership or
-/// detect a same-path re-exec; a future executor needs stronger evidence.
+/// executable observed with it. A kernel execution version is additionally
+/// required for termination; inventory identity still does not prove ownership.
 struct ProcessIdentity: Hashable, Sendable {
     let pid: Int32
     let startSeconds: UInt64?
     let startMicroseconds: UInt64?
     let uid: UInt32?
     let executablePath: String?
+    /// Kernel execution version; nil snapshots remain inspection-only.
+    var executionVersion: UInt32? = nil
 
     var isComplete: Bool {
         pid > 1 && startSeconds.map { $0 > 0 } == true
@@ -39,6 +41,7 @@ struct ProcessInventoryRecord: Identifiable, Hashable, Sendable {
     /// were observed during a complete descriptor read, not no network activity.
     let listeningPorts: [ListeningPort]?
     var metadataIssues: [String] = []
+    var credentials: ProcessCredentials? = nil
     var id: ProcessIdentity { identity }
 }
 
@@ -50,6 +53,7 @@ struct ProcessSnapshot: Sendable {
     let observerPID: Int32
     var issues: [String] = []
     var isPartial = false
+    var currentGID: UInt32? = nil
 }
 
 struct ProcessScanOptions: Sendable {
@@ -191,6 +195,9 @@ enum ProcessClassifier {
             reasons.append(String(localized: "Process start time is inconsistent with this snapshot."))
         }
         let path = record.identity.executablePath?.lowercased() ?? ""
+        if ["/system/", "/usr/libexec/", "/usr/sbin/", "/sbin/"].contains(where: path.hasPrefix) {
+            reasons.append(String(localized: "Operating-system executable path is protected."))
+        }
         let name = record.name.lowercased()
         let binary = (path as NSString).lastPathComponent
         // Deliberately conservative hints, not an exhaustive safety guarantee.
@@ -222,7 +229,8 @@ struct StopPlanTarget: Identifiable, Sendable {
 }
 
 /// Inspection only. No signal number, group target, executable command or
-/// execution closure is stored in this model; no executor exists in this build.
+/// execution closure is stored here. The separate executor mints fresh one-use
+/// confirmation authority; this inspection model cannot itself execute.
 struct StopPlan: Identifiable, Sendable {
     let id: UUID
     let snapshotID: UUID
@@ -269,9 +277,9 @@ enum ProcessStopPlanner {
                                   canonicalProjectPath: assessment.canonicalProjectPath,
                                   protectionReasons: protectionReasons, risks: risks)
         }
-        var warnings = [String(localized: "Preview only. Stopping and force stopping are not implemented."),
+        var warnings = [String(localized: "Review is not permission to stop. A fresh identity check and explicit confirmation are required."),
                         String(localized: "Only exact selected identities are listed. Parents, children and process groups are not added automatically."),
-                        String(localized: "A future stop must re-read identities and prefer cooperative shutdown. A submitted signal would not prove exit.")]
+                        String(localized: "Graceful stop sends SIGTERM to exact selected identities. Force stop requires a separate confirmation; signal submission does not prove exit.")]
         if snapshot.isPartial { warnings.append(String(localized: "This is a partial snapshot; unseen processes or dependencies may exist.")) }
         if snapshot.capturedAt > now || now.timeIntervalSince(snapshot.capturedAt) > maximumSnapshotAge {
             warnings.append(String(localized: "This snapshot is stale or has an invalid timestamp. Refresh before reviewing a future action."))
@@ -282,7 +290,7 @@ enum ProcessStopPlanner {
                         selectedIdentities: selection, targets: targets, warnings: warnings)
     }
 
-    /// Pure future-executor prerequisite, not permission to act. A successful
+    /// Pure inspection revalidation, not permission to act. A successful
     /// comparison cannot make a later PID-based signal atomic or guarantee safety.
     static func invalidations(for plan: StopPlan, snapshot: ProcessSnapshot, selection: Set<ProcessIdentity>, now: Date = .now) -> Set<StopPlanInvalidation> {
         var result: Set<StopPlanInvalidation> = []
@@ -305,5 +313,35 @@ enum ProcessStopPlanner {
             if original.record != fresh { result.insert(.metadataChanged(identity)) }
         }
         return result
+    }
+}
+
+/// Preserve exact spellings without invisible controls changing confirmation
+/// layout or bidirectional order. Escapes are display-only, never signal input.
+enum ProcessDisplayText {
+    static func escape(_ value: String) -> String {
+        value.unicodeScalars.map { scalar in
+            switch scalar.properties.generalCategory {
+            case .control, .format, .lineSeparator, .paragraphSeparator:
+                return String(format: "\\u{%X}", scalar.value)
+            default: return String(scalar)
+            }
+        }.joined()
+    }
+}
+
+
+struct ProcessCredentials: Hashable, Sendable {
+    let realUID: UInt32
+    let effectiveUID: UInt32
+    let savedUID: UInt32
+    let realGID: UInt32
+    let effectiveGID: UInt32
+    let savedGID: UInt32
+    let hasSetIDHistory: Bool
+
+    func isOrdinary(uid: UInt32, gid: UInt32) -> Bool {
+        uid != 0 && !hasSetIDHistory && realUID == uid && effectiveUID == uid && savedUID == uid
+            && realGID == gid && effectiveGID == gid && savedGID == gid
     }
 }

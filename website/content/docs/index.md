@@ -21,7 +21,7 @@ MoeKit 是面向 macOS 的个人 CLI 工具箱。Mole 是第一个内置模块�
 | 工作区 | 负责什么 | 当前边界 |
 | --- | --- | --- |
 | Projects | 项目列表、搜索、排序、置顶、详情、Finder 定位 | 只读发现，不检查 Git 工作区是否干净 |
-| Tools | Mole 报告、确认后的固定版本分析、单个 Downloads `.dmg` 废纸篓／恢复，以及 Processes & Ports | 文件操作需独立确认与严格检查；不执行任意命令、广域清理或停止其他进程 |
+| Tools | Mole 报告、确认后的固定版本分析、单个 Downloads `.dmg` 废纸篓／恢复，以及 Processes & Ports | 文件操作需独立确认与严格检查；停止需独立确认精确身份；不执行任意命令或广域清理 |
 | Tasks | 当前会话的任务状态、取消、结果与 Diagnostics | 退出应用后不保留任务历史 |
 
 ## 第一次打开

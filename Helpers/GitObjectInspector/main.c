@@ -118,6 +118,13 @@ static int close_inherited_descriptors(void) {
     closedir(directory);
     return error ? -1 : 0;
 }
+static void setup_failure(int ready, int stage) {
+    int code = errno;
+    char report[32];
+    int length = snprintf(report, sizeof(report), "E%d:%d", stage, code);
+    if (length > 0 && length < (int)sizeof(report)) (void)write_all(ready, report, (size_t)length);
+    _exit(INTERNAL);
+}
 int main(int argc, char **argv) {
     if (close_inherited_descriptors()) return INTERNAL;
     // The Swift caller verifies the copied Apple signature and constructs the
@@ -172,9 +179,13 @@ int main(int argc, char **argv) {
     if (child < 0) return INTERNAL;
     if (!child) {
         close(out[0]); close(err[0]); close(ready[0]);
-        if (setpgid(0, 0) || chdir(argv[2]) ||
-            limit(RLIMIT_CPU, GIT_CPU_SECONDS) || limit(RLIMIT_CORE, 0) ||
-            limit(RLIMIT_FSIZE, 0) || limit(RLIMIT_DATA, 512 * 1024 * 1024) || limit(RLIMIT_NOFILE, 256)) _exit(INTERNAL);
+        if (setpgid(0, 0)) setup_failure(ready[1], 1);
+        if (chdir(argv[2])) setup_failure(ready[1], 2);
+        if (limit(RLIMIT_CPU, GIT_CPU_SECONDS)) setup_failure(ready[1], 3);
+        if (limit(RLIMIT_CORE, 0)) setup_failure(ready[1], 4);
+        if (limit(RLIMIT_FSIZE, 0)) setup_failure(ready[1], 5);
+        if (limit(RLIMIT_DATA, 512 * 1024 * 1024)) setup_failure(ready[1], 6);
+        if (limit(RLIMIT_NOFILE, 256)) setup_failure(ready[1], 7);
         int null = open("/dev/null", O_RDONLY);
         if (null < 0 || dup2(null, STDIN_FILENO) < 0 || dup2(out[1], STDOUT_FILENO) < 0 ||
             dup2(err[1], STDERR_FILENO) < 0) _exit(INTERNAL);
@@ -210,9 +221,16 @@ int main(int argc, char **argv) {
         // EOF means the app went away; any input means explicit cancellation.
         if (fds[2].revents & (POLLIN | POLLHUP | POLLERR | POLLNVAL)) { result = CANCELLED; break; }
         if (!child_ready && (fds[3].revents & (POLLIN | POLLHUP))) {
-            char byte;
-            if (read(fds[3].fd, &byte, 1) == 1 && byte == 'R') child_ready = true;
-            else { result = INTERNAL; break; }
+            char report[32] = {0};
+            ssize_t size = read(fds[3].fd, report, sizeof(report) - 1);
+            if (size == 1 && report[0] == 'R') child_ready = true;
+            else {
+                int stage = 0, code = 0;
+                if (size > 1 && sscanf(report, "E%d:%d", &stage, &code) == 2 &&
+                    stage >= 1 && stage <= 7 && code >= 0 && code <= 4095)
+                    fprintf(stderr, "GitObjectInspector setup stage=%d errno=%d\n", stage, code);
+                result = INTERNAL; break;
+            }
             close(fds[3].fd); fds[3].fd = -1;
         }
         for (int i = 0; i < 2 && !result; ++i) {

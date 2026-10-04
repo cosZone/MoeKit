@@ -30,6 +30,8 @@ final class GitCleanupCapture {
         try Task.checkCancellation()
         guard prefix.split(separator: "/").count < 48 else { throw GitCleanupFailure.budget }
         try directory.validate()
+        try InstallerFileAccess.rejectMutationGrantingACL(directory.fd)
+        try InstallerFileAccess.rejectCloudAttributes(directory.fd)
         directories[prefix] = try InstallerFileAccess.snapshot(directory.fd)
         let duplicate = openat(directory.fd, ".", O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW)
         guard duplicate >= 0, let stream = fdopendir(duplicate) else {
@@ -58,6 +60,8 @@ final class GitCleanupCapture {
             case UInt32(S_IFREG):
                 guard snapshot.links == 1, snapshot.bytes >= 0, snapshot.bytes <= 64 * 1_024 * 1_024 else { throw GitCleanupFailure.budget }
                 let file = try InstallerFileDescriptor(parent: directory, name: name)
+                try InstallerFileAccess.rejectMutationGrantingACL(file.fd)
+                try InstallerFileAccess.rejectCloudAttributes(file.fd)
                 let data = try BoundedRegularFileReader.read(descriptor: file.fd, maximumBytes: 64 * 1_024 * 1_024)
                 guard snapshot == (try InstallerFileAccess.snapshot(file.fd)), snapshot == (try InstallerFileAccess.snapshotAt(directory.fd, name)) else { throw GitCleanupFailure.changed }
                 bytes += data.count
@@ -70,9 +74,19 @@ final class GitCleanupCapture {
         guard directories[prefix] == (try InstallerFileAccess.snapshot(directory.fd)) else { throw GitCleanupFailure.changed }
     }
     var fingerprint: String {
+        makeFingerprint(normalizeRoot: false)
+    }
+    /// Moving a captured directory changes root metadata. Child identity,
+    /// contents and enumeration remain exact; only the moved root is normalized.
+    var moveFingerprint: String { makeFingerprint(normalizeRoot: true) }
+    private func makeFingerprint(normalizeRoot: Bool) -> String {
         var hash = SHA256()
         for path in directories.keys.sorted() {
-            hash.update(data: Data(("D" + path + String(describing: directories[path]!)).utf8))
+            let value = directories[path]!
+            let description = normalizeRoot && path.isEmpty
+                ? "\(value.device)|\(value.inode)|\(value.mode)|\(value.uid)|\(value.gid)|\(value.flags)"
+                : String(describing: value)
+            hash.update(data: Data(("D" + path + description).utf8))
         }
         for path in files.keys.sorted() {
             hash.update(data: Data(("F" + path + String(describing: files[path]!.identity)).utf8))
@@ -95,6 +109,13 @@ struct GitCleanupEvidence {
     let fingerprint: String
     let bytes: Int64
     let gitVersion: String
+    let target: InstallerDirectoryAnchor
+    let registration: InstallerDirectoryAnchor?
+    let branchFile: InstallerFileDescriptor
+    let branchIdentity: InstallerFileSnapshot
+    let worktreeMoveFingerprint: String?
+    let registrationMoveFingerprint: String?
+    let worktreeFiles: Set<String>?
 }
 
 enum GitCleanupInspection {
@@ -103,7 +124,7 @@ enum GitCleanupInspection {
         guard !branch.isEmpty, branch.utf8.count <= 200, parts.count <= 12, branch != "HEAD",
               !branch.contains(".."), !branch.contains("@{"), !branch.contains("\\"),
               !branch.contains(where: { $0.isWhitespace || $0.isNewline }),
-              !branch.unicodeScalars.contains(where: { $0.value < 33 || $0.value == 127 }),
+              !branch.unicodeScalars.contains(where: { $0.value < 33 || CharacterSet.controlCharacters.contains($0) }),
               !branch.contains(where: { "~^:?*[".contains($0) }) else { throw GitCleanupFailure.unsupported }
         for part in parts {
             guard !part.isEmpty, !part.hasPrefix("."), !part.hasPrefix("-"), !part.hasSuffix("."), !part.hasSuffix(".lock") else { throw GitCleanupFailure.unsupported }
@@ -177,21 +198,24 @@ enum GitCleanupInspection {
         // Loose-only deletion avoids rewriting unrelated packed references.
         let targetOID = try oid(admin.files[targetRef]?.data)
         if let packed = admin.files["packed-refs"]?.data {
-            guard let text = String(data: packed, encoding: .utf8), !text.split(separator: "\n").contains(where: { $0.hasSuffix(" " + targetRef) }) else { throw GitCleanupFailure.unsupported }
+            guard try !packedContains(packed, branch: request.branch) else { throw GitCleanupFailure.unsupported }
         }
         let baseOID = try resolveReference(baseRef, admin: admin)
         guard let mainHead = admin.files["HEAD"]?.data else { throw GitCleanupFailure.unsupported }
         try validateHead(mainHead)
-        guard mainHead != Data(("ref: " + targetRef + "\n").utf8) else { throw GitCleanupFailure.locked }
-        let indexHeads = admin.files.filter { $0.key.hasPrefix("worktrees/") && $0.key.hasSuffix("/HEAD") }
+        guard !headMatches(mainHead, branch: request.branch) else { throw GitCleanupFailure.locked }
+        let indexHeads = admin.files.filter { $0.key.hasPrefix("worktrees/") && $0.key.hasSuffix("/HEAD") && $0.key.split(separator: "/").count == 3 }
         for (_, file) in indexHeads { try validateHead(file.data) }
         for path in admin.directories.keys where path.hasPrefix("worktrees/") && path.split(separator: "/").count == 2 {
             guard admin.files[path + "/HEAD"] != nil else { throw GitCleanupFailure.unsupported }
         }
+        let selectedRegistration = try validateSelectionTopology(request, target: target, common: common, admin: admin)
         var registrationParent: InstallerDirectoryAnchor?, registrationName: String?
         var workingFingerprint = ""
         var size: Int64 = 0
         var gitVersion = ""
+        var worktreeMoveFingerprint: String?, registrationMoveFingerprint: String?
+        var worktreeFiles: Set<String>?
         if request.action == .retireWorktree {
             guard request.project.kind == .worktree, metadata.isLinkedWorktree,
                   let path = String(data: try read(target, ".git", maximum: 4096), encoding: .utf8),
@@ -204,7 +228,7 @@ enum GitCleanupInspection {
                   admin.files[prefix + "commondir"]?.data == Data("../..\n".utf8),
                   admin.files[prefix + "gitdir"]?.data == Data((target.url.appendingPathComponent(".git").path + "\n").utf8),
                   admin.files[prefix + "locked"] == nil,
-                  indexHeads.filter({ $0.value.data == Data(("ref: " + targetRef + "\n").utf8) }).count == 1,
+                  indexHeads.filter({ headMatches($0.value.data, branch: request.branch) }).count == 1,
                   let indexData = admin.files[prefix + "index"]?.data else { throw GitCleanupFailure.locked }
             let index = try GitPlainIndex.parse(indexData)
             let expected = Set(index.entries.map(\.path)).union([".git"])
@@ -229,8 +253,12 @@ enum GitCleanupInspection {
             gitVersion = objects.version
             size = Int64(working.bytes)
             registrationParent = try common.child("worktrees"); registrationName = name
+            worktreeMoveFingerprint = working.moveFingerprint; worktreeFiles = expected
+            guard let selectedRegistration else { throw GitCleanupFailure.changed }
+            let registrationCapture = GitCleanupCapture(); try registrationCapture.collect(selectedRegistration)
+            registrationMoveFingerprint = registrationCapture.moveFingerprint
         } else {
-            guard !indexHeads.contains(where: { $0.value.data == Data(("ref: " + targetRef + "\n").utf8) }) else { throw GitCleanupFailure.locked }
+            guard !indexHeads.contains(where: { headMatches($0.value.data, branch: request.branch) }) else { throw GitCleanupFailure.locked }
             let objects = try GitObjectSnapshot(common: common); defer { objects.remove() }
             try objects.requireAncestor(targetOID, baseOID)
             try objects.validateSource()
@@ -243,17 +271,52 @@ enum GitCleanupInspection {
         let finalAdmin = GitCleanupCapture()
         try finalAdmin.collect(common, skip: ["objects", "hooks", "logs", "moekit-recovery"])
         guard finalAdmin.fingerprint == admin.fingerprint else { throw GitCleanupFailure.changed }
+        let branchFile = try InstallerFileDescriptor(parent: branchParent, name: branchParts.last!)
+        let branchIdentity = try InstallerFileAccess.snapshot(branchFile.fd)
+        guard branchIdentity == admin.files[targetRef]?.identity else { throw GitCleanupFailure.changed }
         try scope.validate(); try target.validate(); try common.validate()
         return .init(common: common, scope: scope, targetParent: targetParent, registrationParent: registrationParent,
                      registrationName: registrationName, branchParent: branchParent, branchName: branchParts.last!,
                      targetOID: targetOID, baseOID: baseOID, fingerprint: admin.fingerprint + workingFingerprint,
-                     bytes: size, gitVersion: gitVersion)
+                     bytes: size, gitVersion: gitVersion, target: target, registration: selectedRegistration,
+                     branchFile: branchFile, branchIdentity: branchIdentity, worktreeMoveFingerprint: worktreeMoveFingerprint,
+                     registrationMoveFingerprint: registrationMoveFingerprint, worktreeFiles: worktreeFiles)
     }
     static func within(_ url: URL, scope: URL) -> Bool { url.pathComponents.starts(with: scope.pathComponents) }
     static func validateHead(_ data: Data) throws {
         if let text = String(data: data, encoding: .utf8), text.hasPrefix("ref: refs/heads/"), text.hasSuffix("\n") {
             _ = try branchComponents(String(text.dropFirst(16).dropLast()))
         } else { _ = try oid(data) }
+    }
+    static func headMatches(_ data: Data, branch: String) -> Bool {
+        guard let text = String(data: data, encoding: .utf8), text.hasPrefix("ref: refs/heads/"), text.hasSuffix("\n") else { return false }
+        return branchKey(String(text.dropFirst(16).dropLast())) == branchKey(branch)
+    }
+    private static func branchKey(_ value: String) -> String {
+        value.folding(options: [.caseInsensitive], locale: Locale(identifier: "en_US_POSIX")).precomposedStringWithCanonicalMapping
+    }
+    static func validateSelectionTopology(_ request: GitCleanupRequest, target: InstallerDirectoryAnchor,
+                                                  common: InstallerDirectoryAnchor, admin: GitCleanupCapture) throws -> InstallerDirectoryAnchor? {
+        guard let metadata = request.project.gitMetadata else { throw GitCleanupFailure.scope }
+        if request.project.kind == .repository {
+            guard !metadata.isLinkedWorktree, target.url == common.parent?.url,
+                  metadata.gitDirectoryPath == common.url.path,
+                  try target.child(".git").identity.matchesDirectory(InstallerFileAccess.snapshot(common.fd)) else { throw GitCleanupFailure.scope }
+            return nil
+        }
+        guard metadata.isLinkedWorktree,
+              let text = String(data: try read(target, ".git", maximum: 4096), encoding: .utf8),
+              text.hasPrefix("gitdir: /"), text.hasSuffix("\n") else { throw GitCleanupFailure.scope }
+        let path = String(text.dropFirst(8).dropLast())
+        let url = URL(fileURLWithPath: path)
+        guard path == metadata.gitDirectoryPath,
+              url.deletingLastPathComponent() == common.url.appendingPathComponent("worktrees") else { throw GitCleanupFailure.scope }
+        let prefix = "worktrees/" + url.lastPathComponent + "/"
+        guard admin.files[prefix + "commondir"]?.data == Data("../..\n".utf8),
+              admin.files[prefix + "gitdir"]?.data == Data((target.url.appendingPathComponent(".git").path + "\n").utf8),
+              let head = admin.files[prefix + "HEAD"]?.data else { throw GitCleanupFailure.scope }
+        try validateHead(head)
+        return try common.child("worktrees").child(url.lastPathComponent)
     }
     static func read(_ parent: InstallerDirectoryAnchor, _ name: String, maximum: Int) throws -> Data {
         let file = try InstallerFileDescriptor(parent: parent, name: name)
@@ -264,11 +327,44 @@ enum GitCleanupInspection {
         var sha = Insecure.SHA1(); sha.update(data: Data("blob \(data.count)\0".utf8)); sha.update(data: data)
         return sha.finalize().map { String(format: "%02x", $0) }.joined()
     }
-    private static func resolveReference(_ ref: String, admin: GitCleanupCapture) throws -> String {
+    static func resolveReference(_ ref: String, admin: GitCleanupCapture) throws -> String {
         if let value = admin.files[ref] { return try oid(value.data) }
-        guard let data = admin.files["packed-refs"]?.data, let text = String(data: data, encoding: .utf8) else { throw GitCleanupFailure.unsupported }
-        let matches = text.split(separator: "\n").filter { $0.hasSuffix(" " + ref) }
-        guard matches.count == 1 else { throw GitCleanupFailure.unsupported }
-        return try oid(Data((matches[0].prefix(40) + "\n").utf8))
+        guard let data = admin.files["packed-refs"]?.data, let value = try packedRefs(data)[ref] else { throw GitCleanupFailure.unsupported }
+        return value
+    }
+    static func packedContains(_ data: Data, branch: String) throws -> Bool {
+        try packedRefs(data).keys.contains { $0.hasPrefix("refs/heads/") && branchKey(String($0.dropFirst(11))) == branchKey(branch) }
+    }
+    private static func packedRefs(_ data: Data) throws -> [String: String] {
+        guard let text = String(data: data, encoding: .utf8), !text.contains("\0") else { throw GitCleanupFailure.unsupported }
+        var result: [String: String] = [:]
+        for line in text.split(separator: "\n") {
+            if line.hasPrefix("#") { continue }
+            if line.hasPrefix("^") { _ = try oid(Data((line.dropFirst() + "\n").utf8)); continue }
+            let pair = line.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: false)
+            guard pair.count == 2, pair[1].hasPrefix("refs/"), !pair[1].contains(where: { $0.isWhitespace }), result[String(pair[1])] == nil else { throw GitCleanupFailure.unsupported }
+            result[String(pair[1])] = try oid(Data((pair[0] + "\n").utf8))
+        }
+        return result
+    }
+    static func readRefsUnderLocks(_ common: InstallerDirectoryAnchor, branch: String) throws -> GitCleanupCapture {
+        let admin = GitCleanupCapture()
+        try admin.collect(common, skip: ["objects", "hooks", "logs", "moekit-recovery", "packed-refs.lock"])
+        guard !admin.files.keys.contains(where: { $0.hasSuffix(".lock") && $0 != "refs/heads/" + branch + ".lock" }) else { throw GitCleanupFailure.locked }
+        try strictConfig(admin.files["config"]?.data)
+        try validateUnoccupiedHeads(admin, branch: branch)
+        if let packed = admin.files["packed-refs"]?.data, try packedContains(packed, branch: branch) { throw GitCleanupFailure.occupied }
+        return admin
+    }
+    static func validateUnoccupiedHeads(_ admin: GitCleanupCapture, branch: String) throws {
+        guard let head = admin.files["HEAD"]?.data else { throw GitCleanupFailure.unsupported }
+        try validateHead(head)
+        for (path, file) in admin.files where path == "HEAD" || (path.hasPrefix("worktrees/") && path.hasSuffix("/HEAD") && path.split(separator: "/").count == 3) {
+            try validateHead(file.data)
+            guard !headMatches(file.data, branch: branch) else { throw GitCleanupFailure.locked }
+        }
+        for path in admin.directories.keys where path.hasPrefix("worktrees/") && path.split(separator: "/").count == 2 {
+            guard admin.files[path + "/HEAD"] != nil else { throw GitCleanupFailure.unsupported }
+        }
     }
 }

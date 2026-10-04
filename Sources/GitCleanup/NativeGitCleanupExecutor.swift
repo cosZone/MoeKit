@@ -43,6 +43,7 @@ actor NativeGitCleanupExecutor {
         // leave an explicit recovery record. Cancellation never triggers deletion.
         let recoveryRoot = try ensurePrivateChild(fresh.common, "moekit-recovery")
         guard mkdirat(recoveryRoot.fd, id.uuidString, 0o700) == 0 else { throw GitCleanupFailure.occupied }
+        guard fsync(fresh.common.fd) == 0, fsync(recoveryRoot.fd) == 0 else { throw GitCleanupFailure.changed }
         let recovery = try recoveryRoot.child(id.uuidString)
         try record(plan, state: "prepared", recovery: recovery)
         var payloadMoved = false
@@ -50,34 +51,59 @@ actor NativeGitCleanupExecutor {
         do {
             if plan.request.action == .retireWorktree {
                 guard let registrationParent = fresh.registrationParent, let registrationName = fresh.registrationName else { throw GitCleanupFailure.changed }
-                let registration = try registrationParent.child(registrationName)
+                guard let registration = fresh.registration else { throw GitCleanupFailure.changed }
                 // A conventional worktree lock blocks cooperating Git removal.
                 // Its exact ownership marker is retained with the registration.
                 try writeNew(Data(("MoeKit retirement " + id.uuidString + "\n").utf8), parent: registration, name: "locked")
                 lockedRegistration = registration
                 try record(plan, state: "worktree-move-intent", recovery: recovery)
                 try checkpoint(.beforeWorktreeMove)
+                try fresh.target.validate(); try registration.validate()
                 try InstallerFileAccess.exclusiveMove(from: fresh.targetParent, name: plan.request.project.url.lastPathComponent, to: recovery, destinationName: "worktree")
                 payloadMoved = true
+                guard fresh.target.identity.matchesDirectory(try InstallerFileAccess.snapshotAt(recovery.fd, "worktree")) else { throw GitCleanupFailure.changed }
+                let captured = GitCleanupCapture(allowedFiles: fresh.worktreeFiles)
+                try captured.collect(recovery.child("worktree"))
+                guard captured.moveFingerprint == fresh.worktreeMoveFingerprint else { throw GitCleanupFailure.changed }
                 try checkpoint(.afterWorktreeMove)
                 try record(plan, state: "registration-move-intent", recovery: recovery)
+                try registration.validate()
                 try InstallerFileAccess.exclusiveMove(from: registrationParent, name: registrationName, to: recovery, destinationName: "registration")
+                guard registration.identity.matchesDirectory(try InstallerFileAccess.snapshotAt(recovery.fd, "registration")) else { throw GitCleanupFailure.changed }
+                let capturedRegistration = GitCleanupCapture()
+                try capturedRegistration.collect(recovery.child("registration"), skip: ["locked"])
+                guard capturedRegistration.moveFingerprint == fresh.registrationMoveFingerprint else { throw GitCleanupFailure.changed }
+                guard fsync(fresh.targetParent.fd) == 0, fsync(registrationParent.fd) == 0 else { throw GitCleanupFailure.changed }
             } else {
                 // Cooperating Git writers must acquire this same loose-ref lock.
-                let lockName = fresh.branchName + ".lock"
-                try writeNew(Data(), parent: fresh.branchParent, name: lockName)
-                defer { _ = unlinkat(fresh.branchParent.fd, lockName, 0) } // our exclusive, empty lock only
+                let packedLock = try GitCleanupOwnedLock(parent: fresh.common, name: "packed-refs.lock")
+                let refLock = try GitCleanupOwnedLock(parent: fresh.branchParent, name: fresh.branchName + ".lock")
+                defer { withExtendedLifetime((packedLock, refLock)) {} }
+                let refs = try GitCleanupInspection.readRefsUnderLocks(fresh.common, branch: plan.request.branch)
+                guard try GitCleanupInspection.resolveReference("refs/heads/" + plan.request.baseBranch, admin: refs) == plan.baseOID else { throw GitCleanupFailure.changed }
+                _ = try GitCleanupInspection.validateSelectionTopology(plan.request, target: fresh.target, common: fresh.common, admin: refs)
                 guard try GitCleanupInspection.oid(GitCleanupInspection.read(fresh.branchParent, fresh.branchName, maximum: 128)) == plan.targetOID else { throw GitCleanupFailure.changed }
                 try record(plan, state: "branch-move-intent", recovery: recovery)
                 try checkpoint(.beforeBranchMove)
+                try packedLock.validate(); try refLock.validate()
+                let finalRefs = try GitCleanupInspection.readRefsUnderLocks(fresh.common, branch: plan.request.branch)
+                guard try GitCleanupInspection.resolveReference("refs/heads/" + plan.request.baseBranch, admin: finalRefs) == plan.baseOID else { throw GitCleanupFailure.changed }
+                guard fresh.branchIdentity == (try InstallerFileAccess.snapshotAt(fresh.branchParent.fd, fresh.branchName)),
+                      fresh.branchIdentity == (try InstallerFileAccess.snapshot(fresh.branchFile.fd)) else { throw GitCleanupFailure.changed }
                 try InstallerFileAccess.exclusiveMove(from: fresh.branchParent, name: fresh.branchName, to: recovery, destinationName: "branch")
                 payloadMoved = true
+                guard fresh.branchIdentity.matchesCaptured(try InstallerFileAccess.snapshotAt(recovery.fd, "branch")),
+                      try GitCleanupInspection.oid(GitCleanupInspection.read(recovery, "branch", maximum: 128)) == plan.targetOID,
+                      fsync(fresh.branchParent.fd) == 0 else { throw GitCleanupFailure.changed }
             }
             guard fsync(recovery.fd) == 0, fsync(fresh.common.fd) == 0 else { throw GitCleanupFailure.changed }
             let payload = plan.request.action == .retireWorktree ? "worktree" : "branch"
             let receipt = GitCleanupReceipt(id: id, plan: plan, recoveryIdentity: try InstallerFileAccess.snapshot(recovery.fd),
                 payloadIdentity: try InstallerFileAccess.snapshotAt(recovery.fd, payload),
-                registrationIdentity: plan.request.action == .retireWorktree ? try InstallerFileAccess.snapshotAt(recovery.fd, "registration") : nil)
+                registrationIdentity: plan.request.action == .retireWorktree ? try InstallerFileAccess.snapshotAt(recovery.fd, "registration") : nil,
+                commonIdentity: try InstallerFileAccess.snapshot(fresh.common.fd), scopeIdentity: try InstallerFileAccess.snapshot(fresh.scope.fd),
+                destinationParentIdentity: try InstallerFileAccess.snapshot(plan.request.action == .retireWorktree ? fresh.targetParent.fd : fresh.branchParent.fd),
+                registrationParentIdentity: try fresh.registrationParent.map { try InstallerFileAccess.snapshot($0.fd) })
             try record(plan, state: "completed", recovery: recovery)
             receipts[id] = receipt
             return receipt
@@ -101,6 +127,9 @@ actor NativeGitCleanupExecutor {
         defer { withExtendedLifetime(lease) {} }
         try lease.requireSnapshot(catalog)
         let common = try InstallerDirectoryAnchor.open(plan.commonDirectory)
+        let scope = try InstallerDirectoryAnchor.open(plan.request.scope)
+        guard receipt.commonIdentity.matchesDirectory(try InstallerFileAccess.snapshot(common.fd)),
+              receipt.scopeIdentity.matchesDirectory(try InstallerFileAccess.snapshot(scope.fd)) else { throw GitCleanupFailure.changed }
         let payload = plan.request.action == .retireWorktree ? "worktree" : "branch"
         let actual = try InstallerFileAccess.snapshotAt(recovery.fd, payload)
         guard plan.request.action == .retireWorktree ? receipt.payloadIdentity.matchesDirectory(actual) : receipt.payloadIdentity.matchesCaptured(actual) else { throw GitCleanupFailure.changed }
@@ -111,35 +140,76 @@ actor NativeGitCleanupExecutor {
             guard let registrationURL = plan.registration, let identity = receipt.registrationIdentity,
                   identity.matchesDirectory(try InstallerFileAccess.snapshotAt(recovery.fd, "registration")) else { throw GitCleanupFailure.changed }
             let registrations = try InstallerDirectoryAnchor.open(registrationURL.deletingLastPathComponent())
+            guard receipt.destinationParentIdentity.matchesDirectory(try InstallerFileAccess.snapshot(destination.fd)),
+                  receipt.registrationParentIdentity?.matchesDirectory(try InstallerFileAccess.snapshot(registrations.fd)) == true else { throw GitCleanupFailure.changed }
+            let registration = try recovery.child("registration")
+            let worktree = try recovery.child("worktree")
+            guard try GitCleanupInspection.read(worktree, ".git", maximum: 4096) == Data(("gitdir: " + registrationURL.path + "\n").utf8),
+                  try GitCleanupInspection.read(registration, "HEAD", maximum: 512) == Data(("ref: refs/heads/" + plan.request.branch + "\n").utf8),
+                  try GitCleanupInspection.read(registration, "commondir", maximum: 128) == Data("../..\n".utf8),
+                  try GitCleanupInspection.read(registration, "gitdir", maximum: 4096) == Data((plan.request.project.url.appendingPathComponent(".git").path + "\n").utf8),
+                  try GitCleanupInspection.read(registration, "locked", maximum: 256) == Data(("MoeKit retirement " + id.uuidString + "\n").utf8) else { throw GitCleanupFailure.changed }
+            let admin = GitCleanupCapture(); try admin.collect(common, skip: ["objects", "hooks", "logs", "moekit-recovery"])
+            guard !admin.files.keys.contains(where: { $0.hasSuffix(".lock") }) else { throw GitCleanupFailure.locked }
+            try GitCleanupInspection.strictConfig(admin.files["config"]?.data)
+            try GitCleanupInspection.validateUnoccupiedHeads(admin, branch: plan.request.branch)
+            let ref = "refs/heads/" + plan.request.branch
+            guard try GitCleanupInspection.oid(admin.files[ref]?.data) == plan.targetOID else { throw GitCleanupFailure.changed }
             try InstallerFileAccess.assertAbsent(registrations, registrationURL.lastPathComponent)
             try InstallerFileAccess.assertAbsent(destination, name)
             try Task.checkCancellation(); try permit.consume()
             try record(plan, state: "restore-intent", recovery: recovery)
             try checkpoint(.beforeRestoreMove)
+            guard receipt.payloadIdentity.matchesDirectory(try InstallerFileAccess.snapshotAt(recovery.fd, "worktree")),
+                  identity.matchesDirectory(try InstallerFileAccess.snapshotAt(recovery.fd, "registration")) else { throw GitCleanupFailure.changed }
             try InstallerFileAccess.exclusiveMove(from: recovery, name: "registration", to: registrations, destinationName: registrationURL.lastPathComponent)
             do {
+                guard identity.matchesDirectory(try InstallerFileAccess.snapshotAt(registrations.fd, registrationURL.lastPathComponent)) else { throw GitCleanupFailure.changed }
+                guard receipt.payloadIdentity.matchesDirectory(try InstallerFileAccess.snapshotAt(recovery.fd, payload)) else { throw GitCleanupFailure.changed }
                 try InstallerFileAccess.exclusiveMove(from: recovery, name: payload, to: destination, destinationName: name)
+                guard receipt.payloadIdentity.matchesDirectory(try InstallerFileAccess.snapshotAt(destination.fd, name)) else { throw GitCleanupFailure.changed }
                 let restoredRegistration = try registrations.child(registrationURL.lastPathComponent)
                 let marker = Data(("MoeKit retirement " + id.uuidString + "\n").utf8)
                 guard try GitCleanupInspection.read(restoredRegistration, "locked", maximum: 256) == marker,
                       unlinkat(restoredRegistration.fd, "locked", 0) == 0 else { throw GitCleanupFailure.changed }
+                guard fsync(restoredRegistration.fd) == 0, fsync(registrations.fd) == 0, fsync(destination.fd) == 0 else { throw GitCleanupFailure.changed }
             } catch { throw GitCleanupFailure.partial(recovery.url.path) }
         } else {
             let parts = try GitCleanupInspection.branchComponents(plan.request.branch)
             var parent = try common.child("refs").child("heads")
             for component in parts.dropLast() { parent = try parent.child(component) }
             destination = parent; name = parts.last!
+            let retainedBranch = try InstallerFileDescriptor(parent: recovery, name: payload)
+            guard receipt.destinationParentIdentity.matchesDirectory(try InstallerFileAccess.snapshot(destination.fd)) else { throw GitCleanupFailure.changed }
             try InstallerFileAccess.assertAbsent(destination, name)
             // A newly packed branch also counts as occupied.
-            if let packed = try? GitCleanupInspection.read(common, "packed-refs", maximum: 8 * 1_024 * 1_024),
-               String(decoding: packed, as: UTF8.self).split(separator: "\n").contains(where: { $0.hasSuffix(" refs/heads/" + plan.request.branch) }) { throw GitCleanupFailure.occupied }
+            var packedStatus = stat()
+            if fstatat(common.fd, "packed-refs", &packedStatus, AT_SYMLINK_NOFOLLOW) == 0 {
+                let packed = try GitCleanupInspection.read(common, "packed-refs", maximum: 8 * 1_024 * 1_024)
+                if try GitCleanupInspection.packedContains(packed, branch: plan.request.branch) { throw GitCleanupFailure.occupied }
+            } else if errno != ENOENT { throw GitCleanupFailure.changed }
+            let objects = try GitObjectSnapshot(common: common); defer { objects.remove() }
+            _ = try objects.treeOID(plan.targetOID); try objects.validateSource()
             try Task.checkCancellation(); try permit.consume()
-            try writeNew(Data(), parent: destination, name: name + ".lock")
-            defer { _ = unlinkat(destination.fd, name + ".lock", 0) }
+            let packedLock = try GitCleanupOwnedLock(parent: common, name: "packed-refs.lock")
+            let refLock = try GitCleanupOwnedLock(parent: destination, name: name + ".lock")
+            defer { withExtendedLifetime((packedLock, refLock)) {} }
+            _ = try GitCleanupInspection.readRefsUnderLocks(common, branch: plan.request.branch)
+            try InstallerFileAccess.assertAbsent(destination, name)
             try record(plan, state: "restore-intent", recovery: recovery)
             try checkpoint(.beforeRestoreMove)
+            try packedLock.validate(); try refLock.validate()
+            _ = try GitCleanupInspection.readRefsUnderLocks(common, branch: plan.request.branch)
+            try InstallerFileAccess.assertAbsent(destination, name)
+            guard receipt.payloadIdentity.matchesCaptured(try InstallerFileAccess.snapshot(retainedBranch.fd)),
+                  receipt.payloadIdentity.matchesCaptured(try InstallerFileAccess.snapshotAt(recovery.fd, payload)),
+                  try GitCleanupInspection.oid(GitCleanupInspection.read(recovery, payload, maximum: 128)) == plan.targetOID else { throw GitCleanupFailure.changed }
             try InstallerFileAccess.exclusiveMove(from: recovery, name: payload, to: destination, destinationName: name)
+            guard receipt.payloadIdentity.matchesCaptured(try InstallerFileAccess.snapshotAt(destination.fd, name)),
+                  try GitCleanupInspection.oid(GitCleanupInspection.read(destination, name, maximum: 128)) == plan.targetOID else { throw GitCleanupFailure.partial(recovery.url.path) }
+            guard fsync(destination.fd) == 0 else { throw GitCleanupFailure.changed }
         }
+        guard fsync(recovery.fd) == 0 else { throw GitCleanupFailure.changed }
         try record(plan, state: "restored", recovery: recovery)
         receipts[id] = nil
     }
@@ -190,5 +260,39 @@ actor NativeGitCleanupExecutor {
             }
         }
         guard fsync(fd) == 0, fsync(parent.fd) == 0 else { throw GitCleanupFailure.changed }
+    }
+}
+
+/// Cooperating Git lock names, acquired only after confirmation. Never remove
+/// a replacement lock; a retained descriptor and exact named identity own cleanup.
+private final class GitCleanupOwnedLock {
+    private let parent: InstallerDirectoryAnchor
+    private let name: String
+    private let fd: Int32
+    private let identity: InstallerFileSnapshot
+    init(parent: InstallerDirectoryAnchor, name: String) throws {
+        self.parent = parent; self.name = name
+        try parent.validate(); try InstallerFileAccess.rejectMutationGrantingACL(parent.fd)
+        let opened = openat(parent.fd, name, O_RDWR | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0o600)
+        guard opened >= 0 else { throw GitCleanupFailure.locked }
+        fd = opened
+        do {
+            try InstallerFileAccess.validatePrivate(opened, directory: false)
+            identity = try InstallerFileAccess.snapshot(opened)
+            guard fsync(opened) == 0, fsync(parent.fd) == 0 else { throw GitCleanupFailure.changed }
+        } catch {
+            if let held = try? InstallerFileAccess.snapshot(opened), let named = try? InstallerFileAccess.snapshotAt(parent.fd, name), held == named {
+                _ = unlinkat(parent.fd, name, 0); _ = fsync(parent.fd)
+            }
+            close(opened); throw error
+        }
+    }
+    deinit {
+        do { try validate(); _ = unlinkat(parent.fd, name, 0); _ = fsync(parent.fd) } catch {}
+        close(fd)
+    }
+    func validate() throws {
+        try parent.validate()
+        guard identity == (try InstallerFileAccess.snapshot(fd)), identity == (try InstallerFileAccess.snapshotAt(parent.fd, name)) else { throw GitCleanupFailure.changed }
     }
 }

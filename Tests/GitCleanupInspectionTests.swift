@@ -202,4 +202,19 @@ struct GitCleanupInspectionTests {
         }
         await #expect(throws: CancellationError.self) { try await operation.value }
     }
+
+    @Test("Nested file and directory ACL write grants are rejected despite private POSIX modes", arguments: [false, true])
+    func nestedACL(_ directory: Bool) throws {
+        let root = try fixture()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let child = root.appendingPathComponent("nested")
+        if directory { try FileManager.default.createDirectory(at: child, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700]) }
+        else { try Data("retained".utf8).write(to: child) }
+        let fd = open(child.path, O_RDONLY | O_NOFOLLOW | O_CLOEXEC)
+        try #require(fd >= 0); defer { close(fd) }
+        let acl = try #require(acl_from_text("!#acl 1\ngroup:ABCDEFAB-CDEF-ABCD-EFAB-CDEF0000000C:::allow:write\n"))
+        defer { acl_free(UnsafeMutableRawPointer(acl)) }
+        try #require(acl_set_fd_np(fd, acl, ACL_TYPE_EXTENDED) == 0)
+        #expect(throws: (any Error).self) { try GitCleanupCapture().collect(InstallerDirectoryAnchor.open(root)) }
+    }
 }

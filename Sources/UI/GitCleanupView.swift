@@ -39,7 +39,10 @@ struct GitCleanupView: View {
                         state.inspect(.init(scope: scope, project: project, baseBranch: baseBranch, branch: branch, action: action,
                             protectedPaths: workspace.projects.filter { $0.id != project.id && $0.kind != .group }.map(\.path)))
                     }.disabled(state.isBusy || workspace.isDemoEnabled || scope == nil || branch.isEmpty || baseBranch.isEmpty)
-                    if state.isBusy { ProgressView("Rechecking exact target…").controlSize(.small) }
+                    if state.isBusy {
+                        ProgressView("Rechecking exact target…").controlSize(.small)
+                        Text("Cancelling stops further checks. A running private Git query can take up to 15 seconds to finish or time out.").font(.caption).foregroundStyle(.secondary)
+                    }
                     if let error = state.error { Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.orange).textSelection(.enabled) }
                     if let plan = state.plan {
                         Divider()

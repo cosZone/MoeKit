@@ -52,6 +52,7 @@ private struct GitCleanupNativeFixture: Sendable {
     let catalog: URL
     let home: URL
     let linked: Bool
+    let rootIdentity: InstallerFileSnapshot
     let projectID = UUID()
     let mainID = UUID()
     let marker = Data("MoeKit synthetic tracked fixture\n".utf8)
@@ -68,7 +69,9 @@ private struct GitCleanupNativeFixture: Sendable {
         home = root.appendingPathComponent("empty-home")
         self.linked = linked
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+        rootIdentity = try InstallerDirectoryAnchor.open(root).identity
         do {
+            try Data(root.lastPathComponent.utf8).write(to: root.appendingPathComponent(".fixture-owner"), options: .withoutOverwriting)
             for directory in [main, catalog, home, root.appendingPathComponent("empty-template")] {
                 try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
             }
@@ -82,7 +85,7 @@ private struct GitCleanupNativeFixture: Sendable {
             if linked { try git(["worktree", "add", worktree.path, "feature"], at: main) }
             try saveCatalog(linked ? [mainProject, project] : [mainProject])
         } catch {
-            try? FileManager.default.removeItem(at: root)
+            remove()
             throw error
         }
     }
@@ -109,7 +112,14 @@ private struct GitCleanupNativeFixture: Sendable {
         _ = try persistence.load()
         try persistence.save(projects)
     }
-    func remove() { try? FileManager.default.removeItem(at: root) }
+    func remove() {
+        do {
+            let anchor = try InstallerDirectoryAnchor.open(root)
+            guard rootIdentity.matchesDirectory(try InstallerFileAccess.snapshot(anchor.fd)),
+                  try GitCleanupInspection.read(anchor, ".fixture-owner", maximum: 128) == Data(root.lastPathComponent.utf8) else { return }
+            try FileManager.default.removeItem(at: root)
+        } catch {}
+    }
     func assertSentinel() throws {
         #expect(try Data(contentsOf: root.appendingPathComponent("outside-sentinel")) == marker)
         #expect(try Data(contentsOf: main.appendingPathComponent("tracked.txt")) == marker)
@@ -491,5 +501,141 @@ struct GitCleanupExecutorTests {
         #expect(!FileManager.default.fileExists(atPath: fixture.featureRef.path))
         #expect(try Data(contentsOf: payload) == replacement)
         try fixture.assertSentinel()
+    }
+
+    @Test("Worktree restore refuses a moved branch or a branch checked out elsewhere", arguments: [false, true])
+    func restoreBranchChanged(_ checkedOut: Bool) async throws {
+        let fixture = try GitCleanupNativeFixture()
+        defer { fixture.remove() }
+        let executor = fixture.executor(), plan = try await executor.prepare(fixture.request())
+        let receipt = try await executor.execute(plan.id, permit: GitCleanupPermit())
+        if checkedOut {
+            try fixture.git(["worktree", "add", fixture.root.appendingPathComponent("new-feature").path, "feature"], at: fixture.main)
+        } else {
+            try fixture.git(["commit", "--allow-empty", "-m", "Advance base after retirement"], at: fixture.main)
+            try fixture.git(["branch", "--force", "feature", "main"], at: fixture.main)
+        }
+        await #expect(throws: (any Error).self) { try await executor.restore(receipt.id, permit: GitCleanupPermit()) }
+        #expect(!FileManager.default.fileExists(atPath: fixture.worktree.path))
+        #expect(try Data(contentsOf: plan.recovery.appendingPathComponent("worktree/tracked.txt")) == fixture.marker)
+        #expect(FileManager.default.fileExists(atPath: plan.recovery.appendingPathComponent("registration").path))
+        try fixture.assertSentinel()
+    }
+
+    @Test("Moving the retained recovery folder into a replacement Git directory does not transfer authority")
+    func replacedCommonRestore() async throws {
+        let fixture = try GitCleanupNativeFixture(linked: false)
+        defer { fixture.remove() }
+        let executor = fixture.executor(), plan = try await executor.prepare(fixture.request(.deleteBranch))
+        let receipt = try await executor.execute(plan.id, permit: GitCleanupPermit())
+        let original = fixture.main.appendingPathComponent("old-git")
+        try FileManager.default.moveItem(at: fixture.common, to: original)
+        try FileManager.default.createDirectory(at: fixture.common, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+        try FileManager.default.moveItem(at: original.appendingPathComponent("moekit-recovery"), to: fixture.common.appendingPathComponent("moekit-recovery"))
+        await #expect(throws: GitCleanupFailure.changed) { try await executor.restore(receipt.id, permit: GitCleanupPermit()) }
+        #expect(try Data(contentsOf: plan.recovery.appendingPathComponent("branch")) == Data((plan.targetOID + "\n").utf8))
+        try fixture.assertSentinel()
+    }
+
+    @Test("A symlinked packed-refs file blocks branch restore without reading its target")
+    func linkedPackedRefsRestore() async throws {
+        let fixture = try GitCleanupNativeFixture(linked: false)
+        defer { fixture.remove() }
+        let executor = fixture.executor(), plan = try await executor.prepare(fixture.request(.deleteBranch))
+        let receipt = try await executor.execute(plan.id, permit: GitCleanupPermit())
+        let sentinel = fixture.root.appendingPathComponent("outside-sentinel")
+        try FileManager.default.createSymbolicLink(at: fixture.common.appendingPathComponent("packed-refs"), withDestinationURL: sentinel)
+        await #expect(throws: (any Error).self) { try await executor.restore(receipt.id, permit: GitCleanupPermit()) }
+        #expect(!FileManager.default.fileExists(atPath: fixture.featureRef.path))
+        #expect(try Data(contentsOf: plan.recovery.appendingPathComponent("branch")) == Data((plan.targetOID + "\n").utf8))
+        try fixture.assertSentinel()
+    }
+
+    @Test("Case-aliased symbolic HEADs still protect the selected loose branch")
+    func aliasHeadProtection() async throws {
+        let fixture = try GitCleanupNativeFixture(linked: false)
+        defer { fixture.remove() }
+        try Data("ref: refs/heads/Feature\n".utf8).write(to: fixture.common.appendingPathComponent("HEAD"))
+        await #expect(throws: GitCleanupFailure.locked) { try await fixture.executor().prepare(fixture.request(.deleteBranch)) }
+        try fixture.assertNoRecovery()
+    }
+
+    @Test("Branch removal cannot use a selected worktree's obsolete common-directory metadata")
+    func staleSelectionTopology() async throws {
+        let fixture = try GitCleanupNativeFixture()
+        defer { fixture.remove() }
+        try fixture.git(["branch", "unused"], at: fixture.main)
+        let ref = fixture.common.appendingPathComponent("refs/heads/unused")
+        let before = try Data(contentsOf: ref)
+        try Data(("gitdir: " + fixture.root.appendingPathComponent("different/.git/worktrees/feature").path + "\n").utf8).write(to: fixture.worktree.appendingPathComponent(".git"))
+        await #expect(throws: GitCleanupFailure.scope) {
+            try await fixture.executor().prepare(fixture.request(.deleteBranch, branch: "unused", selected: fixture.project))
+        }
+        #expect(try Data(contentsOf: ref) == before)
+        try fixture.assertNoRecovery()
+    }
+
+    @Test("An orphan HEAD using the removed branch name blocks branch restore")
+    func orphanRestore() async throws {
+        let fixture = try GitCleanupNativeFixture(linked: false)
+        defer { fixture.remove() }
+        let executor = fixture.executor(), plan = try await executor.prepare(fixture.request(.deleteBranch))
+        let receipt = try await executor.execute(plan.id, permit: GitCleanupPermit())
+        try Data("ref: refs/heads/feature\n".utf8).write(to: fixture.common.appendingPathComponent("HEAD"))
+        await #expect(throws: GitCleanupFailure.locked) { try await executor.restore(receipt.id, permit: GitCleanupPermit()) }
+        #expect(!FileManager.default.fileExists(atPath: fixture.featureRef.path))
+        #expect(try Data(contentsOf: plan.recovery.appendingPathComponent("branch")) == Data((plan.targetOID + "\n").utf8))
+    }
+
+    @Test("Unknown worktree HEAD state blocks worktree restoration", arguments: [false, true])
+    func unknownRestoreHEAD(_ missing: Bool) async throws {
+        let fixture = try GitCleanupNativeFixture()
+        defer { fixture.remove() }
+        let executor = fixture.executor(), plan = try await executor.prepare(fixture.request())
+        let receipt = try await executor.execute(plan.id, permit: GitCleanupPermit())
+        let unknown = fixture.common.appendingPathComponent("worktrees/unknown")
+        try FileManager.default.createDirectory(at: unknown, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+        if !missing { try Data("malformed HEAD\n".utf8).write(to: unknown.appendingPathComponent("HEAD")) }
+        await #expect(throws: GitCleanupFailure.unsupported) { try await executor.restore(receipt.id, permit: GitCleanupPermit()) }
+        #expect(!FileManager.default.fileExists(atPath: fixture.worktree.path))
+        #expect(FileManager.default.fileExists(atPath: plan.recovery.appendingPathComponent("worktree").path))
+    }
+
+    @Test("A target-directory replacement at the mutation checkpoint is never captured")
+    func replacedWorktreeAtMove() async throws {
+        let fixture = try GitCleanupNativeFixture()
+        defer { fixture.remove() }
+        let retained = fixture.root.appendingPathComponent("original-feature")
+        let replacement = Data("unrelated replacement directory".utf8)
+        let executor = NativeGitCleanupExecutor(catalogDirectory: fixture.catalog) { checkpoint in
+            if checkpoint == .beforeWorktreeMove {
+                try FileManager.default.moveItem(at: fixture.worktree, to: retained)
+                try FileManager.default.createDirectory(at: fixture.worktree, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+                try replacement.write(to: fixture.worktree.appendingPathComponent("neighbor"))
+            }
+        }
+        let plan = try await executor.prepare(fixture.request())
+        await #expect(throws: GitCleanupFailure.partial(plan.recovery.path)) { try await executor.execute(plan.id, permit: GitCleanupPermit()) }
+        #expect(try Data(contentsOf: fixture.worktree.appendingPathComponent("neighbor")) == replacement)
+        #expect(try Data(contentsOf: retained.appendingPathComponent("tracked.txt")) == fixture.marker)
+        #expect(!FileManager.default.fileExists(atPath: plan.recovery.appendingPathComponent("worktree").path))
+        try fixture.assertSentinel()
+    }
+
+    @Test("An ACL-writable temporary parent cannot host executable Git snapshots")
+    func unsafeSnapshotParent() throws {
+        let fixture = try GitCleanupNativeFixture()
+        defer { fixture.remove() }
+        let temporary = fixture.root.appendingPathComponent("private-temp")
+        try FileManager.default.createDirectory(at: temporary, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+        let directory = try InstallerDirectoryAnchor.open(temporary)
+        let acl = try #require(acl_from_text("!#acl 1\ngroup:ABCDEFAB-CDEF-ABCD-EFAB-CDEF0000000C::file_inherit,directory_inherit:allow:write\n"))
+        defer { acl_free(UnsafeMutableRawPointer(acl)) }
+        try #require(acl_set_fd_np(directory.fd, acl, ACL_TYPE_EXTENDED) == 0)
+        #expect(throws: (any Error).self) {
+            _ = try GitObjectSnapshot(common: InstallerDirectoryAnchor.open(fixture.common), temporaryRoot: temporary)
+        }
+        #expect(try FileManager.default.contentsOfDirectory(atPath: temporary.path).isEmpty)
+        try fixture.assertNoRecovery()
     }
 }

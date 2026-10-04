@@ -54,6 +54,10 @@ struct GitCleanupReceipt: Identifiable, Equatable, Sendable {
     let recoveryIdentity: InstallerFileSnapshot
     let payloadIdentity: InstallerFileSnapshot
     let registrationIdentity: InstallerFileSnapshot?
+    let commonIdentity: InstallerFileSnapshot
+    let scopeIdentity: InstallerFileSnapshot
+    let destinationParentIdentity: InstallerFileSnapshot
+    let registrationParentIdentity: InstallerFileSnapshot?
 }
 
 /// Session-bound cancellation/one-use authority. Display models are never authority.

@@ -118,6 +118,12 @@ def verify(directory: Path, language: str) -> int:
         f"process-stop-{mode}-{language}-{appearance}-740x780": (740, 780)
         for mode in ("graceful", "force") for appearance in ("light", "dark")
     })
+    expected.update({
+        f"updates-{scenario}-{language}-{appearance}-{width}x{height}": (width, height)
+        for scenario in ("available", "current", "development", "failure", "cancelled", "hidden-icons")
+        for appearance in ("light", "dark")
+        for width, height in (((520, 600),) if scenario == "hidden-icons" else ((540, 520),))
+    })
     manifest = json.loads((directory / "manifest.json").read_text())
     images, scopes = {}, {}
     for test in manifest:
@@ -155,6 +161,14 @@ def verify(directory: Path, language: str) -> int:
             f"Partial-result title: {'部分结果' if language == 'zh-Hans' else 'Partial result'}",
             f"Content size: {width} × {height} points",
         }
+        if name.startswith("updates-"):
+            required.update({
+                f"Update action title: {'检查更新…' if language == 'zh-Hans' else 'Check for updates…'}",
+                "Network requests: 0",
+                f"Visible required controls: {3 if 'hidden-icons' in name else (7 if any(state in name for state in ('available', 'development')) else 6)}",
+                "Evidence source: public SwiftUI bounds anchors on displayed views",
+                "Scope: owned release/settings views with isolated preferences and synthetic responses.",
+            })
         if name.startswith("process-stop-"):
             required.update({"Native signals: 0", "Visible required controls: 7",
                 "Confirmation initially acknowledged: false",

@@ -9,6 +9,10 @@ status: unreleased
 
 [0.1.0-preview.8](/changelog/0.1.0-preview.8) 已交付逐次确认的精确进程停止，以及原生多缓存废纸篓、原路径恢复和依据操作记录另行确认的缓存永久删除，提供已核实的 DMG 与 ZIP。进程停止不扩展到浏览器／共享服务或无头会话归属；缓存位置与标记不能代替使用者确认，永久删除不可恢复且不保证物理空间立即回收。安装限制、精确源码、构建及下载验证见该版本记录。
 
+## 已合入源码，尚未发布
+
+菜单栏入口、Dock／菜单栏图标设置与手动检查 GitHub 新版本已随 [PR #44](https://github.com/cosZone/MoeKit/pull/44) 合入当前源码，尚未包含在 preview.8 安装包。检查更新由用户主动触发，下载后仍需手动安装；不等同于 Sparkle 自动更新。实现与限制见 [更新与应用入口](https://github.com/cosZone/MoeKit/blob/41547901a3fde532314939af58d7506b74a7dd0e/Documentation/Updates-and-app-icons.md)。
+
 ## 后续工作
 
 广域 Mole 清理、卸载、维护、项目删除、任意进程停止和真实 Git status 仍未启用。实验性 Git status／Git 清理、菜单栏与 Dock 改进、手动更新入口不包含在 preview.8 安装包，Sparkle 自动更新仍未启用。后续应用改动只有在对应版本实际发布并核实后，才会标记为已交付。

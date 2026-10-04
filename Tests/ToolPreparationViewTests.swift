@@ -23,7 +23,7 @@ final class ToolPreparationViewTests: XCTestCase {
                     let name = "tool-preparation-\(inspected ? "observed" : "unchecked")-\(language)-\(dark ? "dark" : "light")-\(Int(size.width))x\(Int(size.height))"
                     _ = NSApplication.shared
                     let appearance = try XCTUnwrap(NSAppearance(named: dark ? .darkAqua : .aqua))
-                    let root = ToolPreparationView(isDemoEnabled: false, preparation: preparation,
+                    let root = ToolPreparationView(preparation: preparation,
                         homeDirectory: URL(fileURLWithPath: "/synthetic-home"))
                         .environment(\.colorScheme, dark ? .dark : .light)
                         .environment(\.locale, Locale.current)

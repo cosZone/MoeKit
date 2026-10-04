@@ -3,7 +3,6 @@ import SwiftUI
 
 @MainActor
 struct ToolPreparationView: View {
-    let isDemoEnabled: Bool
     let homeDirectory: URL
     @State private var preparation: ToolPreparationStore
     @State private var tool = PreparedTool.mole
@@ -11,14 +10,13 @@ struct ToolPreparationView: View {
     @State private var selectingFile = false
     @State private var selectionGeneration = UUID()
 
-    init(isDemoEnabled: Bool, preparation: ToolPreparationStore = ToolPreparationStore(),
+    init(preparation: ToolPreparationStore,
          homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser) {
-        self.isDemoEnabled = isDemoEnabled
         self.homeDirectory = homeDirectory
         _preparation = State(initialValue: preparation)
     }
 
-    private var canInspect: Bool { !isDemoEnabled && !preparation.isInspecting && !selectingFile }
+    private var canInspect: Bool { !preparation.isDemoEnabled && !preparation.isInspecting && !selectingFile }
     private var locations: [URL] { tool.conventionalLocations(home: homeDirectory) }
 
     var body: some View {
@@ -31,7 +29,7 @@ struct ToolPreparationView: View {
                     ForEach(PreparedTool.allCases) { item in Text(item.title).tag(item) }
                 }.pickerStyle(.segmented)
                     .disabled(preparation.isInspecting || selectingFile)
-                if isDemoEnabled {
+                if preparation.isDemoEnabled {
                     Label("Tool inspection is disabled in Demo. No example installation is shown.", systemImage: "info.circle")
                         .font(.callout).foregroundStyle(.secondary)
                 }
@@ -102,11 +100,6 @@ struct ToolPreparationView: View {
             }.padding(24)
         }
         .frame(minWidth: 580, idealWidth: 680, minHeight: 520, idealHeight: 720)
-        .onAppear { preparation.setDemoEnabled(isDemoEnabled) }
-        .onChange(of: isDemoEnabled) { _, enabled in
-            selectionGeneration = UUID()
-            preparation.setDemoEnabled(enabled)
-        }
         .onDisappear {
             selectionGeneration = UUID()
             preparation.cancel()
@@ -116,6 +109,7 @@ struct ToolPreparationView: View {
     private func chooseFile() {
         guard canInspect else { return }
         let selectedTool = tool
+        let mode = preparation.modeGeneration
         let request = UUID()
         selectionGeneration = request
         selectingFile = true
@@ -128,9 +122,8 @@ struct ToolPreparationView: View {
         panel.prompt = String(localized: "Inspect metadata")
         panel.begin { response in
             selectingFile = false
-            guard response == .OK, selectionGeneration == request, !isDemoEnabled,
-                  !preparation.isDemoEnabled, let url = panel.url else { return }
-            preparation.inspect(selectedTool, locations: [url])
+            guard response == .OK, selectionGeneration == request, let url = panel.url else { return }
+            preparation.inspect(selectedTool, locations: [url], expectedMode: mode)
         }
     }
 }

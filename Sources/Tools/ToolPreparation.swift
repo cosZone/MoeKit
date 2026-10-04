@@ -80,6 +80,7 @@ final class ToolPreparationStore {
     private(set) var isCancelling = false
     private(set) var errorMessage: String?
     private(set) var isDemoEnabled = false
+    private(set) var modeGeneration = UUID()
     @ObservationIgnored private let inspector: any ToolCandidateInspecting
     @ObservationIgnored private var inspectionTask: Task<Void, Never>?
     @ObservationIgnored private var generation = UUID()
@@ -90,8 +91,9 @@ final class ToolPreparationStore {
 
     var isInspecting: Bool { inspectionTask != nil }
 
-    func inspect(_ tool: PreparedTool, locations: [URL]) {
-        guard !isDemoEnabled, inspectionTask == nil else { return }
+    func inspect(_ tool: PreparedTool, locations: [URL], expectedMode: UUID? = nil) {
+        guard !isDemoEnabled, inspectionTask == nil,
+              expectedMode == nil || expectedMode == modeGeneration else { return }
         guard !locations.isEmpty, locations.count <= NativeToolCandidateInspector.maximumLocations else { return }
         let request = UUID()
         generation = request
@@ -128,6 +130,7 @@ final class ToolPreparationStore {
     func setDemoEnabled(_ enabled: Bool) {
         guard enabled != isDemoEnabled else { return }
         isDemoEnabled = enabled
+        modeGeneration = UUID()
         cancel()
         observations = [:]
         errorMessage = nil

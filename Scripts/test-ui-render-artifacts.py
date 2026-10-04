@@ -30,9 +30,10 @@ class RenderArtifactTests(unittest.TestCase):
             scenarios += ["demo-mole-space", "demo-processes-unavailable"]
         scenarios += ["first-use-projects", "first-use-processes", "first-use-tasks", "first-use-mole-space"]
         scenarios += ["getting-started-" + page for page in ("welcome", "projects", "processes", "demo")]
+        scenarios += ["settings-real", "settings-demo"]
         attachments = []
         for scenario in scenarios:
-            sizes = ((520, 480), (620, 580)) if scenario.startswith("getting-started-") else ((960, 620), (1280, 800))
+            sizes = ((520, 600),) if scenario.startswith("settings-") else (((520, 480), (620, 580)) if scenario.startswith("getting-started-") else ((960, 620), (1280, 800)))
             for appearance in ("light", "dark"):
                 for width, height in sizes:
                     name = f"{scenario}-{language}-{appearance}-{width}x{height}"
@@ -49,7 +50,7 @@ class RenderArtifactTests(unittest.TestCase):
         return manifest
 
     def test_complete_english_and_chinese(self):
-        for language, count in [("en", 48), ("zh-Hans", 40)]:
+        for language, count in [("en", 52), ("zh-Hans", 44)]:
             with self.subTest(language=language), tempfile.TemporaryDirectory() as path:
                 root = Path(path)
                 self.fixture(root, language)
@@ -70,7 +71,7 @@ class RenderArtifactTests(unittest.TestCase):
             manifest = self.fixture(root, "zh-Hans")
             manifest[0]["attachments"].pop()
             (root / "manifest.json").write_text(json.dumps(manifest))
-            with self.assertRaisesRegex(ValueError, "Expected 40"):
+            with self.assertRaisesRegex(ValueError, "Expected 44"):
                 module.verify(root, "zh-Hans")
 
     def test_rejects_wrong_dimensions(self):

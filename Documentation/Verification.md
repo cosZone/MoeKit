@@ -97,6 +97,14 @@
 - 中文图片保存在 `native-chinese-view-renders-<SHA>`，独立 `.xcresult` 与原英文结果一同留存；是否通过、对应 SHA 与图片人工检查结果以实际 CI / PR 记录为准
 - 仅覆盖所列中文视图布局，不包括其他模块、系统弹窗、工具栏、键盘、VoiceOver 或活动窗口对比度；示例项目名、路径和品牌名称保留原样
 
+## Demo 错误与异步所有权回归
+
+- `WorkspaceOperationPrivacyTests` 只使用唯一临时目录、合成报告及可控 continuation，覆盖快速往返 Demo、旧任务迟到成功/失败、旧进度回调、取消后立即重入、旧 defer 不清空新任务、既有报告/时间保留，以及真实模式 catalog 恢复提示
+- 新套件进入完整 Debug、优化 Release 和定向 AddressSanitizer 的执行清单；须核对精确 SHA 的 CI 结果，不能把源码检查当作 Swift 测试通过
+- `testSettingsModeGuidanceRenders` 为 520×600 的真实/Demo Settings 在英/简中、浅/深色下各生成 4 张 app-owned PNG；现有引导和空工作区渲染继续保留。脚本只校验完整性和语言，图片仍需查看
+- [ ] 真实 macOS 中在报告导入期间打开 Settings，切换 Demo 后不出现旧文件名或旧错误弹窗；再切回真实模式并新导入，旧任务不能结束新导入
+- [ ] 取消原生文件选择器不改变报告；文件选择器跨模式后不使用旧选择；键盘和 VoiceOver 仍可操作 Demo 开关
+
 ## 工具准备（待原生交互验收）
 
 - [ ] Settings 与 Mole 的工具准备入口可达；首次打开无自动检查、安装或 CLI 启动

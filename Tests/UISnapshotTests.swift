@@ -73,16 +73,24 @@ final class UISnapshotTests: XCTestCase {
     }
 
     @MainActor
-    private func captureVariants(named scenario: String, rendersGuide: Bool = false, isDemoEnabled: Bool = true, configure: (WorkspaceStore) -> Void) throws {
+    func testSettingsModeGuidanceRenders() throws {
+        for demo in [false, true] {
+            try captureVariants(named: demo ? "settings-demo" : "settings-real",
+                                rendersSettings: true, isDemoEnabled: demo) { _ in }
+        }
+    }
+
+    @MainActor
+    private func captureVariants(named scenario: String, rendersGuide: Bool = false, rendersSettings: Bool = false, isDemoEnabled: Bool = true, configure: (WorkspaceStore) -> Void) throws {
         let language = try XCTUnwrap(Bundle.main.preferredLocalizations.first)
         XCTAssertTrue(["en", "zh-Hans"].contains(language), "Render language must be explicitly supported")
         XCTAssertEqual(WorkspaceSection.projects.title, language == "zh-Hans" ? "项目" : "Projects")
         XCTAssertEqual(TaskStatus.partial.title, language == "zh-Hans" ? "部分结果" : "Partial result")
         // CI separately checks that the process locale agrees with its requested
         // language. Setting only the SwiftUI locale would leave model strings mixed.
-        let sizes = rendersGuide
+        let sizes = rendersSettings ? [NSSize(width: 520, height: 600)] : (rendersGuide
             ? [NSSize(width: 520, height: 480), NSSize(width: 620, height: 580)]
-            : [NSSize(width: 960, height: 620), NSSize(width: 1280, height: 800)]
+            : [NSSize(width: 960, height: 620), NSSize(width: 1280, height: 800)])
         let appearances: [(String, NSAppearance.Name, ColorScheme)] = [
             ("light", .aqua, .light), ("dark", .darkAqua, .dark),
         ]
@@ -91,7 +99,7 @@ final class UISnapshotTests: XCTestCase {
                 try autoreleasepool {
                     let name = "\(scenario)-\(language)-\(name)-\(Int(size.width))x\(Int(size.height))"
                     try capture(named: name, size: size, appearanceName: appearanceName,
-                                colorScheme: colorScheme, rendersGuide: rendersGuide, isDemoEnabled: isDemoEnabled, configure: configure)
+                                colorScheme: colorScheme, rendersGuide: rendersGuide, rendersSettings: rendersSettings, isDemoEnabled: isDemoEnabled, configure: configure)
                 }
             }
         }
@@ -99,7 +107,7 @@ final class UISnapshotTests: XCTestCase {
 
     @MainActor
     private func capture(named name: String, size: NSSize, appearanceName: NSAppearance.Name,
-                         colorScheme: ColorScheme, rendersGuide: Bool, isDemoEnabled: Bool, configure: (WorkspaceStore) -> Void) throws {
+                         colorScheme: ColorScheme, rendersGuide: Bool, rendersSettings: Bool, isDemoEnabled: Bool, configure: (WorkspaceStore) -> Void) throws {
         // Even Demo's store initializer loads its catalog. Point it exclusively at
         // a fresh, empty test directory, never the runner's Application Support.
         let directory = FileManager.default.temporaryDirectory
@@ -113,7 +121,8 @@ final class UISnapshotTests: XCTestCase {
 
         _ = NSApplication.shared
         let appearance = try XCTUnwrap(NSAppearance(named: appearanceName))
-        let content = rendersGuide ? AnyView(GettingStartedView(close: {})) : AnyView(WorkspaceView())
+        let content = rendersSettings ? AnyView(SettingsView())
+            : (rendersGuide ? AnyView(GettingStartedView(close: {})) : AnyView(WorkspaceView()))
         let root = content
             .environment(store)
             .environment(\.colorScheme, colorScheme)
@@ -184,7 +193,7 @@ final class UISnapshotTests: XCTestCase {
         Window content layout: \(window.contentLayoutRect)
         macOS: \(ProcessInfo.processInfo.operatingSystemVersionString)
         Scope: app-owned view subtree, built-in Demo fixtures or empty first-use state, empty temporary catalog.
-        Guide presentation: \(rendersGuide); Demo enabled: \(isDemoEnabled).
+        Guide presentation: \(rendersGuide); Settings presentation: \(rendersSettings); Demo enabled: \(isDemoEnabled).
         No screen/window-server capture. Window chrome and toolbar are outside this content render.
         These are review artifacts, not approved baselines or manual visual/accessibility acceptance.
         Fixture timestamps are relative; do not use these images as deterministic pixel baselines.

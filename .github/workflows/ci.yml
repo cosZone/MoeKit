@@ -62,6 +62,7 @@ jobs:
             -only-testing:MoeKitTests/UISnapshotTests/testGettingStartedWelcomeRenders \
             -only-testing:MoeKitTests/UISnapshotTests/testGettingStartedDestinationsRender \
             -only-testing:MoeKitTests/UISnapshotTests/testFirstUseWorkspacesRender \
+            -only-testing:MoeKitTests/UISnapshotTests/testSettingsModeGuidanceRenders \
             -only-testing:MoeKitTests/ToolPreparationViewTests/testToolPreparationRenders \
             -resultBundlePath ChineseRenderResults.xcresult
       - name: Check SwiftUI bundle and smoke-launch explicit demo
@@ -180,6 +181,7 @@ jobs:
             test_args+=(-only-testing:MoeKitTests/CatalogPersistenceTests
                         -only-testing:MoeKitTests/WorkspacePersistenceTests
                         -only-testing:MoeKitTests/CatalogRecoveryLifetimeTests
+                        -only-testing:MoeKitTests/WorkspaceOperationPrivacyTests
                         -only-testing:MoeKitTests/ToolPreparationTests
                         -only-testing:MoeKitTests/ToolPreparationStoreTests)
           fi
@@ -206,7 +208,7 @@ jobs:
           summary = json.loads(Path("ReleaseTestSummary.json").read_text())
           inventory = Path("ReleaseTestInventory.json").read_text()
           json.loads(inventory)
-          required = ("CatalogPersistenceTests", "WorkspacePersistenceTests", "CatalogRecoveryLifetimeTests")
+          required = ("CatalogPersistenceTests", "WorkspacePersistenceTests", "CatalogRecoveryLifetimeTests", "WorkspaceOperationPrivacyTests", "ToolPreparationTests", "ToolPreparationStoreTests")
           if summary.get("passedTests", 0) < 17 or summary.get("failedTests") != 0 or summary.get("skippedTests") != 0:
               raise SystemExit(f"Optimized catalog tests must execute and pass without skips: {summary}")
           if any(suite not in inventory for suite in required):

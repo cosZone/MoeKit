@@ -140,6 +140,43 @@ struct ToolPreparationStoreTests {
         #expect(store.errorMessage == nil)
     }
 
+    @Test("Workspace mode transitions synchronously invalidate inspection and picker tickets")
+    func workspaceRapidRoundTrip() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("MoeKit-tool-mode-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let inspector = ControlledToolInspector()
+        let preparation = ToolPreparationStore(inspector: inspector)
+        let workspace = WorkspaceStore(isDemoEnabled: false, persistence: CatalogPersistence(directory: directory), toolPreparation: preparation)
+        let pickerTicket = preparation.modeGeneration
+        preparation.inspect(.mole, locations: [Self.location])
+        await inspector.waitForStart()
+        // No suspension or SwiftUI render between these transitions.
+        workspace.isDemoEnabled = true
+        workspace.isDemoEnabled = false
+        #expect(preparation.modeGeneration != pickerTicket)
+        #expect(preparation.isCancelling)
+        await inspector.complete()
+        try await settle(preparation)
+        #expect(preparation.observations.isEmpty)
+        // An old chooser cannot launch an inspection after the old IO settles.
+        preparation.inspect(.git, locations: [Self.location], expectedMode: pickerTicket)
+        #expect(!preparation.isInspecting)
+        #expect(await inspector.count == 1)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: directory.path).isEmpty)
+    }
+
+    @Test("Explicit Demo workspace initializes tool preparation disabled")
+    func workspaceStartsInDemo() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("MoeKit-tool-demo-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let workspace = WorkspaceStore(isDemoEnabled: true, persistence: CatalogPersistence(directory: directory))
+        #expect(workspace.toolPreparation.isDemoEnabled)
+        workspace.toolPreparation.inspect(.mole, locations: [Self.location])
+        #expect(!workspace.toolPreparation.isInspecting)
+    }
+
     @Test("A new explicit inspection replaces old metadata rather than showing it as fresh")
     func refresh() async throws {
         let inspector = ControlledToolInspector()

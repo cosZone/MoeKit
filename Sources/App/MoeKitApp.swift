@@ -47,7 +47,7 @@ struct MoeKitApp: App {
         .defaultLaunchBehavior(.suppressed)
 
         Window("Tool preparation", id: "tool-preparation") {
-            ToolPreparationView(isDemoEnabled: store.isDemoEnabled)
+            ToolPreparationView(preparation: store.toolPreparation)
         }
         .defaultSize(width: 680, height: 720)
         .windowResizability(.contentMinSize)

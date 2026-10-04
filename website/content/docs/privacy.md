@@ -27,9 +27,15 @@ description: 默认空白、明确读取、未知保持未知。
 
 preview.8 的精确进程停止必须单独复查并确认；浏览器、应用、共享服务等受保护目标不能借此停止。信号结果仅保留于本次会话，强制停止须另一次新确认；不能从目录关联或端口推断 AI 专用浏览器归属。具体后果和取消边界见 [进程与端口](/docs/processes)。
 
-## 尚未发布的手动更新检查
+## Git 整理与恢复数据
 
-当前源码已合入用户主动触发的 GitHub 版本检查，**preview.8 安装包不包含这项功能**。它只请求固定的 cosZone/MoeKit 公开 Releases API，不使用认证、Cookie 或持久网络缓存，不发送项目／任务数据；GitHub 仍会收到请求的 IP 地址。它不会自动检查、下载代码或替换应用；具体网络与取消边界见 [更新与应用入口](https://github.com/cosZone/MoeKit/blob/41547901a3fde532314939af58d7506b74a7dd0e/Documentation/Updates-and-app-icons.md)。
+Git 整理只处理明确选择和逐次确认的受支持目标，不运行 live 仓库的 hooks、filters 或外部配置。已安装 Apple 签名 Git 的临时副本只检查 app 自有对象副本；不 fetch、不发送仓库数据、不自动下载安装 Git，也不提供 OS 沙箱保证。
+
+确认后，工作树／登记或分支 ref 移入主仓库 `.git/moekit-recovery/` 的操作目录，保存原路径、提交和阶段记录。数据继续占用存储，会话内恢复需另行确认；重启后不自动扫描、恢复或删除。记录与恢复内容可能含私人数据，不是独立 Git bundle 或异地备份；分享前复查并脱敏。完整限制见 [项目管理](/docs/projects)。
+
+## 手动更新检查
+
+[preview.9](/changelog/0.1.0-preview.9) 已交付用户主动触发的 GitHub 版本检查，preview.8 不包含。它只请求固定的 cosZone/MoeKit 公开 Releases API，不使用认证、Cookie 或持久网络缓存，不发送项目／任务数据；GitHub 仍会收到请求的 IP 地址。它不会自动检查、下载代码或替换应用；具体网络与取消边界见 [更新与应用入口](https://github.com/cosZone/MoeKit/blob/c5de70153e2eb6f9d1c547c17cf3926565514e50/Documentation/Updates-and-app-icons.md)。
 
 ## 文档网站
 

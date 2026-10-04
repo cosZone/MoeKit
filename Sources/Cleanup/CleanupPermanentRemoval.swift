@@ -98,7 +98,10 @@ enum CleanupPermanentRemoval {
     private static func checkLink(_ entry: CleanupEntry, parent: InstallerDirectoryAnchor, name: String) throws {
         guard entry.kind == .symbolicLink else { return }
         var buffer = [UInt8](repeating: 0, count: 4097)
-        let count = readlinkat(parent.fd, name, &buffer, buffer.count)
+        let capacity = buffer.count
+        let count = buffer.withUnsafeMutableBytes { bytes in
+            readlinkat(parent.fd, name, bytes.baseAddress, capacity)
+        }
         guard count >= 0, count < buffer.count, Data(buffer.prefix(count)) == entry.linkDestination else { throw CleanupFailure.changed }
     }
     private static func split(_ path: String) -> (parent: String, name: String) {

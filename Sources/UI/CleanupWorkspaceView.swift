@@ -17,6 +17,7 @@ struct CleanupWorkspaceView: View {
         VStack(spacing: 0) {
             HStack {
                 Label("Native cache cleanup", systemImage: "trash").fontWeight(.medium)
+                    .installerCaptureIdentity("cleanup.heading", text: String(localized: "Native cache cleanup"))
                 Spacer()
                 Text("Explicit selection · native macOS Trash").foregroundStyle(.secondary)
             }.padding(.horizontal, 16).frame(height: 38)
@@ -137,29 +138,32 @@ struct CleanupWorkspaceView: View {
         GroupBox {
             VStack(alignment: .leading, spacing: 12) {
                 Text("3. Confirm these exact caches").font(.headline)
+                    .installerCaptureIdentity("cleanup.trash.heading", text: String(localized: "3. Confirm these exact caches"))
                 Text("\(plan.targets.count) caches · \(size(plan.logicalBytes)) of logical content").monospacedDigit()
                 Text("MoeKit will recheck and move only these reviewed cache directories to native macOS Trash. Files remain stored in Trash; this step does not free their storage.")
-                ForEach(plan.targets, id: \.originalURL) { target in
-                    manifest(target.manifest, root: target.originalURL)
+                    .installerCaptureIdentity("cleanup.trash.effects", text: String(localized: "MoeKit will recheck and move only these reviewed cache directories to native macOS Trash. Files remain stored in Trash; this step does not free their storage."))
+                ForEach(Array(plan.targets.enumerated()), id: \.offset) { index, target in
+                    manifest(target.manifest, root: target.originalURL, idPrefix: "cleanup.trash.target.\(index)")
                     Text(target.evidence).font(.caption).foregroundStyle(.secondary)
                 }
-                path("Private recovery root", plan.recoveryRoot)
+                path("Private recovery root", plan.recoveryRoot, id: "cleanup.trash.recovery-path")
                 Text("After confirmation, MoeKit may create private parent directories, coordination locks, per-item staging directories and numbered recovery records here. Records disclose these original paths and persist after the operation. Closing this plan creates none of them.")
                     .font(.caption).foregroundStyle(.secondary)
                 Text("Close apps, builds, sync jobs and other workloads using these caches first. Inventory and identity checks cannot prove global non-use or prevent every same-user race.")
+                    .installerCaptureIdentity("cleanup.trash.use-warning", text: String(localized: "Close apps, builds, sync jobs and other workloads using these caches first. Inventory and identity checks cannot prove global non-use or prevent every same-user race."))
                 Toggle("I have stopped the apps and workloads using every selected cache", isOn: Binding(
                     get: { store.workloadsStopped }, set: { store.attestWorkloadsStopped($0, planID: plan.id) }
-                ))
+                )).installerCaptureIdentity("cleanup.trash.workload-attestation", text: String(localized: "I have stopped the apps and workloads using every selected cache"))
                 Toggle("I reviewed the full paths and can regenerate all selected content", isOn: Binding(
                     get: { store.contentRegenerable }, set: { store.attestContentRegenerable($0, planID: plan.id) }
-                ))
+                )).installerCaptureIdentity("cleanup.trash.content-attestation", text: String(localized: "I reviewed the full paths and can regenerate all selected content"))
                 TimelineView(.periodic(from: .now, by: 1)) { _ in
                     VStack(alignment: .leading, spacing: 8) {
                         expiry(plan.expiresAt)
                         HStack {
-                            Button("Cancel plan") { store.cancel() }
+                            Button("Cancel plan") { store.cancel() }.installerCaptureIdentity("cleanup.trash.cancel", text: String(localized: "Cancel plan"))
                             Spacer()
-                            Button("Move selected caches to Trash") { store.confirm(planID: plan.id) }
+                            Button("Move selected caches to Trash") { store.confirm(planID: plan.id) }.installerCaptureIdentity("cleanup.trash.confirm", text: String(localized: "Move selected caches to Trash"))
                                 .buttonStyle(.borderedProminent).disabled(!store.canConfirm(planID: plan.id))
                         }
                     }
@@ -175,19 +179,21 @@ struct CleanupWorkspaceView: View {
                 Text(deletes ? "Confirm permanent deletion of this cache" : "Confirm original-path cache restore")
                     .font(.headline)
                 Text("Receipt \(plan.receipt.id.uuidString)").font(.caption.monospaced()).textSelection(.enabled)
-                path("Original cache path", plan.receipt.target.originalURL)
-                manifest(plan.receipt.manifest, root: plan.sourceURL)
-                path("Private operation records", plan.receipt.operationURL)
+                path("Original cache path", plan.receipt.target.originalURL, id: "cleanup.recovery.original-path")
+                manifest(plan.receipt.manifest, root: plan.sourceURL, idPrefix: "cleanup.recovery.target")
+                path("Private operation records", plan.receipt.operationURL, id: "cleanup.recovery.records")
                 if deletes {
                     Text("This permanently deletes only this receipt’s validated cache and the complete contents listed above. It cannot be undone through Trash or MoeKit. Other Trash items are not selected or emptied.")
+                    .installerCaptureIdentity("cleanup.recovery.effects", text: String(localized: "This permanently deletes only this receipt’s validated cache and the complete contents listed above. It cannot be undone through Trash or MoeKit. Other Trash items are not selected or emptied."))
                         .foregroundStyle(.red)
                     Text("Logical bytes are not guaranteed physically reclaimed space. Open files, APFS snapshots, clones and filesystem behavior can retain storage.")
                         .font(.caption).foregroundStyle(.secondary)
                     Toggle("I understand this exact cache will be permanently deleted and cannot be restored", isOn: Binding(
                         get: { store.irreversibleDeletionAccepted }, set: { store.attestIrreversibleDeletion($0, planID: plan.id) }
-                    ))
+                    )).installerCaptureIdentity("cleanup.recovery.attestation", text: String(localized: "I understand this exact cache will be permanently deleted and cannot be restored"))
                 } else {
                     Text("MoeKit will move this exact recorded cache back to its original path after rechecking it. An occupied destination refuses the restore; nothing is overwritten.")
+                    .installerCaptureIdentity("cleanup.recovery.effects", text: String(localized: "MoeKit will move this exact recorded cache back to its original path after rechecking it. An occupied destination refuses the restore; nothing is overwritten."))
                 }
                 Text("This operation appends private recovery records. If interrupted or only partly completed, inspect the per-item outcome and read recovery records before deciding what to do next.")
                     .font(.caption).foregroundStyle(.secondary)
@@ -195,13 +201,13 @@ struct CleanupWorkspaceView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         expiry(plan.expiresAt)
                         HStack {
-                            Button("Cancel plan") { store.cancel() }
+                            Button("Cancel plan") { store.cancel() }.installerCaptureIdentity("cleanup.recovery.cancel", text: String(localized: "Cancel plan"))
                             Spacer()
                             if deletes {
-                                Button("Permanently delete this cache", role: .destructive) { store.confirmRecovery(planID: plan.id) }
+                                Button("Permanently delete this cache", role: .destructive) { store.confirmRecovery(planID: plan.id) }.installerCaptureIdentity("cleanup.recovery.confirm", text: String(localized: "Permanently delete this cache"))
                                     .disabled(!store.canConfirmRecovery(planID: plan.id))
                             } else {
-                                Button("Restore this cache") { store.confirmRecovery(planID: plan.id) }
+                                Button("Restore this cache") { store.confirmRecovery(planID: plan.id) }.installerCaptureIdentity("cleanup.recovery.confirm", text: String(localized: "Restore this cache"))
                                     .buttonStyle(.borderedProminent).disabled(!store.canConfirmRecovery(planID: plan.id))
                             }
                         }
@@ -211,9 +217,9 @@ struct CleanupWorkspaceView: View {
         }
     }
 
-    private func manifest(_ manifest: CleanupManifest, root: URL) -> some View {
+    private func manifest(_ manifest: CleanupManifest, root: URL, idPrefix: String) -> some View {
         VStack(alignment: .leading, spacing: 7) {
-            path("Exact target", root)
+            path("Exact target", root, id: idPrefix + ".root")
             Text("\(manifest.itemCount) inventory entries · \(manifest.logicalBytes) logical bytes").font(.caption).monospacedDigit()
             Text("Complete reviewed path inventory").font(.subheadline.weight(.medium))
             ScrollView {
@@ -286,8 +292,10 @@ struct CleanupWorkspaceView: View {
                         }.disabled(!store.canReadRecovery || !store.catalogIsKnown)
                     } else {
                         warning(item.issue ?? String(localized: "Recovery record unavailable; outcome unknown"))
+                            .installerCaptureIdentity("cleanup.unknown.warning", text: item.issue ?? String(localized: "Recovery record unavailable; outcome unknown"))
                         path("Operation records", item.operationURL)
                         Text("Incomplete records cannot authorize restore or deletion. Retained data is preserved.")
+                    .installerCaptureIdentity("cleanup.unknown.effects", text: String(localized: "Incomplete records cannot authorize restore or deletion. Retained data is preserved."))
                             .font(.caption).foregroundStyle(.secondary)
                     }
                 }
@@ -320,10 +328,11 @@ struct CleanupWorkspaceView: View {
     private func expiry(_ date: Date) -> some View {
         Text("Confirmation expires at \(date.formatted(date: .omitted, time: .standard))").font(.caption).foregroundStyle(.secondary)
     }
-    private func path(_ title: LocalizedStringKey, _ value: URL) -> some View {
+    private func path(_ title: LocalizedStringKey, _ value: URL, id: String = "") -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(title).font(.caption).foregroundStyle(.secondary)
             Text(InstallerPathDisplay.quoted(value.path)).font(.callout.monospaced()).textSelection(.enabled)
+                .installerCaptureIdentity(id, text: InstallerPathDisplay.quoted(value.path))
                 .fixedSize(horizontal: false, vertical: true)
         }
     }

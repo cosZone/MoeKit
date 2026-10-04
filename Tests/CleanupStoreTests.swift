@@ -288,10 +288,14 @@ actor CleanupStoreFixture: CleanupExecuting {
     private var recoveryPlans: [UUID: CleanupRecoveryPlan] = [:]
     private var records: [CleanupReceipt] = []
     private var recoveryMissing = false
+    private let incompleteRecovery: Bool
+    private let longInventory: Bool
     private let root = URL(fileURLWithPath: "/Synthetic/Caches", isDirectory: true)
 
     init(holdInspection: Bool = false, holdPreparation: Bool = false, holdMutation: Bool = false,
-         holdRecoveryMutation: Bool = false, partialOutcome: Bool = false, mismatchedPlan: Bool = false) {
+         holdRecoveryMutation: Bool = false, partialOutcome: Bool = false, mismatchedPlan: Bool = false,
+         incompleteRecovery: Bool = false, longInventory: Bool = false) {
+        self.incompleteRecovery = incompleteRecovery; self.longInventory = longInventory
         self.holdInspection = holdInspection; self.holdPreparation = holdPreparation; self.holdMutation = holdMutation
         self.holdRecoveryMutation = holdRecoveryMutation; self.partialOutcome = partialOutcome; self.mismatchedPlan = mismatchedPlan
     }
@@ -299,7 +303,7 @@ actor CleanupStoreFixture: CleanupExecuting {
         inspectCount += 1
         if holdInspection { await withCheckedContinuation { inspectionWaiter = $0 } }
         let candidates = ["one", "two"].map {
-            CleanupCandidate(url: root.appendingPathComponent($0), evidence: "Synthetic cache", manifest: Self.manifest, blocker: nil)
+            CleanupCandidate(url: root.appendingPathComponent($0), evidence: "Synthetic cache", manifest: fixtureManifest, blocker: nil)
         } + [CleanupCandidate(url: root.appendingPathComponent("blocked"), evidence: "Synthetic blocker", manifest: nil, blocker: "Unreadable")]
         let result = CleanupInspection(id: UUID(), rootURL: root, candidates: candidates, context: context, observedAt: Date())
         inspection = result
@@ -310,7 +314,7 @@ actor CleanupStoreFixture: CleanupExecuting {
         if holdPreparation { await withCheckedContinuation { preparationWaiter = $0 } }
         guard let inspection, inspection.id == inspectionID else { throw CleanupFailure.changed }
         let targets = selectedPaths.sorted().map { path in
-            CleanupTarget(originalURL: URL(fileURLWithPath: mismatchedPlan ? "/Synthetic/Outside" : path), evidence: "Synthetic cache", manifest: Self.manifest)
+            CleanupTarget(originalURL: URL(fileURLWithPath: mismatchedPlan ? "/Synthetic/Outside" : path), evidence: "Synthetic cache", manifest: fixtureManifest)
         }
         let result = CleanupPlan(id: UUID(), inspectionID: inspectionID, rootURL: inspection.rootURL, targets: targets,
             context: context, recoveryRoot: URL(fileURLWithPath: "/Synthetic/Recovery"), preparedAt: Date(), expiresAt: Date().addingTimeInterval(120))
@@ -333,8 +337,12 @@ actor CleanupStoreFixture: CleanupExecuting {
     }
     func recoveryRecords() async throws -> [CleanupRecoveryItem] {
         recoveryCount += 1
+        if incompleteRecovery {
+            let id = UUID()
+            return [.init(id: id, operationURL: URL(fileURLWithPath: "/Synthetic/Recovery/\(id)"), receipt: nil, issue: String(localized: "Recovery record unavailable; outcome unknown"))]
+        }
         if recoveryMissing { return [] }
-        if records.isEmpty { records = [makeReceipt(target: CleanupTarget(originalURL: root.appendingPathComponent("one"), evidence: "Synthetic cache", manifest: Self.manifest), state: .trashed)] }
+        if records.isEmpty { records = [makeReceipt(target: CleanupTarget(originalURL: root.appendingPathComponent("one"), evidence: "Synthetic cache", manifest: fixtureManifest), state: .trashed)] }
         return records.map { CleanupRecoveryItem(id: $0.id, operationURL: $0.operationURL, receipt: $0, issue: nil) }
     }
     func prepareRecovery(receiptID: UUID, action: CleanupRecoveryPlan.Action, context: CleanupContext) async throws -> CleanupRecoveryPlan {
@@ -371,6 +379,13 @@ actor CleanupStoreFixture: CleanupExecuting {
             operationURL: URL(fileURLWithPath: "/Synthetic/Recovery/\(id)"), operationIdentity: Self.identity,
             state: state, payloadURL: URL(fileURLWithPath: "/Synthetic/Trash/\(target.originalURL.lastPathComponent)"),
             manifest: target.manifest, recordedAt: Date())
+    }
+    private var fixtureManifest: CleanupManifest {
+        guard longInventory else { return Self.manifest }
+        let entries = Self.manifest.entries + (0..<80).map {
+            CleanupEntry(relativePath: "long folder with spaces/\($0)-cached asset with quotes \" and newline\n資料.bin", kind: .file, identity: Self.identity, linkDestination: nil)
+        }
+        return .init(entries: entries, logicalBytes: 4096)
     }
     private static let identity = InstallerFileSnapshot(device: 1, inode: 2, mode: 0o100600, uid: 501, gid: 20,
         links: 1, flags: 0, bytes: 12, modifiedSeconds: 1, modifiedNanoseconds: 0, changedSeconds: 1, changedNanoseconds: 0)

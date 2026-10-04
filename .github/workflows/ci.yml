@@ -157,6 +157,7 @@ jobs:
           python3 Scripts/test-mole-supervisor.py
           python3 Scripts/test-installer-fixture-evidence.py
           python3 Scripts/test-cache-fixture-evidence.py
+          python3 Scripts/test-cache-render-artifacts.py
           python3 Scripts/test-installer-conditional-evidence.py
           xcodebuild -version
           xcodebuild -help > XcodeHelp.txt 2>&1
@@ -248,10 +249,12 @@ jobs:
           if [ -d TestResults.xcresult ]; then
             xcrun xcresulttool export attachments --path TestResults.xcresult --output-path UIRenderArtifacts
             python3 Scripts/verify-ui-render-artifacts.py UIRenderArtifacts en
+            python3 Scripts/verify-cache-render-artifacts.py UIRenderArtifacts en
           fi
           if [ -d ChineseRenderResults.xcresult ]; then
             xcrun xcresulttool export attachments --path ChineseRenderResults.xcresult --output-path ChineseUIRenderArtifacts
             python3 Scripts/verify-ui-render-artifacts.py ChineseUIRenderArtifacts zh-Hans
+            python3 Scripts/verify-cache-render-artifacts.py ChineseUIRenderArtifacts zh-Hans
           fi
       - name: Preserve owned-view render evidence
         if: always()
@@ -347,7 +350,9 @@ jobs:
                         -only-testing:MoeKitTests/InstallerFileAccessTests
                         -only-testing:MoeKitTests/InstallerTrashExecutorTests
                         -only-testing:MoeKitTests/InstallerUseEvidenceTests
-                        -only-testing:MoeKitTests/InstallerTrashStoreTests)
+                        -only-testing:MoeKitTests/InstallerTrashStoreTests
+                        -only-testing:MoeKitTests/CleanupExecutorTests
+                        -only-testing:MoeKitTests/CleanupStoreTests)
           fi
           xcodebuild -project MoeKit.xcodeproj -alltargets -configuration Release \
             ENABLE_TESTABILITY=YES CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= \
@@ -367,6 +372,7 @@ jobs:
           xcodebuild "${args[@]}" "${test_args[@]}"
           if [ "$INSTRUMENTATION" = none ]; then
             python3 Scripts/verify-installer-fixture-evidence.py --directory InstallerFixtureEvidence --source-sha "$SOURCE_SHA" --kinds native-trash mounted-image live-mole
+            python3 Scripts/verify-cache-fixture-evidence.py --directory InstallerFixtureEvidence --source-sha "$SOURCE_SHA"
           fi
           xcrun xcresulttool get test-results summary --path ReleaseTestResults.xcresult > ReleaseTestSummary.json
           xcrun xcresulttool get test-results tests --path ReleaseTestResults.xcresult > ReleaseTestInventory.json
@@ -381,7 +387,7 @@ jobs:
                       "CatalogWriteCoordinatorTests", "WorkspaceOperationPrivacyTests",
                       "ToolPreparationTests", "ToolPreparationStoreTests",
                       "MoleAnalysisModelsTests", "MoleAnalysisFilesTests", "MoleAnalysisStoreTests",
-                      "InstallerFileAccessTests", "InstallerTrashExecutorTests", "InstallerUseEvidenceTests", "InstallerTrashStoreTests")
+                      "InstallerFileAccessTests", "InstallerTrashExecutorTests", "InstallerUseEvidenceTests", "InstallerTrashStoreTests", "CleanupExecutorTests", "CleanupStoreTests")
           if summary.get("passedTests", 0) < 27 or summary.get("failedTests") != 0 or summary.get("skippedTests") != 0:
               raise SystemExit(f"Optimized catalog tests must execute and pass without skips: {summary}")
           if any(suite not in inventory for suite in required):

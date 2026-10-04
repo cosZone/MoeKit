@@ -180,7 +180,8 @@ actor NativeCleanupExecutor: CleanupExecuting {
             // Once the URL-based OS sink starts, a missing source is not success.
             // Before it starts, keep a captured tree intact and expose recovery.
             let verifiedCapture = receipt.state == .staged || receipt.state == .trashIntent
-            let state: CleanupReceiptState = trashStarted || !captured || !verifiedCapture ? .uncertain : .retained
+            let intact = !trashStarted && captured && verifiedCapture && retainedTreeIsIntact(receipt, payload: payload, operation: operation, journal: journal)
+            let state: CleanupReceiptState = intact ? .retained : .uncertain
             let retained = recordFailure(receipt.advancing(state, payloadURL: payload), journal: journal, operation: operation)
             return .init(id: id, originalURL: target.originalURL, receipt: retained,
                 message: String(localized: "Cleanup stopped. The receipt shows retained or uncertain data; nothing is retried automatically."), succeeded: false, requiresRecovery: true)
@@ -272,7 +273,8 @@ actor NativeCleanupExecutor: CleanupExecuting {
             return outcome(receipt, message: String(localized: "Restored to its original location without replacing any existing file."), success: true)
         } catch {
             let verifiedCapture = receipt.state == .restoreStaged || receipt.state == .restoreIntent
-            receipt = receipt.advancing(!restored && captured && verifiedCapture ? .retained : .uncertain,
+            let intact = !restored && captured && verifiedCapture && retainedTreeIsIntact(receipt, payload: stageURL, operation: operation, journal: journal)
+            receipt = receipt.advancing(intact ? .retained : .uncertain,
                 payloadURL: restored ? receipt.target.originalURL : (captured ? stageURL : plan.display.sourceURL))
             receipt = recordFailure(receipt, journal: journal, operation: operation)
             return outcome(receipt, message: String(localized: "Restore stopped. The exact recovery location is retained in the receipt; no destination was overwritten."), success: false)
@@ -312,7 +314,8 @@ actor NativeCleanupExecutor: CleanupExecuting {
             return outcome(receipt, message: String(localized: "Permanently removed the confirmed cache entries. Restore is no longer available. Open files, hard links and APFS snapshots may delay or reduce physical space reclaimed."), success: true)
         } catch {
             let verifiedCapture = receipt.state == .deleteStaged || receipt.state == .deleteIntent
-            receipt = receipt.advancing(!deletionStarted && captured && verifiedCapture ? .retained : .uncertain, payloadURL: captured ? stageURL : plan.display.sourceURL)
+            let intact = !deletionStarted && captured && verifiedCapture && retainedTreeIsIntact(receipt, payload: stageURL, operation: operation, journal: journal)
+            receipt = receipt.advancing(intact ? .retained : .uncertain, payloadURL: captured ? stageURL : plan.display.sourceURL)
             receipt = recordFailure(receipt, journal: journal, operation: operation)
             return outcome(receipt, message: deletionStarted
                 ? String(localized: "Permanent deletion stopped after it began. Some confirmed entries may already be removed; remaining data is retained. No automatic retry is allowed.")
@@ -357,6 +360,16 @@ actor NativeCleanupExecutor: CleanupExecuting {
         try CleanupFiles.validateNamespace(from, environment: environment)
         try CleanupFiles.validateNamespace(to, environment: environment)
         try InstallerFileAccess.exclusiveMove(from: from, name: name, to: to, destinationName: destinationName)
+    }
+    private func retainedTreeIsIntact(_ receipt: CleanupReceipt, payload: URL, operation: InstallerDirectoryAnchor, journal: CleanupJournal) -> Bool {
+        do {
+            guard journal.isHealthy, payload.deletingLastPathComponent().path == operation.url.path,
+                  try journal.latest(receipt.id) == receipt else { return false }
+            try CleanupFiles.validateNamespace(operation, environment: environment)
+            try InstallerFileAccess.validatePrivate(operation.fd, directory: true)
+            let tree = try operation.child(payload.lastPathComponent)
+            return try CleanupFiles.manifest(tree, environment: environment, honorCancellation: false) == receipt.manifest
+        } catch { return false }
     }
     private func recordFailure(_ proposed: CleanupReceipt, journal: CleanupJournal, operation: InstallerDirectoryAnchor) -> CleanupReceipt {
         do { try journal.append(proposed, operation: operation); return proposed }

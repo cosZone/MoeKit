@@ -323,6 +323,28 @@ struct CleanupExecutorTests {
         #expect(try Data(contentsOf: a.appendingPathComponent("owned.bin")) == f.marker)
         #expect(try Data(contentsOf: neighbor.appendingPathComponent("new")) == Data("new cache preserved".utf8))
     }
+    @Test("Cancellation before permanent removal preserves a newly confirmable exact restore")
+    func cancellationBeforeUnlink() async throws {
+        let f = try CacheFixture(), a = try f.folder("cache"), context = f.context
+        let executor = f.executor(), plan = try await f.plan(executor, selected: [a], context: context)
+        let moved = try await executor.moveToTrash(planID: plan.id, context: context)
+        let receipt = try #require(moved.items.first?.receipt)
+        let cancelling = f.executor { checkpoint in
+            if case .beforePermanentDelete = checkpoint { throw CancellationError() }
+        }
+        let deletion = try await cancelling.prepareRecovery(receiptID: receipt.id, action: .deletePermanently, context: context)
+        let stopped = try await cancelling.applyRecovery(planID: deletion.id, context: context)
+        let retained = try #require(stopped.items.first?.receipt)
+        #expect(retained.state == .retained && retained.canRestore)
+        #expect(!retained.canDeletePermanently)
+        #expect(try Data(contentsOf: #require(retained.payloadURL).appendingPathComponent("owned.bin")) == f.marker)
+        let restore = try await cancelling.prepareRecovery(receiptID: receipt.id, action: .restore, context: context)
+        let restored = try await cancelling.applyRecovery(planID: restore.id, context: context)
+        #expect(restored.items.first?.succeeded == true)
+        #expect(try Data(contentsOf: a.appendingPathComponent("owned.bin")) == f.marker)
+        try f.sentinelUnchanged()
+    }
+
     @Test("A partial journal write latches the writer and revokes receipt authority")
     func journalWriteFailure() async throws {
         let f = try CacheFixture(), a = try f.folder("cache"), context = f.context

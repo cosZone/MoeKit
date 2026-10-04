@@ -178,7 +178,10 @@ enum CleanupFiles {
                 case UInt32(S_IFLNK):
                     try validateObject(identity, expectedDevice: directory.identity.device, kind: .symbolicLink)
                     var buffer = [UInt8](repeating: 0, count: 4097)
-                    let count = readlinkat(node.fd, name, &buffer, buffer.count)
+                    let capacity = buffer.count
+                    let count = buffer.withUnsafeMutableBytes { bytes in
+                        readlinkat(node.fd, name, bytes.baseAddress, capacity)
+                    }
                     guard count >= 0, count < buffer.count,
                           identity == (try InstallerFileAccess.snapshotAt(node.fd, name)) else { throw CleanupFailure.changed }
                     entries.append(.init(relativePath: childPath, kind: .symbolicLink, identity: identity, linkDestination: Data(buffer.prefix(count))))

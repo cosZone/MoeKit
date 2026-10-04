@@ -6056,7 +6056,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "记录 %@ · 第 %lld 条记录"
+            "value": "凭据 %@ · 第 %lld 条记录"
           }
         }
       }

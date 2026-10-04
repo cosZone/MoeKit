@@ -225,7 +225,7 @@ struct ProcessTerminationStoreTests {
         #expect(await system.isBlocked)
         store.reset()
         await system.resume()
-        for _ in 0..<20 { await Task.yield() }
+        try await settle { !store.isBusy }
         #expect(await system.signals == 0)
         #expect(store.review == nil)
         #expect(store.results.isEmpty)

@@ -40,6 +40,7 @@ struct MoleAnalysisView: View {
             }
             if let plan = analysis.plan { confirmation(plan) }
             if let result = analysis.result { resultView(result) }
+            InstallerTrashView()
             if analysis.result == nil && analysis.plan == nil {
                 ContentUnavailableView("No live analysis result", systemImage: "chart.bar.doc.horizontal", description:
                     Text("Selections do not start a process. Review the plan, then explicitly start analysis."))
@@ -85,9 +86,12 @@ struct MoleAnalysisView: View {
                 Spacer()
                 Text(result.finishedAt, format: .dateTime.hour().minute().second()).foregroundStyle(.secondary)
             }
-            Text("Live Mole result · filtered, non-atomic observation · no cleanup action")
+            Text("Live Mole result · filtered, non-atomic observation · sizes are not reclaimable space")
                 .font(.caption).foregroundStyle(.secondary)
-            Table(result.report.entries) {
+            Table(result.report.entries, selection: Binding<String?>(
+                get: { workspace.installerTrash.selectedPath },
+                set: { workspace.installerTrash.select(path: $0) }
+            )) {
                 TableColumn("Name") { entry in
                     Label(entry.name, systemImage: entry.isDirectory ? "folder" : "doc").lineLimit(1)
                 }
@@ -100,6 +104,8 @@ struct MoleAnalysisView: View {
                 TableColumn("Read status") { entry in Text(entry.coverage.title).foregroundStyle(.secondary) }
             }.frame(minHeight: 200)
             Text("\(result.report.entries.count) entries · empty rows do not prove an empty disk").font(.caption).foregroundStyle(.secondary)
+            Text("Only a directly listed .dmg in the current live Downloads analysis can be selected for independent native Trash review. Imported and Demo entries cannot be used.")
+                .font(.caption).foregroundStyle(.secondary)
         }
     }
 

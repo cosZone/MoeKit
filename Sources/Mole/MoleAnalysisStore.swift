@@ -9,6 +9,8 @@ final class MoleAnalysisStore {
     private(set) var directory: URL?
     private(set) var plan: MoleAnalysisPlan?
     private(set) var result: MoleAnalysisResult?
+    private(set) var liveResultID: UUID?
+    @ObservationIgnored var onContextChange: (@MainActor () -> Void)?
     private(set) var errorMessage: String?
     private(set) var isPreparing = false
     private(set) var isRunning = false
@@ -32,12 +34,14 @@ final class MoleAnalysisStore {
         directory = url; invalidateSelection()
     }
     private func invalidateSelection() {
-        generation = UUID(); plan = nil; result = nil; errorMessage = nil
+        generation = UUID(); plan = nil; result = nil; liveResultID = nil; errorMessage = nil
+        onContextChange?()
     }
     func prepare() {
         guard canPrepare, let executable, let directory else { return }
         let request = UUID(); generation = request
-        plan = nil; result = nil; errorMessage = nil; isPreparing = true
+        plan = nil; result = nil; liveResultID = nil; errorMessage = nil; isPreparing = true
+        onContextChange?()
         task = Task { [weak self, executor] in
             do {
                 let plan = try await executor.prepare(executable: executable, directory: directory)
@@ -53,23 +57,31 @@ final class MoleAnalysisStore {
     func confirm(planID: UUID) {
         guard !isBusy, !isDemoEnabled, let plan, plan.id == planID else { return }
         let request = UUID(); generation = request
-        self.plan = nil; result = nil; errorMessage = nil; isRunning = true
+        self.plan = nil; result = nil; liveResultID = nil; errorMessage = nil; isRunning = true
+        onContextChange?()
         task = Task { [weak self, executor] in
             do {
                 let result = try await executor.run(plan)
                 try Task.checkCancellation()
                 guard let self else { return }
-                if self.generation == request, !self.isDemoEnabled { self.result = result }
+                if self.generation == request, !self.isDemoEnabled {
+                    self.result = result; self.liveResultID = UUID(); self.onContextChange?()
+                }
                 self.finish()
             } catch { self?.fail(error, request: request) }
         }
     }
     func cancel() {
-        plan = nil; generation = UUID()
+        plan = nil; result = nil; liveResultID = nil; generation = UUID()
+        onContextChange?()
         guard task != nil else { return }
         generation = UUID(); isCancelling = true
         task?.cancel()
     }
+    /// An imported report is a separate read-only context and invalidates any
+    /// earlier live-result selection authority, even if its paths are identical.
+    func invalidateLiveResult() { cancel() }
+
     func setDemoEnabled(_ enabled: Bool) {
         guard enabled != isDemoEnabled else { return }
         isDemoEnabled = enabled; cancel(); executable = nil; directory = nil; result = nil; errorMessage = nil

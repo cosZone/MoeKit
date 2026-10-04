@@ -1,0 +1,39 @@
+# Confirmed downloaded disk-image Trash and recovery
+
+Implementation boundary under review (2026-10-04). This is an original native macOS adapter beside Mole analysis, not a Mole cleanup command. Activation requires independent review and exact-commit native fixture tests. It never runs clean/purge/uninstall, follows report paths as authority, or handles projects/worktrees.
+
+## First supported operation
+
+One explicitly chosen direct-child regular `.dmg` of the current user's actual local Downloads directory. `.pkg`, directories, nested files, batches, hard links, symlinks in any component, cloud/file-provider metadata, network/removable/non-APFS filesystems, mount points, unsafe ownership, unknown catalog, catalog/project overlap, Git-marked ancestors and changed metadata refuse. The filename extension is only a surface constraint, never evidence that content is disposable.
+
+The user selects an entry from a successful current live Mole analysis of the exact Downloads root. The live result is only a hint; fresh independent inspection and exact confirmation supply authority. Arbitrary picker-only targets are unsupported. Imported JSON and Demo never authorize mutations. Scope/selection/mode/catalog/analysis changes invalidate the one-use immutable in-memory plan. Preparation and closing a plan perform no journal/staging writes. Plans expire after two minutes.
+
+## Occupancy scope
+
+The product explicitly checks a bounded complete snapshot of current-user open vnode file descriptors and fileports, with PID/start-time rechecks, excluding only MoeKit's exact retained observer FD. Memory mappings are not exhaustively observable through public APIs and are outside this check. Any denied/partial/stale observation in that scope refuses. It also requires complete mounted-disk-image evidence and refuses the selected mounted image. The UI says “No open descriptor or fileport use observed in the checked current-user processes”; it does not claim global non-use. Memory mappings, other users/system services and a later open are outside this observation. The user must explicitly attest that installation and use of this image have finished. `.pkg` remains unsupported because Installer services can use it as root.
+
+`proc_listpidspath` is unsuitable as negative proof: Apple's implementation skips per-process errors. Advisory flock/NSFileCoordinator is not a global file lock. There is no privilege request, process signal or permission workaround.
+
+## Persistent private operation storage
+
+Persistent storage is below `~/Library/Application Support/MoeKit/InstallerRecovery`, never caches or a temporary session that can be automatically swept. Strict descriptor chains reject symlinks and check ancestors; newly created operation directories are 0700, receipt records 0600, owned by the current UID, same device as Downloads. Private directory ACLs must contain no extended entries; unknown ACL status refuses. Existing unsafe directories are not chmodded. A persistent private `operations.lock` is a single-link, owned 0600 file with an exclusive nonblocking cooperative flock; it is never removed. This lease covers cooperating MoeKit instances only.
+
+After exact confirmation, create one UUID operation directory. Write bounded append-only numbered JSON receipt states using O_EXCL/O_NOFOLLOW, full-write loops, fsync/F_FULLFSYNC and fsync of the operation/parent directories before source capture. No source mutation occurs if durable intent cannot be established. Every record includes policy version, operation UUID, original parent/file identities, original name, operation directory identity, intended action and state. Path disclosure is confined to this private journal; no telemetry. Records are not imported as confirmation tokens.
+
+## Capture and native Trash
+
+Retain the original file FD and all ancestor descriptors. Revalidate plan, local policy, use evidence and parent paths. Rename exactly the original basename to the validated original basename inside the private operation descriptor using `renameatx_np(RENAME_EXCL)` on the same device. No copy, overwrite, unlink or fallback exists. Reopen the captured entry no-follow and compare it with both the expected plan and retained source FD before native Trash. Compare type/device/inode/owner/group/mode/link-count/flags/size/mtime; permit only rename-induced ctime change. A replacement capture can be a file, symlink or directory: do not recurse into it or change its metadata. Attempt exclusive rollback only to the still-anchored original parent; otherwise retain it intact and expose recovery.
+
+Persist captured and Trash-started states before `FileManager.trashItem(at:resultingItemURL:)`. Revalidate the private stage URL against its descriptor immediately before this URL-based call. Record and verify the actual returned destination and identity; Trash may rename. Any ambiguous call/receipt failure is an uncertain result, never success inferred from source absence. Cancellation before Trash rolls back exclusively or retains the payload. Once synchronous Trash starts, wait to establish its outcome, even if the view closes or Demo changes.
+
+## Restore
+
+Recovery listing reads only bounded numbered records from validated owned operation directories, never scans arbitrary Trash or automatically resumes mutations. Original-path restore needs a fresh visible confirmation for this exact receipt and current source/original-parent identities. First capture the exact recorded Trash entry into the fixed `restore.dmg` slot in the same owned operation directory with RENAME_EXCL, then post-verify the captured identity before exclusively moving into the original parent/name. On mismatch, exclusively return to its anchored Trash parent or retain intact. A collision never overwrites or offers force. Journal each intended namespace change first. Finder Put Back may target the stage; MoeKit's receipt-backed restore targets the original Downloads path. Recovery is unavailable after Trash is emptied or identities/volumes no longer match. Uncertain outcomes remain visible and are not retried automatically.
+
+## Threat model and acceptance
+
+0700 does not exclude same-UID processes. Apple's public Trash API accepts a URL, not an expected inode. Descriptor-relative exclusive capture plus post-verification prevents a detected wrong capture from reaching Trash, but can transiently move a replacement before detection. This supports ordinary cooperative local operation, not malicious same-user races or a promise that nobody opens a file after inspection. All limitations appear before confirmation.
+
+Acceptance includes cancellation/replay/expiry/Demo/import invalidation, capture replacement by file/symlink/directory, ancestor/staging substitution, rollback collision, journal failures/crashes at transitions, mismatched/colliding restore, unknown occupancy, mounted DMG, unchanged outside sentinels, and actual macOS Trash+restore solely on marker/identity-verified uniquely owned fixtures. No retained payload or operation directory is ever automatically removed.
+
+Primary references: [Apple exclusive rename](https://github.com/apple-oss-distributions/xnu/blob/main/bsd/man/man2/rename.2), [Apple Trash](https://developer.apple.com/documentation/foundation/filemanager/trashitem(at:resultingitemurl:)), [Apple process-path implementation](https://github.com/apple-oss-distributions/xnu/blob/main/libsyscall/wrappers/libproc/proc_listpidspath.c), [Mole public installer](https://github.com/tw93/Mole/blob/6bca4812acd6a3d54ffe97291734c3556a174057/bin/installer.sh).

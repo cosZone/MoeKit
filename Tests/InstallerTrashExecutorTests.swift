@@ -1,0 +1,297 @@
+import Darwin
+import Foundation
+import Testing
+@testable import MoeKit
+
+private struct InstallerFixtureEvidence: InstallerUseEvidenceProviding {
+    let result: InstallerUseEvidence
+    func evidence(for target: InstallerUseTarget) async -> InstallerUseEvidence { result }
+}
+
+private final class InstallerFixtureSink: InstallerTrashSink, @unchecked Sendable {
+    let destination: URL
+    private let lock = NSLock()
+    private var calls = 0
+    var callCount: Int { lock.withLock { calls } }
+    init(_ destination: URL) { self.destination = destination }
+    func trash(_ url: URL) throws -> URL {
+        lock.withLock { calls += 1 }
+        let source = try InstallerDirectoryAnchor.open(url.deletingLastPathComponent())
+        let target = try InstallerDirectoryAnchor.open(destination)
+        let result = destination.appendingPathComponent(url.lastPathComponent)
+        try InstallerFileAccess.exclusiveMove(from: source, name: url.lastPathComponent, to: target, destinationName: result.lastPathComponent)
+        return result
+    }
+}
+
+private struct InstallerFixture: Sendable {
+    let base: URL
+    let downloads: URL
+    let source: URL
+    let trash: URL
+    let recovery: URL
+    let marker: Data
+    let sentinel: URL
+    init(name: String = "Owned installer 空格\n.dmg", realTrash: Bool = false) throws {
+        let temp = try MoleAnalysisFiles.canonicalURL(FileManager.default.temporaryDirectory)
+        base = temp.appendingPathComponent("MoeKit-Installer-Test-\(UUID().uuidString)")
+        downloads = base.appendingPathComponent("Downloads")
+        source = downloads.appendingPathComponent(name)
+        trash = realTrash ? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".Trash") : base.appendingPathComponent("Trash")
+        recovery = base.appendingPathComponent("Support/MoeKit/InstallerRecovery")
+        marker = Data("Uniquely owned MoeKit test fixture \(UUID().uuidString)".utf8)
+        sentinel = base.appendingPathComponent("outside-sentinel")
+        for url in [base, downloads, base.appendingPathComponent("Support")] + (realTrash ? [] : [trash]) {
+            try FileManager.default.createDirectory(at: url, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+        }
+        try marker.write(to: source, options: .withoutOverwriting)
+        try Data("outside remains unchanged".utf8).write(to: sentinel, options: .withoutOverwriting)
+    }
+    var environment: InstallerTrashEnvironment { .init(downloads: downloads, recoveryRoot: recovery, trash: trash, enforceLocalVolume: false) }
+    var scope: InstallerTrashScope { .init(generation: UUID(), liveAnalysisID: UUID(), liveDirectory: downloads,
+        liveEntryPaths: [source.path], protectedPaths: [], catalogIsKnown: true) }
+    var context: InstallerRecoveryContext { .init(generation: UUID(), protectedPaths: [], catalogIsKnown: true) }
+    func executor(sink: (any InstallerTrashSink)? = nil, evidence: InstallerUseEvidence = .noUseObserved,
+                  hook: @escaping @Sendable (InstallerMutationCheckpoint) throws -> Void = { _ in }) -> NativeInstallerTrashExecutor {
+        NativeInstallerTrashExecutor(environment: environment, evidence: InstallerFixtureEvidence(result: evidence),
+            sink: sink ?? InstallerFixtureSink(trash), nativeExecutionEnabled: true, checkpoint: hook)
+    }
+    func checkSentinel() throws { #expect(try Data(contentsOf: sentinel) == Data("outside remains unchanged".utf8)) }
+    // No recursive cleanup: crash/retention tests intentionally leave their tiny
+    // owned fixtures intact for inspection and the ephemeral CI runner lifecycle.
+}
+
+@Suite("Confirmed installer capture and recovery", .serialized)
+struct InstallerTrashExecutorTests {
+    @Test("Preview and cancellation never create recovery storage")
+    func readOnlyPlan() async throws {
+        let f = try InstallerFixture(), executor = f.executor()
+        let plan = try await executor.prepare(selection: f.source, scope: f.scope)
+        #expect(plan.file.bytes == f.marker.count)
+        #expect(!FileManager.default.fileExists(atPath: f.recovery.path))
+        await executor.discardPlans()
+        await #expect(throws: InstallerTrashFailure.expired) { try await executor.moveToTrash(planID: plan.id, scope: plan.scope) }
+        #expect(try Data(contentsOf: f.source) == f.marker)
+        try f.checkSentinel()
+    }
+    @Test("Exact one-use plan moves and separately confirms original-path restore")
+    func happyPath() async throws {
+        let f = try InstallerFixture(), executor = f.executor()
+        let plan = try await executor.prepare(selection: f.source, scope: f.scope)
+        let moved = try await executor.moveToTrash(planID: plan.id, scope: plan.scope)
+        #expect(moved.movedToTrash)
+        let receipt = try #require(moved.receipt)
+        #expect(receipt.state == .trashed)
+        #expect(try Data(contentsOf: #require(receipt.trashURL)) == f.marker)
+        await #expect(throws: InstallerTrashFailure.expired) { try await executor.moveToTrash(planID: plan.id, scope: plan.scope) }
+        let context = f.context
+        let restore = try await executor.prepareRestore(receiptID: receipt.id, context: context)
+        #expect(!FileManager.default.fileExists(atPath: f.source.path))
+        let result = try await executor.restore(planID: restore.id, context: context)
+        #expect(result.receipt?.state == .restored)
+        #expect(try Data(contentsOf: f.source) == f.marker)
+        #expect(try await executor.recoveryReceipts().count == 1)
+        try f.checkSentinel()
+    }
+    @Test("Unknown or observed descriptor use blocks unchanged before storage", arguments: [InstallerUseEvidence.unavailable(reason: "denied"), .observedUse(reason: "open")])
+    func useBlocks(_ evidence: InstallerUseEvidence) async throws {
+        let f = try InstallerFixture(), executor = f.executor(evidence: evidence)
+        await #expect(throws: (any Error).self) { try await executor.prepare(selection: f.source, scope: f.scope) }
+        #expect(!FileManager.default.fileExists(atPath: f.recovery.path))
+        #expect(try Data(contentsOf: f.source) == f.marker)
+    }
+    @Test("Imported, other-root, unknown-catalog and protected scopes cannot prepare")
+    func scopeGuards() async throws {
+        let f = try InstallerFixture(), executor = f.executor()
+        for scope in [
+            InstallerTrashScope(generation: UUID(), liveAnalysisID: UUID(), liveDirectory: f.downloads, liveEntryPaths: [], protectedPaths: [], catalogIsKnown: true),
+            .init(generation: UUID(), liveAnalysisID: UUID(), liveDirectory: f.base, liveEntryPaths: [f.source.path], protectedPaths: [], catalogIsKnown: true),
+            .init(generation: UUID(), liveAnalysisID: UUID(), liveDirectory: f.downloads, liveEntryPaths: [f.source.path], protectedPaths: [], catalogIsKnown: false),
+            .init(generation: UUID(), liveAnalysisID: UUID(), liveDirectory: f.downloads, liveEntryPaths: [f.source.path], protectedPaths: [f.downloads.path], catalogIsKnown: true)
+        ] { await #expect(throws: (any Error).self) { try await executor.prepare(selection: f.source, scope: scope) } }
+        try f.checkSentinel()
+    }
+    @Test("Hardlinks, symlink leaves and flat packages are unsupported")
+    func unsupportedKinds() async throws {
+        let f = try InstallerFixture(name: "owned.pkg")
+        await #expect(throws: InstallerTrashFailure.unsupported) { try await f.executor().prepare(selection: f.source, scope: f.scope) }
+        let g = try InstallerFixture()
+        try #require(link(g.source.path, g.base.appendingPathComponent("second-link").path) == 0)
+        await #expect(throws: InstallerTrashFailure.unsupported) { try await g.executor().prepare(selection: g.source, scope: g.scope) }
+    }
+    @Test("Replacement immediately before capture never reaches Trash", arguments: ["file", "symlink", "directory"])
+    func captureReplacement(_ kind: String) async throws {
+        let f = try InstallerFixture(), sink = InstallerFixtureSink(f.trash)
+        let saved = f.base.appendingPathComponent("retained-original.dmg")
+        let executor = f.executor(sink: sink) { point in
+            guard point == .beforeCapture else { return }
+            try FileManager.default.moveItem(at: f.source, to: saved)
+            switch kind {
+            case "file": try Data("unconfirmed replacement".utf8).write(to: f.source, options: .withoutOverwriting)
+            case "symlink": try FileManager.default.createSymbolicLink(at: f.source, withDestinationURL: f.sentinel)
+            default: try FileManager.default.createDirectory(at: f.source, withIntermediateDirectories: false)
+            }
+        }
+        let plan = try await executor.prepare(selection: f.source, scope: f.scope)
+        let result = try await executor.moveToTrash(planID: plan.id, scope: plan.scope)
+        #expect(!result.movedToTrash); #expect(sink.callCount == 0)
+        #expect(result.receipt?.state == .rolledBack)
+        #expect(try Data(contentsOf: saved) == f.marker)
+        if kind == "file" { #expect(try Data(contentsOf: f.source) == Data("unconfirmed replacement".utf8)) }
+        if kind == "symlink" { #expect(try FileManager.default.destinationOfSymbolicLink(atPath: f.source.path) == f.sentinel.path) }
+        try f.checkSentinel()
+    }
+    @Test("Rollback collision retains both captured and new source objects")
+    func rollbackCollision() async throws {
+        let f = try InstallerFixture(), sink = InstallerFixtureSink(f.trash)
+        let executor = f.executor(sink: sink) { point in
+            if point == .afterCapture {
+                try Data("new neighbor at original name".utf8).write(to: f.source, options: .withoutOverwriting)
+                throw InstallerTrashFailure.cancelled
+            }
+        }
+        let plan = try await executor.prepare(selection: f.source, scope: f.scope)
+        let result = try await executor.moveToTrash(planID: plan.id, scope: plan.scope)
+        #expect(sink.callCount == 0); #expect(result.requiresRecovery)
+        #expect(try Data(contentsOf: f.source) == Data("new neighbor at original name".utf8))
+        #expect(try Data(contentsOf: plan.recoveryURL.appendingPathComponent(f.source.lastPathComponent)) == f.marker)
+        try f.checkSentinel()
+    }
+    @Test("Post-Trash interruption stays uncertain without automatic retry")
+    func postTrashUnknown() async throws {
+        let f = try InstallerFixture(), sink = InstallerFixtureSink(f.trash)
+        let executor = f.executor(sink: sink) { point in if point == .afterTrash { throw InstallerTrashFailure.journal } }
+        let plan = try await executor.prepare(selection: f.source, scope: f.scope)
+        let result = try await executor.moveToTrash(planID: plan.id, scope: plan.scope)
+        #expect(result.receipt?.state == .uncertain); #expect(!result.movedToTrash)
+        #expect(sink.callCount == 1)
+        let items = try await executor.recoveryReceipts()
+        #expect(items.first?.receipt?.state == .uncertain)
+        await #expect(throws: (any Error).self) { try await executor.prepareRestore(receiptID: plan.id, context: f.context) }
+        #expect(try Data(contentsOf: f.trash.appendingPathComponent(f.source.lastPathComponent)) == f.marker)
+    }
+    @Test("Restore collision and fresh project protection never overwrite")
+    func restoreGuards() async throws {
+        let f = try InstallerFixture(), executor = f.executor()
+        let plan = try await executor.prepare(selection: f.source, scope: f.scope)
+        _ = try await executor.moveToTrash(planID: plan.id, scope: plan.scope)
+        let protected = InstallerRecoveryContext(generation: UUID(), protectedPaths: [f.downloads.path], catalogIsKnown: true)
+        await #expect(throws: InstallerTrashFailure.protected) { try await executor.prepareRestore(receiptID: plan.id, context: protected) }
+        try Data("collision".utf8).write(to: f.source, options: .withoutOverwriting)
+        await #expect(throws: InstallerTrashFailure.collision) { try await executor.prepareRestore(receiptID: plan.id, context: f.context) }
+        #expect(try Data(contentsOf: f.source) == Data("collision".utf8))
+        try f.checkSentinel()
+    }
+    @Test("Torn journal after capture retains payload without rollback mutation")
+    func journalFailureAfterCapture() async throws {
+        let f = try InstallerFixture(), sink = InstallerFixtureSink(f.trash)
+        let executor = f.executor(sink: sink) { point in
+            if point == .afterCapture {
+                let directories = try FileManager.default.contentsOfDirectory(at: f.recovery, includingPropertiesForKeys: nil)
+                let operation = try #require(directories.first(where: { UUID(uuidString: $0.lastPathComponent) != nil }))
+                try Data("{".utf8).write(to: operation.appendingPathComponent("000001.json"), options: .withoutOverwriting)
+            }
+        }
+        let plan = try await executor.prepare(selection: f.source, scope: f.scope)
+        let result = try await executor.moveToTrash(planID: plan.id, scope: plan.scope)
+        #expect(!result.movedToTrash); #expect(result.requiresRecovery); #expect(sink.callCount == 0)
+        #expect(!FileManager.default.fileExists(atPath: f.source.path))
+        #expect(try Data(contentsOf: plan.recoveryURL.appendingPathComponent(f.source.lastPathComponent)) == f.marker)
+        let items = try await executor.recoveryReceipts()
+        #expect(items.first?.receipt == nil); #expect(items.first?.issue != nil)
+        #expect(!FileManager.default.fileExists(atPath: plan.recoveryURL.appendingPathComponent("000002.json").path))
+    }
+    @Test("Renamed Downloads parent after capture prevents rollback into a replacement")
+    func sourceParentReplacement() async throws {
+        let f = try InstallerFixture(), sink = InstallerFixtureSink(f.trash)
+        let executor = f.executor(sink: sink) { point in
+            if point == .afterCapture {
+                try FileManager.default.moveItem(at: f.downloads, to: f.base.appendingPathComponent("old-Downloads"))
+                try FileManager.default.createDirectory(at: f.downloads, withIntermediateDirectories: false)
+                try Data("replacement sentinel".utf8).write(to: f.source)
+                throw InstallerTrashFailure.changed
+            }
+        }
+        let plan = try await executor.prepare(selection: f.source, scope: f.scope)
+        let result = try await executor.moveToTrash(planID: plan.id, scope: plan.scope)
+        #expect(result.requiresRecovery); #expect(sink.callCount == 0)
+        #expect(try Data(contentsOf: f.source) == Data("replacement sentinel".utf8))
+        #expect(try Data(contentsOf: plan.recoveryURL.appendingPathComponent(f.source.lastPathComponent)) == f.marker)
+        try f.checkSentinel()
+    }
+    @Test("Restore source replacement is captured, detected and returned without reaching Downloads")
+    func restoreReplacement() async throws {
+        let f = try InstallerFixture(), sink = InstallerFixtureSink(f.trash)
+        let saved = f.base.appendingPathComponent("approved-original.dmg")
+        let executor = f.executor(sink: sink) { point in
+            if point == .beforeRestoreCapture {
+                let trashFile = f.trash.appendingPathComponent(f.source.lastPathComponent)
+                try FileManager.default.moveItem(at: trashFile, to: saved)
+                try Data("unconfirmed restore replacement".utf8).write(to: trashFile, options: .withoutOverwriting)
+            }
+        }
+        let plan = try await executor.prepare(selection: f.source, scope: f.scope)
+        _ = try await executor.moveToTrash(planID: plan.id, scope: plan.scope)
+        let context = f.context
+        let restore = try await executor.prepareRestore(receiptID: plan.id, context: context)
+        let result = try await executor.restore(planID: restore.id, context: context)
+        #expect(result.requiresRecovery)
+        #expect(!FileManager.default.fileExists(atPath: f.source.path))
+        #expect(try Data(contentsOf: saved) == f.marker)
+        #expect(try Data(contentsOf: f.trash.appendingPathComponent(f.source.lastPathComponent)) == Data("unconfirmed restore replacement".utf8))
+        try f.checkSentinel()
+    }
+    @Test("A destination created after restore confirmation is never overwritten")
+    func lateRestoreCollision() async throws {
+        let f = try InstallerFixture(), executor = f.executor { point in
+            if point == .beforeRestore { try Data("new original-path content".utf8).write(to: f.source, options: .withoutOverwriting) }
+        }
+        let plan = try await executor.prepare(selection: f.source, scope: f.scope)
+        _ = try await executor.moveToTrash(planID: plan.id, scope: plan.scope)
+        let context = f.context
+        let restore = try await executor.prepareRestore(receiptID: plan.id, context: context)
+        let result = try await executor.restore(planID: restore.id, context: context)
+        #expect(result.requiresRecovery)
+        #expect(try Data(contentsOf: f.source) == Data("new original-path content".utf8))
+        #expect(try Data(contentsOf: plan.recoveryURL.appendingPathComponent("restore.dmg")) == f.marker)
+        try f.checkSentinel()
+    }
+    @Test("Actual macOS Trash API and receipt restore only on owned CI fixture")
+    func nativeTrashRoundTrip() async throws {
+        let env = ProcessInfo.processInfo.environment
+        guard env["MOEKIT_INSTALLER_TRASH_FIXTURE"] == "1", env["GITHUB_ACTIONS"] == "true", env["RUNNER_ENVIRONMENT"] == "github-hosted" else { return }
+        let f = try InstallerFixture(name: "MoeKit-owned-\(UUID().uuidString).dmg", realTrash: true)
+        let expected = try Data(contentsOf: f.source)
+        try #require(expected == f.marker)
+        let native = FixtureOnlyNativeTrashSink(marker: f.marker, allowedParent: f.recovery)
+        let executor = f.executor(sink: native)
+        let plan = try await executor.prepare(selection: f.source, scope: f.scope)
+        let result = try await executor.moveToTrash(planID: plan.id, scope: plan.scope)
+        try #require(result.movedToTrash)
+        let receipt = try #require(result.receipt), destination = try #require(receipt.trashURL)
+        try #require(receipt.originalFile.matchesCaptured(#require(receipt.trashFile)))
+        try #require(try Data(contentsOf: destination) == f.marker)
+        let context = f.context
+        let restore = try await executor.prepareRestore(receiptID: receipt.id, context: context)
+        let restored = try await executor.restore(planID: restore.id, context: context)
+        #expect(restored.receipt?.state == .restored)
+        #expect(try Data(contentsOf: f.source) == f.marker)
+        try f.checkSentinel()
+    }
+}
+
+private struct FixtureOnlyNativeTrashSink: InstallerTrashSink {
+    let marker: Data
+    let allowedParent: URL
+    func trash(_ url: URL) throws -> URL {
+        guard url.deletingLastPathComponent().deletingLastPathComponent() == allowedParent,
+              UUID(uuidString: url.deletingLastPathComponent().lastPathComponent) != nil else { throw InstallerTrashFailure.protected }
+        let parent = try InstallerDirectoryAnchor.open(url.deletingLastPathComponent())
+        let fd = try InstallerFileDescriptor(parent: parent, name: url.lastPathComponent)
+        let expected = try InstallerFileAccess.snapshot(fd.fd)
+        try InstallerFileAccess.validateRegular(expected)
+        guard expected.bytes == marker.count, try Data(contentsOf: url) == marker,
+              expected == (try InstallerFileAccess.snapshotAt(parent.fd, url.lastPathComponent)) else { throw InstallerTrashFailure.changed }
+        return try NativeInstallerTrashSink().trash(url)
+    }
+}

@@ -15,9 +15,10 @@ final class GitObjectSnapshot {
     private var binaryDigest = ""
     var provenance: String { version + "|" + binaryDigest }
     init(common: InstallerDirectoryAnchor, temporaryRoot: URL? = nil) throws {
-        source = try common.child("objects")
+        let objectDirectory = try common.child("objects")
+        source = objectDirectory
         let objects = GitCleanupCapture(maximumBytes: 256 * 1_024 * 1_024)
-        try GitCleanupInspectionStage.check("object capture") { try objects.collect(source) }
+        try GitCleanupInspectionStage.check("object capture") { try objects.collect(objectDirectory) }
         guard objects.directories.keys.allSatisfy({ $0.isEmpty || $0 == "pack" || $0 == "info" || ($0.count == 2 && $0.utf8.allSatisfy(Self.hex)) }),
               objects.files.keys.allSatisfy(Self.allowedObject) else { throw GitCleanupFailure.unsupported }
         fingerprint = objects.fingerprint

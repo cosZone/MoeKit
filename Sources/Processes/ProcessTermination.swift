@@ -23,11 +23,11 @@ struct ProcessStopResult: Identifiable, Sendable {
 
 protocol ProcessTerminationSystem: Sendable {
     func inspect(_ identities: [ProcessIdentity]) async throws -> ProcessSnapshot
-    func signal(_ record: ProcessInventoryRecord, mode: ProcessStopMode) async throws
+    func signal(_ record: ProcessInventoryRecord, mode: ProcessStopMode, authority: ProcessSignalAuthority) async throws
     func presence(of identity: ProcessIdentity) async -> ProcessPresence
 }
 
-enum ProcessTerminationError: Error, LocalizedError {
+enum ProcessTerminationError: Error, Equatable, LocalizedError {
     case unavailable, changed, protectedTarget, expired, forceNotReviewed, selectionLimit
     var errorDescription: String? {
         switch self {
@@ -50,6 +50,7 @@ actor ProcessTerminationExecutor {
     private var pending: (review: ProcessStopReview, expires: TimeInterval)?
     private var forceEligible: Set<ProcessIdentity> = []
     private var generation: UInt64 = 0
+    private var activeAuthority: ProcessSignalAuthority?
 
     init(system: any ProcessTerminationSystem = NativeProcessTerminationSystem(),
          now: @escaping @Sendable () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }) {
@@ -58,11 +59,13 @@ actor ProcessTerminationExecutor {
 
     func invalidate(clearForceEligibility: Bool = true) {
         generation &+= 1; pending = nil
+        activeAuthority?.revoke()
         if clearForceEligibility { forceEligible = [] }
     }
 
     func prepare(records: [ProcessInventoryRecord], mode: ProcessStopMode) async throws -> ProcessStopReview {
         generation &+= 1
+        activeAuthority?.revoke()
         let request = generation
         pending = nil
         guard (1...16).contains(records.count), Set(records.map(\.identity)).count == records.count,
@@ -86,6 +89,12 @@ actor ProcessTerminationExecutor {
         let request = generation
         guard now() <= authorization.expires else { throw ProcessTerminationError.expired }
         let review = authorization.review
+        let signalAuthority = ProcessSignalAuthority(deadline: authorization.expires, now: now)
+        activeAuthority = signalAuthority
+        defer {
+            signalAuthority.revoke()
+            if activeAuthority === signalAuthority { activeAuthority = nil }
+        }
         let fresh = try await system.inspect(review.records.map(\.identity))
         try Task.checkCancellation()
         guard generation == request, now() <= authorization.expires else { throw ProcessTerminationError.expired }
@@ -98,7 +107,7 @@ actor ProcessTerminationExecutor {
                 continue
             }
             do {
-                try await system.signal(record, mode: review.mode)
+                try await system.signal(record, mode: review.mode, authority: signalAuthority)
                 // Observe only the submitted identity. Exit is not assumed from
                 // successful submission; no automatic escalation or retry.
                 var presence = await system.presence(of: record.identity)
@@ -130,13 +139,39 @@ actor ProcessTerminationExecutor {
         guard !fresh.isPartial, fresh.records.count == records.count else { throw ProcessTerminationError.unavailable }
         for record in records {
             guard record.identity.isComplete, record.identity.executionVersion != nil,
-                  let observed = fresh.records.first(where: { $0.identity == record.identity }), observed == record,
                   record.metadataIssues.isEmpty, record.workingDirectory != nil, record.listeningPorts != nil else {
+                throw ProcessTerminationError.unavailable
+            }
+            guard let observed = fresh.records.first(where: { $0.identity == record.identity }), observed == record else {
                 throw ProcessTerminationError.changed
             }
+            guard let gid = fresh.currentGID, let credentials = record.credentials,
+                  credentials.isOrdinary(uid: fresh.currentUID, gid: gid) else { throw ProcessTerminationError.protectedTarget }
             guard ProcessClassifier.protectionReasons(for: observed, snapshot: fresh).isEmpty else {
                 throw ProcessTerminationError.protectedTarget
             }
+        }
+    }
+}
+
+
+/// Revocation and expiry are checked at the final native sink, not only before
+/// asynchronous preflight. The short lock linearizes revocation with submission;
+/// it cannot retract a signal whose system call has already started.
+final class ProcessSignalAuthority: @unchecked Sendable {
+    private let lock = NSLock()
+    private var valid = true
+    private let deadline: TimeInterval
+    private let now: @Sendable () -> TimeInterval
+    init(deadline: TimeInterval, now: @escaping @Sendable () -> TimeInterval) {
+        self.deadline = deadline; self.now = now
+    }
+    func revoke() { lock.withLock { valid = false } }
+    func submit<T>(_ operation: () throws -> T) throws -> T {
+        try lock.withLock {
+            try Task.checkCancellation()
+            guard valid, now() <= deadline else { throw ProcessTerminationError.expired }
+            return try operation()
         }
     }
 }

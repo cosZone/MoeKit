@@ -1,9 +1,50 @@
+import Darwin
 import Foundation
 import Testing
 @testable import MoeKit
 
 @Suite("Exact process termination confirmation")
 struct ProcessTerminationTests {
+    @Test("Real/effective/saved user/group IDs and set-ID history are all required")
+    func credentials() {
+        var ordinary = proc_bsdinfo()
+        ordinary.pbi_uid = 501; ordinary.pbi_ruid = 501; ordinary.pbi_svuid = 501
+        ordinary.pbi_gid = 20; ordinary.pbi_rgid = 20; ordinary.pbi_svgid = 20
+        #expect(NativeProcessCredentials.read(ordinary).isOrdinary(uid: 501, gid: 20))
+        for field in 0..<7 {
+            var changed = ordinary
+            switch field {
+            case 0: changed.pbi_uid = 0
+            case 1: changed.pbi_ruid = 0
+            case 2: changed.pbi_svuid = 0
+            case 3: changed.pbi_gid = 0
+            case 4: changed.pbi_rgid = 0
+            case 5: changed.pbi_svgid = 0
+            default: changed.pbi_flags = UInt32(PROC_FLAG_PSUGID)
+            }
+            #expect(!NativeProcessCredentials.read(changed).isOrdinary(uid: 501, gid: 20))
+        }
+    }
+
+    @Test("Expiry and revocation during final adapter inspection refuse submission", arguments: [false, true])
+    func finalSinkGuard(revoke: Bool) async throws {
+        let system = GatedStopSystem(holdSignal: true)
+        let clock = StopFixtureClock()
+        let executor = ProcessTerminationExecutor(system: system, now: { clock.read() })
+        let review = try await executor.prepare(records: [stopFixture()], mode: .graceful)
+        let run = Task { try await executor.execute(reviewID: review.id) }
+        for _ in 0..<200 {
+            if await system.isHeld { break }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        #expect(await system.isHeld)
+        if revoke { await executor.invalidate() } else { clock.advance(61) }
+        await system.resume()
+        let results = try await run.value
+        #expect(await system.signals == 0)
+        #expect(results.first?.signalSubmitted == false)
+    }
+
     @Test("Control and direction markers cannot disguise confirmation identities")
     func escapedIdentity() {
         #expect(ProcessDisplayText.escape("/tmp/line\nname\u{202E}txt") == "/tmp/line\\u{A}name\\u{202E}txt")
@@ -57,9 +98,9 @@ struct ProcessTerminationTests {
                     stopFixture(path: "/Applications/Tool.app/Contents/MacOS/worker"),
                     stopFixture(path: "/usr/libexec/worker"), stopFixture(pid: 900), stopFixture(uid: 502),
                     stopFixture(name: "postgres"), stopFixture(path: "/bin/zsh")] {
-            let system = FakeTerminationSystem()
+            let system = FakeTerminationSystem(records: [row])
             let executor = ProcessTerminationExecutor(system: system)
-            await #expect(throws: ProcessTerminationError.self) { try await executor.prepare(records: [row], mode: .graceful) }
+            await #expect(throws: ProcessTerminationError.protectedTarget) { try await executor.prepare(records: [row], mode: .graceful) }
             #expect(await system.sent.isEmpty)
         }
     }
@@ -115,6 +156,82 @@ struct ProcessTerminationTests {
 
 @Suite("Process stop UI coordination") @MainActor
 struct ProcessTerminationStoreTests {
+    @Test("Reset after submission retains ownership and actual outcome until settlement")
+    func resetAfterSubmission() async throws {
+        let system = GatedStopSystem(holdSignal: false)
+        let store = ProcessTerminationStore(executor: ProcessTerminationExecutor(system: system))
+        store.prepare([stopFixture()], mode: .graceful)
+        try await settle { store.review != nil }
+        let id = try #require(store.review?.id)
+        store.acknowledge(reviewID: id, value: true)
+        store.confirm(reviewID: id)
+        for _ in 0..<200 {
+            if await system.isHeld { break }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        #expect(await system.signals == 1)
+        store.reset()
+        #expect(store.isBusy)
+        #expect(store.isExecuting)
+        store.prepare([stopFixture()], mode: .graceful)
+        #expect(store.review == nil)
+        await system.resume()
+        try await settle { !store.isBusy }
+        #expect(store.results.first?.signalSubmitted == true)
+        #expect(store.results.first?.presence == .exited)
+        #expect(store.forceCandidates.isEmpty)
+        store.reset()
+        #expect(store.results.count == 1)
+    }
+
+    @Test("Acknowledgement is exact-nonce authority and never carries to a replacement review")
+    func nonceAcknowledgement() async throws {
+        let system = FakeTerminationSystem()
+        let store = ProcessTerminationStore(executor: ProcessTerminationExecutor(system: system))
+        store.prepare([stopFixture()], mode: .graceful)
+        try await settle { store.review != nil }
+        let old = try #require(store.review?.id)
+        store.acknowledge(reviewID: old, value: true)
+        store.prepare([stopFixture()], mode: .graceful)
+        try await settle { store.review != nil }
+        let fresh = try #require(store.review?.id)
+        #expect(fresh != old)
+        #expect(store.acknowledgedReviewID == nil)
+        store.acknowledge(reviewID: old, value: true)
+        store.confirm(reviewID: old)
+        store.confirm(reviewID: fresh)
+        #expect(await system.sent.isEmpty)
+        store.acknowledge(reviewID: fresh, value: true)
+        store.confirm(reviewID: fresh)
+        try await settle { !store.isBusy }
+        #expect(await system.sent.count == 1)
+    }
+
+    @Test("Mode reset during preparation or final preflight cannot send late signals", arguments: [1, 2])
+    func latePreflight(blockAt: Int) async throws {
+        let system = BlockingTerminationSystem(blockAt: blockAt)
+        let store = ProcessTerminationStore(executor: ProcessTerminationExecutor(system: system))
+        store.prepare([stopFixture()], mode: .graceful)
+        if blockAt == 2 {
+            try await settle { store.review != nil }
+            let id = try #require(store.review?.id)
+            store.acknowledge(reviewID: id, value: true)
+            store.confirm(reviewID: id)
+        }
+        for _ in 0..<200 {
+            if await system.isBlocked { break }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        #expect(await system.isBlocked)
+        store.reset()
+        await system.resume()
+        for _ in 0..<20 { await Task.yield() }
+        #expect(await system.signals == 0)
+        #expect(store.review == nil)
+        #expect(store.results.isEmpty)
+        #expect(!store.isBusy)
+    }
+
     @Test("Double confirm is consumed once; cancelling review never signals")
     func coordinator() async throws {
         let system = FakeTerminationSystem()
@@ -126,6 +243,7 @@ struct ProcessTerminationStoreTests {
         store.prepare([stopFixture()], mode: .graceful)
         try await settle { store.review != nil }
         let id = try #require(store.review?.id)
+        store.acknowledge(reviewID: id, value: true)
         store.confirm(reviewID: id)
         store.confirm(reviewID: id)
         try await settle { !store.isBusy }
@@ -133,7 +251,16 @@ struct ProcessTerminationStoreTests {
         #expect(store.results.count == 1)
         store.reset()
         #expect(store.review == nil)
-        #expect(store.results.isEmpty)
+        #expect(store.results.count == 1)
+        store.prepare([stopFixture(pid: 102)], mode: .graceful)
+        try await settle { store.review != nil }
+        let next = try #require(store.review?.id)
+        #expect(store.review?.records.first?.identity.pid == 102)
+        #expect(store.acknowledgedReviewID == nil)
+        store.acknowledge(reviewID: next, value: true)
+        store.confirm(reviewID: next)
+        try await settle { !store.isBusy }
+        #expect(await system.sent.map(\.pid) == [101, 102])
     }
 
     private func settle(_ predicate: @MainActor () -> Bool) async throws {
@@ -148,6 +275,8 @@ struct ProcessTerminationStoreTests {
 private actor FakeTerminationSystem: ProcessTerminationSystem {
     var sent: [ProcessIdentity] = []
     var modes: [ProcessStopMode] = []
+    private let fixtureRows: [ProcessInventoryRecord]?
+    init(records: [ProcessInventoryRecord]? = nil) { fixtureRows = records }
     private var replacement: ProcessInventoryRecord?
     private var partial = false
     private var running = false
@@ -158,12 +287,12 @@ private actor FakeTerminationSystem: ProcessTerminationSystem {
     func failSignal(for identity: ProcessIdentity) { failIdentity = identity }
     func inspect(_ identities: [ProcessIdentity]) async throws -> ProcessSnapshot {
         ProcessSnapshot(records: identities.map { identity in
-            replacement ?? stopFixture(pid: identity.pid, uid: identity.uid ?? 501, path: identity.executablePath ?? "/tmp/worker", version: identity.executionVersion)
-        }, currentUID: 501, observerPID: 900, isPartial: partial)
+            replacement ?? fixtureRows?.first(where: { $0.identity == identity }) ?? stopFixture(pid: identity.pid, uid: identity.uid ?? 501, path: identity.executablePath ?? "/tmp/worker", version: identity.executionVersion)
+        }, currentUID: 501, observerPID: 900, isPartial: partial, currentGID: 20)
     }
-    func signal(_ record: ProcessInventoryRecord, mode: ProcessStopMode) async throws {
+    func signal(_ record: ProcessInventoryRecord, mode: ProcessStopMode, authority: ProcessSignalAuthority) async throws {
         if record.identity == failIdentity { throw ProcessTerminationError.unavailable }
-        sent.append(record.identity); modes.append(mode)
+        try authority.submit { sent.append(record.identity); modes.append(mode) }
     }
     func presence(of identity: ProcessIdentity) async -> ProcessPresence { running ? .running : .exited }
 }
@@ -172,7 +301,9 @@ private func stopFixture(pid: Int32 = 101, uid: UInt32 = 501, name: String = "wo
                          version: UInt32? = 7, cwd: String = "/tmp/project") -> ProcessInventoryRecord {
     ProcessInventoryRecord(identity: ProcessIdentity(pid: pid, startSeconds: 1_700_000_000, startMicroseconds: 7,
         uid: uid, executablePath: path, executionVersion: version), name: name,
-        parentPID: 42, processGroupID: 42, workingDirectory: cwd, listeningPorts: [])
+        parentPID: 42, processGroupID: 42, workingDirectory: cwd, listeningPorts: [],
+        credentials: ProcessCredentials(realUID: uid, effectiveUID: uid, savedUID: uid,
+            realGID: 20, effectiveGID: 20, savedGID: 20, hasSetIDHistory: false))
 }
 
 private final class StopFixtureClock: @unchecked Sendable {
@@ -180,4 +311,48 @@ private final class StopFixtureClock: @unchecked Sendable {
     private var time: TimeInterval = 0
     func read() -> TimeInterval { lock.withLock { time } }
     func advance(_ value: TimeInterval) { lock.withLock { time += value } }
+}
+
+private actor BlockingTerminationSystem: ProcessTerminationSystem {
+    let blockAt: Int
+    var calls = 0
+    var signals = 0
+    var isBlocked = false
+    private var continuation: CheckedContinuation<Void, Never>?
+    init(blockAt: Int) { self.blockAt = blockAt }
+    func inspect(_ identities: [ProcessIdentity]) async throws -> ProcessSnapshot {
+        calls += 1
+        if calls == blockAt {
+            isBlocked = true
+            await withCheckedContinuation { continuation = $0 }
+        }
+        return ProcessSnapshot(records: [stopFixture()], currentUID: 501, observerPID: 900, currentGID: 20)
+    }
+    func resume() { continuation?.resume(); continuation = nil }
+    func signal(_ record: ProcessInventoryRecord, mode: ProcessStopMode, authority: ProcessSignalAuthority) async throws { try authority.submit { signals += 1 } }
+    func presence(of identity: ProcessIdentity) async -> ProcessPresence { .exited }
+}
+
+private actor GatedStopSystem: ProcessTerminationSystem {
+    let holdSignal: Bool
+    var signals = 0
+    var isHeld = false
+    private var continuation: CheckedContinuation<Void, Never>?
+    init(holdSignal: Bool) { self.holdSignal = holdSignal }
+    func inspect(_ identities: [ProcessIdentity]) async throws -> ProcessSnapshot {
+        ProcessSnapshot(records: [stopFixture()], currentUID: 501, observerPID: 900, currentGID: 20)
+    }
+    func signal(_ record: ProcessInventoryRecord, mode: ProcessStopMode, authority: ProcessSignalAuthority) async throws {
+        if holdSignal { await hold() }
+        try authority.submit { signals += 1 }
+    }
+    func presence(of identity: ProcessIdentity) async -> ProcessPresence {
+        if !holdSignal { await hold() }
+        return .exited
+    }
+    private func hold() async {
+        isHeld = true
+        await withCheckedContinuation { continuation = $0 }
+    }
+    func resume() { continuation?.resume(); continuation = nil }
 }

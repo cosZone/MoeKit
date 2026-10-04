@@ -7,13 +7,20 @@ static volatile sig_atomic_t reexec_requested = 0;
 static void request_reexec(int signal_number) { (void)signal_number; reexec_requested = 1; }
 int main(int argc, char **argv) {
     if (argc != 3) return 2;
+    signal(SIGALRM, SIG_DFL);
+    alarm(30); // bounded fixture lifetime, including failed test setup/cleanup
     if (strcmp(argv[1], "ignore-term") == 0) signal(SIGTERM, SIG_IGN);
     signal(SIGUSR1, request_reexec);
+    sigset_t blocked, previous;
+    sigemptyset(&blocked);
+    sigaddset(&blocked, SIGUSR1);
+    if (sigprocmask(SIG_BLOCK, &blocked, &previous) != 0) return 6;
     int ready = open(argv[2], O_WRONLY | O_CREAT | O_TRUNC, 0600);
     if (ready < 0) return 3;
     if (write(ready, "ready", 5) != 5) return 4;
     close(ready);
-    while (!reexec_requested) pause();
+    while (!reexec_requested) sigsuspend(&previous);
+    if (sigprocmask(SIG_SETMASK, &previous, NULL) != 0) return 7;
     execv(argv[0], argv);
     return 5;
 }

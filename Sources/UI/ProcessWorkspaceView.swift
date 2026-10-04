@@ -24,6 +24,21 @@ struct ProcessWorkspaceView: View {
             } else {
                 VStack(spacing: 0) {
                     snapshotHeader
+                    if inventory.termination.isExecuting {
+                        Label("A confirmed stop is settling. Submitted signals cannot be undone.", systemImage: "hourglass")
+                            .font(.caption).padding(8)
+                    }
+                    if !inventory.termination.results.isEmpty {
+                        DisclosureGroup("Last real stop result") {
+                            ScrollView {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    ForEach(inventory.termination.results) { result in
+                                        Text("PID \(result.record.identity.pid): \(result.message)")
+                                    }
+                                }.frame(maxWidth: .infinity, alignment: .leading)
+                            }.frame(maxHeight: 120)
+                        }.font(.caption).padding(.horizontal, 16)
+                    }
                     Divider()
                     if let error = inventory.errorMessage {
                         Label(error, systemImage: "exclamationmark.triangle")
@@ -290,7 +305,6 @@ struct ProcessStopPlanView: View {
     @Environment(\.dismiss) private var dismiss
     let plan: StopPlan
     let termination: ProcessTerminationStore
-    @State private var acknowledged = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -347,6 +361,7 @@ struct ProcessStopPlanView: View {
                     Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
                 }
                 if !termination.results.isEmpty {
+                    Text("Last real stop result").fontWeight(.medium)
                     ScrollView {
                         VStack(alignment: .leading, spacing: 8) {
                             ForEach(termination.results) { result in
@@ -358,19 +373,36 @@ struct ProcessStopPlanView: View {
                 if let review = termination.review {
                     Text(review.mode == .graceful ? "Confirm graceful stop (SIGTERM)" : "Confirm force stop (SIGKILL)")
                         .fontWeight(.semibold)
+                        .installerCaptureIdentity("process.mode", text: review.mode.rawValue)
                     Text("\(review.records.count) exact targets: \(review.records.map { String($0.identity.pid) }.joined(separator: ", "))")
                         .font(.caption).textSelection(.enabled)
+                        .installerCaptureIdentity("process.targets", text: review.records.map { String($0.identity.pid) }.joined(separator: ", "))
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 6) {
+                            ForEach(review.records) { record in
+                                Text("PID \(record.identity.pid): \(ProcessDisplayText.escape(record.identity.executablePath ?? ProcessPresentation.unknown))")
+                                    .font(.caption).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .installerCaptureIdentity("process.identity.\(record.identity.pid)", text: ProcessDisplayText.escape(record.identity.executablePath ?? ProcessPresentation.unknown))
+                            }
+                        }
+                    }.frame(maxHeight: 80)
                     Text(review.mode == .graceful
                          ? "These processes may stop immediately and lose unsaved work. A process may also stop its own children in response. MoeKit sends no group or descendant signals. This confirmation expires after 60 seconds."
                          : "Force stop prevents cleanup and may lose or corrupt unsaved work. Only the listed still-running identities receive SIGKILL. This confirmation expires after 60 seconds.")
                         .font(.caption).foregroundStyle(.secondary)
-                    Toggle("I checked each listed target and accept these consequences", isOn: $acknowledged)
+                    Toggle("I checked each listed target and accept these consequences", isOn: Binding(
+                        get: { termination.acknowledgedReviewID == review.id },
+                        set: { termination.acknowledge(reviewID: review.id, value: $0) }
+                    )).installerCaptureIdentity("process.acknowledgement", text: String(localized: "I checked each listed target and accept these consequences"))
                     HStack {
                         Button("Cancel confirmation") { termination.cancelReview() }
+                            .installerCaptureIdentity("process.cancel", text: String(localized: "Cancel confirmation"))
                         Spacer()
                         Button(review.mode == .graceful ? "Stop these processes" : "Force stop these processes", role: .destructive) {
                             termination.confirm(reviewID: review.id)
-                        }.disabled(!acknowledged)
+                        }.disabled(termination.acknowledgedReviewID != review.id)
+                            .installerCaptureIdentity("process.confirm", text: review.mode == .graceful ? String(localized: "Stop these processes") : String(localized: "Force stop these processes"))
                     }
                 } else {
                     HStack {
@@ -379,7 +411,7 @@ struct ProcessStopPlanView: View {
                             Button("Review force stop…") {
                                 termination.prepare(termination.forceCandidates, mode: .force)
                             }
-                        } else if termination.results.isEmpty {
+                        } else {
                             Button("Prepare graceful stop…") {
                                 termination.prepare(plan.targets.map(\.record), mode: .graceful)
                             }.disabled(plan.protectedTargetCount > 0 || plan.targets.isEmpty || plan.targets.count != plan.selectedIdentities.count)
@@ -392,7 +424,6 @@ struct ProcessStopPlanView: View {
             }.font(.callout).padding(20)
         }.frame(minWidth: 620, idealWidth: 740, minHeight: 480, idealHeight: 720)
             .interactiveDismissDisabled(termination.isBusy)
-            .onChange(of: termination.review?.id) { _, _ in acknowledged = false }
             .onDisappear { termination.cancelReview() }
     }
 }

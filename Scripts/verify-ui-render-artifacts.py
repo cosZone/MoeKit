@@ -114,6 +114,10 @@ def verify(directory: Path, language: str) -> int:
         for scenario in ("trash-confirmation", "restore-confirmation")
         for appearance in ("light", "dark")
     })
+    expected.update({
+        f"process-stop-{mode}-{language}-{appearance}-740x780": (740, 780)
+        for mode in ("graceful", "force") for appearance in ("light", "dark")
+    })
     manifest = json.loads((directory / "manifest.json").read_text())
     images, scopes = {}, {}
     for test in manifest:
@@ -151,6 +155,10 @@ def verify(directory: Path, language: str) -> int:
             f"Partial-result title: {'部分结果' if language == 'zh-Hans' else 'Partial result'}",
             f"Content size: {width} × {height} points",
         }
+        if name.startswith("process-stop-"):
+            required.update({"Native signals: 0", "Visible required controls: 6",
+                "Confirmation initially acknowledged: false",
+                "Evidence source: public SwiftUI bounds anchors on displayed views"})
         if name.startswith("tool-preparation-"):
             required.add(f"Download copy title: {'复制下载命令' if language == 'zh-Hans' else 'Copy download command'}")
             required.add(f"Tool candidate title: {'已找到 · 未验证' if language == 'zh-Hans' else 'Found · unverified'}")

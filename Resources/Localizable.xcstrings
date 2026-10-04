@@ -6810,6 +6810,26 @@
           }
         }
       }
+    },
+    "Last real stop result": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上次真实停止结果"
+          }
+        }
+      }
+    },
+    "A confirmed stop is settling. Submitted signals cannot be undone.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已确认的停止操作正在核实结果。已提交的信号无法撤销。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

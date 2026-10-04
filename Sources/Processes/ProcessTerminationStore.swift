@@ -4,23 +4,28 @@ import Observation
 @MainActor @Observable
 final class ProcessTerminationStore {
     private(set) var review: ProcessStopReview?
+    private(set) var acknowledgedReviewID: UUID?
     private(set) var results: [ProcessStopResult] = []
     private(set) var isBusy = false
+    private(set) var isExecuting = false
     private(set) var errorMessage: String?
     @ObservationIgnored private let executor: ProcessTerminationExecutor
     @ObservationIgnored private var task: Task<Void, Never>?
     @ObservationIgnored private var invalidationTask: Task<Void, Never>?
     @ObservationIgnored private var requestID: UUID?
+    @ObservationIgnored private var contextGeneration: UInt64 = 0
+    @ObservationIgnored private var mayOfferForce = false
 
     init(executor: ProcessTerminationExecutor = ProcessTerminationExecutor()) { self.executor = executor }
 
     var forceCandidates: [ProcessInventoryRecord] {
-        results.filter { $0.mode == .graceful && $0.signalSubmitted && $0.presence == .running }.map(\.record)
+        guard mayOfferForce else { return [] }
+        return results.filter { $0.mode == .graceful && $0.signalSubmitted && $0.presence == .running }.map(\.record)
     }
 
     func prepare(_ records: [ProcessInventoryRecord], mode: ProcessStopMode) {
         guard !isBusy else { return }
-        review = nil; errorMessage = nil; isBusy = true
+        review = nil; acknowledgedReviewID = nil; errorMessage = nil; isBusy = true
         let id = UUID(); requestID = id
         let invalidation = invalidationTask
         task = Task { [weak self, executor] in
@@ -40,36 +45,50 @@ final class ProcessTerminationStore {
         }
     }
 
-    /// Called only by the destructive confirmation button after the user has
-    /// acknowledged the displayed consequences. A nonce cannot be reused.
-    func confirm(reviewID: UUID) {
+    func acknowledge(reviewID: UUID, value: Bool) {
         guard !isBusy, review?.id == reviewID else { return }
-        review = nil; errorMessage = nil; isBusy = true
+        acknowledgedReviewID = value ? reviewID : nil
+    }
+
+    /// Acknowledgement is bound to this exact nonce, not transient view state.
+    func confirm(reviewID: UUID) {
+        guard !isBusy, review?.id == reviewID, acknowledgedReviewID == reviewID else { return }
+        review = nil; acknowledgedReviewID = nil; errorMessage = nil
+        isBusy = true; isExecuting = true; mayOfferForce = false
         let id = UUID(); requestID = id
+        let context = contextGeneration
         task = Task { [weak self, executor] in
             do {
                 let results = try await executor.execute(reviewID: reviewID)
                 guard let self, self.requestID == id else { return }
-                self.results = results; self.isBusy = false; self.task = nil
+                // Cancellation or mode/navigation changes cannot erase a real
+                // submitted signal. Views show these outcomes only in real mode.
+                self.results = results
+                self.mayOfferForce = self.contextGeneration == context && !Task.isCancelled
+                self.isBusy = false; self.isExecuting = false; self.task = nil
             } catch {
                 guard let self, self.requestID == id else { return }
                 self.errorMessage = (error as? ProcessTerminationError)?.errorDescription
                     ?? String(localized: "The stop was cancelled before signal submission.")
-                self.isBusy = false; self.task = nil
+                self.isBusy = false; self.isExecuting = false; self.task = nil
             }
         }
     }
 
-    func cancelReview(clearResults: Bool = false) {
-        task?.cancel(); task = nil; requestID = nil
-        review = nil; isBusy = false; errorMessage = nil
-        if clearResults { results = [] }
+    func cancelReview(clearForceEligibility: Bool = false) {
+        task?.cancel()
+        review = nil; acknowledgedReviewID = nil; errorMessage = nil
+        if !isExecuting {
+            task = nil; requestID = nil; isBusy = false
+        }
+        if clearForceEligibility { contextGeneration &+= 1; mayOfferForce = false }
         let previous = invalidationTask
         invalidationTask = Task { [executor] in
             await previous?.value
-            await executor.invalidate(clearForceEligibility: clearResults)
+            await executor.invalidate(clearForceEligibility: clearForceEligibility)
         }
     }
 
-    func reset() { cancelReview(clearResults: true) }
+    /// Reset selection authority, not knowledge of an irreversible action.
+    func reset() { cancelReview(clearForceEligibility: true) }
 }

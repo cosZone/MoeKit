@@ -41,6 +41,7 @@ struct ProcessInventoryRecord: Identifiable, Hashable, Sendable {
     /// were observed during a complete descriptor read, not no network activity.
     let listeningPorts: [ListeningPort]?
     var metadataIssues: [String] = []
+    var credentials: ProcessCredentials? = nil
     var id: ProcessIdentity { identity }
 }
 
@@ -52,6 +53,7 @@ struct ProcessSnapshot: Sendable {
     let observerPID: Int32
     var issues: [String] = []
     var isPartial = false
+    var currentGID: UInt32? = nil
 }
 
 struct ProcessScanOptions: Sendable {
@@ -288,7 +290,7 @@ enum ProcessStopPlanner {
                         selectedIdentities: selection, targets: targets, warnings: warnings)
     }
 
-    /// Pure future-executor prerequisite, not permission to act. A successful
+    /// Pure inspection revalidation, not permission to act. A successful
     /// comparison cannot make a later PID-based signal atomic or guarantee safety.
     static func invalidations(for plan: StopPlan, snapshot: ProcessSnapshot, selection: Set<ProcessIdentity>, now: Date = .now) -> Set<StopPlanInvalidation> {
         var result: Set<StopPlanInvalidation> = []
@@ -325,5 +327,21 @@ enum ProcessDisplayText {
             default: return String(scalar)
             }
         }.joined()
+    }
+}
+
+
+struct ProcessCredentials: Hashable, Sendable {
+    let realUID: UInt32
+    let effectiveUID: UInt32
+    let savedUID: UInt32
+    let realGID: UInt32
+    let effectiveGID: UInt32
+    let savedGID: UInt32
+    let hasSetIDHistory: Bool
+
+    func isOrdinary(uid: UInt32, gid: UInt32) -> Bool {
+        uid != 0 && !hasSetIDHistory && realUID == uid && effectiveUID == uid && savedUID == uid
+            && realGID == gid && effectiveGID == gid && savedGID == gid
     }
 }

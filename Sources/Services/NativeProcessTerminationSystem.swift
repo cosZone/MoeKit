@@ -27,7 +27,7 @@ actor NativeProcessTerminationSystem: ProcessTerminationSystem {
     private let inventory = NativeProcessInventoryProvider()
 
     func inspect(_ identities: [ProcessIdentity]) async throws -> ProcessSnapshot {
-        guard geteuid() != 0, geteuid() == getuid() else { throw ProcessTerminationError.protectedTarget }
+        guard geteuid() != 0, geteuid() == getuid(), getegid() == getgid() else { throw ProcessTerminationError.protectedTarget }
         let snapshot = try await inventory.inspectSelected(identities.map(\.pid))
         try Task.checkCancellation()
         let ancestors = try ancestorPIDs()
@@ -35,16 +35,26 @@ actor NativeProcessTerminationSystem: ProcessTerminationSystem {
         return snapshot
     }
 
-    func signal(_ record: ProcessInventoryRecord, mode: ProcessStopMode) async throws {
+    func signal(_ record: ProcessInventoryRecord, mode: ProcessStopMode, authority: ProcessSignalAuthority) async throws {
         let fresh = try await inspect([record.identity])
         try ProcessTerminationExecutor.validate([record], fresh: fresh)
         guard var token = NativeProcessToken.read(pid: record.identity.pid),
               token.val.1 == geteuid(), token.val.3 == getuid(),
               token.val.7 == record.identity.executionVersion else { throw ProcessTerminationError.changed }
+        var bsd = proc_bsdinfo()
+        let size = Int32(MemoryLayout<proc_bsdinfo>.size)
+        guard proc_pidinfo(record.identity.pid, PROC_PIDTBSDINFO, 0, &bsd, size) == size,
+              bsd.pbi_pid == UInt32(record.identity.pid),
+              bsd.pbi_start_tvsec == record.identity.startSeconds, bsd.pbi_start_tvusec == record.identity.startMicroseconds,
+              NativeProcessCredentials.read(bsd) == record.credentials,
+              NativeProcessCredentials.read(bsd).isOrdinary(uid: geteuid(), gid: getegid()),
+              NativeProcessToken.read(pid: record.identity.pid)?.val.7 == token.val.7 else { throw ProcessTerminationError.protectedTarget }
         try Task.checkCancellation()
         // Kernel checks the execution version and retains the exact process.
         // Mutable cwd/listeners may still change; this is not an atomic snapshot.
-        let code = proc_signal_with_audittoken(&token, mode == .graceful ? SIGTERM : SIGKILL)
+        let code = try authority.submit {
+            proc_signal_with_audittoken(&token, mode == .graceful ? SIGTERM : SIGKILL)
+        }
         guard code == 0 else { throw ProcessTerminationError.unavailable }
     }
 
@@ -74,5 +84,14 @@ actor NativeProcessTerminationSystem: ProcessTerminationSystem {
             pid = parent
         }
         throw ProcessTerminationError.unavailable
+    }
+}
+
+
+enum NativeProcessCredentials {
+    static func read(_ info: proc_bsdinfo) -> ProcessCredentials {
+        ProcessCredentials(realUID: info.pbi_ruid, effectiveUID: info.pbi_uid, savedUID: info.pbi_svuid,
+            realGID: info.pbi_rgid, effectiveGID: info.pbi_gid, savedGID: info.pbi_svgid,
+            hasSetIDHistory: info.pbi_flags & UInt32(PROC_FLAG_PSUGID) != 0)
     }
 }

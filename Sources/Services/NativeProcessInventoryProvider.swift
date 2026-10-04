@@ -33,6 +33,7 @@ actor NativeProcessInventoryProvider: ProcessInventoryProviding {
         let name: String
         let parentPID: Int32?
         let processGroupID: Int32?
+        let credentials: ProcessCredentials
     }
 
     func scan(options: ProcessScanOptions) async throws -> ProcessSnapshot {
@@ -112,7 +113,7 @@ actor NativeProcessInventoryProvider: ProcessInventoryProviding {
                 // PID alone is not identity. Recheck the UID, start time and
                 // executable path after all per-process metadata has been read.
                 guard let after = try observation(pid: pid, currentUID: currentUID, deadline: deadline),
-                      before.identity == after.identity else {
+                      before.identity == after.identity, before.credentials == after.credentials else {
                     changedCount += 1
                     isPartial = true
                     continue
@@ -125,7 +126,8 @@ actor NativeProcessInventoryProvider: ProcessInventoryProviding {
                     processGroupID: before.processGroupID,
                     workingDirectory: workingDirectory,
                     listeningPorts: ports,
-                    metadataIssues: metadataIssues
+                    metadataIssues: metadataIssues,
+                    credentials: before.credentials
                 ))
             }
         } catch BudgetExpired.expired {
@@ -148,7 +150,8 @@ actor NativeProcessInventoryProvider: ProcessInventoryProviding {
             currentUID: currentUID,
             observerPID: observerPID,
             issues: issues,
-            isPartial: isPartial
+            isPartial: isPartial,
+            currentGID: getegid()
         )
     }
 
@@ -166,15 +169,15 @@ actor NativeProcessInventoryProvider: ProcessInventoryProviding {
             let cwd = try workingDirectory(pid: pid, deadline: deadline)
             var issues: [String] = []
             let ports = try listeningPorts(pid: pid, maximumDescriptors: 256, deadline: deadline, issues: &issues)
-            guard let after = try observation(pid: pid, currentUID: uid, deadline: deadline), before.identity == after.identity else {
+            guard let after = try observation(pid: pid, currentUID: uid, deadline: deadline), before.identity == after.identity, before.credentials == after.credentials else {
                 throw ProcessTerminationError.changed
             }
             records.append(ProcessInventoryRecord(identity: before.identity, name: before.name,
                 parentPID: before.parentPID, processGroupID: before.processGroupID,
-                workingDirectory: cwd, listeningPorts: ports, metadataIssues: issues))
+                workingDirectory: cwd, listeningPorts: ports, metadataIssues: issues, credentials: before.credentials))
         }
         return ProcessSnapshot(records: records, currentUID: uid, observerPID: getpid(),
-            isPartial: records.contains { !$0.metadataIssues.isEmpty || $0.workingDirectory == nil || $0.listeningPorts == nil })
+            isPartial: records.contains { !$0.metadataIssues.isEmpty || $0.workingDirectory == nil || $0.listeningPorts == nil }, currentGID: getegid())
     }
 
     private func checkBudget(_ deadline: TimeInterval) throws {
@@ -214,7 +217,8 @@ actor NativeProcessInventoryProvider: ProcessInventoryProviding {
             ),
             name: name,
             parentPID: Int32(exactly: info.pbi_ppid),
-            processGroupID: Int32(exactly: info.pbi_pgid)
+            processGroupID: Int32(exactly: info.pbi_pgid),
+            credentials: NativeProcessCredentials.read(info)
         )
     }
 

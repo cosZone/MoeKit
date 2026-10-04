@@ -326,7 +326,7 @@ private struct InstallerCaptureViewportModifier: ViewModifier {
 }
 
 extension View {
-    fileprivate func installerCaptureIdentity(_ id: String, text: String) -> some View {
+    func installerCaptureIdentity(_ id: String, text: String) -> some View {
         modifier(InstallerCaptureIdentityModifier(id: id, text: text))
     }
 

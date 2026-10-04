@@ -9,6 +9,7 @@ final class ProcessTerminationStore {
     private(set) var errorMessage: String?
     @ObservationIgnored private let executor: ProcessTerminationExecutor
     @ObservationIgnored private var task: Task<Void, Never>?
+    @ObservationIgnored private var invalidationTask: Task<Void, Never>?
     @ObservationIgnored private var requestID: UUID?
 
     init(executor: ProcessTerminationExecutor = ProcessTerminationExecutor()) { self.executor = executor }
@@ -21,8 +22,11 @@ final class ProcessTerminationStore {
         guard !isBusy else { return }
         review = nil; errorMessage = nil; isBusy = true
         let id = UUID(); requestID = id
+        let invalidation = invalidationTask
         task = Task { [weak self, executor] in
             do {
+                await invalidation?.value
+                try Task.checkCancellation()
                 let review = try await executor.prepare(records: records, mode: mode)
                 try Task.checkCancellation()
                 guard let self, self.requestID == id else { return }
@@ -56,11 +60,16 @@ final class ProcessTerminationStore {
         }
     }
 
-    func cancelReview() {
+    func cancelReview(clearResults: Bool = false) {
         task?.cancel(); task = nil; requestID = nil
         review = nil; isBusy = false; errorMessage = nil
-        Task { [executor] in await executor.invalidate() }
+        if clearResults { results = [] }
+        let previous = invalidationTask
+        invalidationTask = Task { [executor] in
+            await previous?.value
+            await executor.invalidate(clearForceEligibility: clearResults)
+        }
     }
 
-    func reset() { cancelReview(); results = [] }
+    func reset() { cancelReview(clearResults: true) }
 }

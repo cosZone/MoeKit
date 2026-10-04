@@ -56,7 +56,10 @@ actor ProcessTerminationExecutor {
         self.system = system; self.now = now
     }
 
-    func invalidate() { generation &+= 1; pending = nil; forceEligible = [] }
+    func invalidate(clearForceEligibility: Bool = true) {
+        generation &+= 1; pending = nil
+        if clearForceEligibility { forceEligible = [] }
+    }
 
     func prepare(records: [ProcessInventoryRecord], mode: ProcessStopMode) async throws -> ProcessStopReview {
         generation &+= 1
@@ -89,9 +92,9 @@ actor ProcessTerminationExecutor {
         try Self.validate(review.records, fresh: fresh)
         var results: [ProcessStopResult] = []
         for record in review.records {
-            if Task.isCancelled || generation != request {
+            if Task.isCancelled || generation != request || now() > authorization.expires {
                 results.append(ProcessStopResult(record: record, mode: review.mode, signalSubmitted: false, presence: .unknown,
-                    message: String(localized: "Cancelled before sending a signal to this target.")))
+                    message: String(localized: "Cancelled or expired before sending a signal to this target.")))
                 continue
             }
             do {

@@ -6450,6 +6450,366 @@
           }
         }
       }
+    },
+    "The exact process identity or required metadata could not be verified. No fallback signal is allowed.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法核实精确进程身份或必要元数据，不会改用其他发信号方式。"
+          }
+        }
+      }
+    },
+    "A selected process changed or exited. Scan and review again.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所选进程已变化或退出，请重新扫描并复查。"
+          }
+        }
+      }
+    },
+    "This selection includes a protected application, browser, shared service, system process, or MoeKit ancestor. Remove protected rows before continuing.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所选项包含受保护的应用、浏览器、共享服务、系统进程或 MoeKit 祖先进程。请移除受保护项后继续。"
+          }
+        }
+      }
+    },
+    "This confirmation expired or was already used. Review the exact targets again.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此确认已过期或已经使用，请重新复查精确目标。"
+          }
+        }
+      }
+    },
+    "Force stop is available only for the exact processes still running after your confirmed graceful stop.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "只有你确认正常停止后仍在运行的同一进程身份，才能进一步确认强制停止。"
+          }
+        }
+      }
+    },
+    "Select between 1 and 16 exact processes for one confirmation.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每次确认请选择 1 至 16 个精确进程。"
+          }
+        }
+      }
+    },
+    "Cancelled or expired before sending a signal to this target.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "向此目标发送信号前已取消或过期。"
+          }
+        }
+      }
+    },
+    "Signal submitted; the selected process identity is no longer running.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "信号已提交，所选进程身份已不再运行。"
+          }
+        }
+      }
+    },
+    "Signal submitted; this process is still running. Force stop requires another review and confirmation.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "信号已提交，此进程仍在运行。强制停止需要另行复查并确认。"
+          }
+        }
+      }
+    },
+    "Signal submitted; exit could not be verified. Refresh to inspect the result.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "信号已提交，但无法核实是否退出。请刷新检查结果。"
+          }
+        }
+      }
+    },
+    "No signal submitted: identity, protection, metadata, or operating-system permission check failed.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未提交信号：身份、保护、元数据或系统权限检查未通过。"
+          }
+        }
+      }
+    },
+    "The exact targets could not be prepared. No signal was sent.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法完成精确目标复查，未发送信号。"
+          }
+        }
+      }
+    },
+    "The stop was cancelled before signal submission.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "停止操作在提交信号前已取消。"
+          }
+        }
+      }
+    },
+    "Operating-system executable path is protected.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "操作系统可执行文件路径受保护。"
+          }
+        }
+      }
+    },
+    "Review is not permission to stop. A fresh identity check and explicit confirmation are required.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看计划不代表授权停止，必须重新核实身份并明确确认。"
+          }
+        }
+      }
+    },
+    "Graceful stop sends SIGTERM to exact selected identities. Force stop requires a separate confirmation; signal submission does not prove exit.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正常停止只向精确选择的身份发送 SIGTERM。强制停止需要独立确认；提交信号不代表已经退出。"
+          }
+        }
+      }
+    },
+    "Exact targets · stopping requires confirmation": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "精确目标 · 停止需要确认"
+          }
+        }
+      }
+    },
+    "Inspect exact targets and risks, then prepare a fresh stop confirmation.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看精确目标及风险，然后准备新的停止确认。"
+          }
+        }
+      }
+    },
+    "Review every selected identity and its risks. Protected processes cannot be stopped here.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复查每个所选身份及风险，受保护进程不能在此停止。"
+          }
+        }
+      }
+    },
+    "Execution version": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "执行版本"
+          }
+        }
+      }
+    },
+    "Review exact targets. Preparing a confirmation rechecks current identity and metadata. Protected targets must be removed before stopping.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复查精确目标。准备确认时将重新核实当前身份和元数据，停止前须移除受保护目标。"
+          }
+        }
+      }
+    },
+    "Browsers, applications, shared services, system processes and MoeKit ancestors are protected. Headless browser ownership cannot yet be proved from this metadata. Selecting a row does not authorize stopping it.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "浏览器、应用、共享服务、系统进程及 MoeKit 祖先进程受保护。这些元数据尚不能证明无头浏览器的归属。选中行不代表授权停止。"
+          }
+        }
+      }
+    },
+    "Confirm graceful stop (SIGTERM)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "确认正常停止（SIGTERM）"
+          }
+        }
+      }
+    },
+    "Confirm force stop (SIGKILL)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "确认强制停止（SIGKILL）"
+          }
+        }
+      }
+    },
+    "These processes may stop immediately and lose unsaved work. A process may also stop its own children in response. MoeKit sends no group or descendant signals. This confirmation expires after 60 seconds.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这些进程可能立即停止并丢失未保存的工作；进程自身也可能连带停止其子进程。MoeKit 不向整个组或自动扩展的后代发送信号。此确认在 60 秒后过期。"
+          }
+        }
+      }
+    },
+    "Force stop prevents cleanup and may lose or corrupt unsaved work. Only the listed still-running identities receive SIGKILL. This confirmation expires after 60 seconds.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "强制停止不会等待退出清理，可能丢失或损坏未保存的工作。仅列出的仍在运行身份会收到 SIGKILL。此确认在 60 秒后过期。"
+          }
+        }
+      }
+    },
+    "I checked each listed target and accept these consequences": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "我已核对每个列出目标并接受上述后果"
+          }
+        }
+      }
+    },
+    "Cancel confirmation": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消此次确认"
+          }
+        }
+      }
+    },
+    "Stop these processes": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "停止这些进程"
+          }
+        }
+      }
+    },
+    "Force stop these processes": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "强制停止这些进程"
+          }
+        }
+      }
+    },
+    "Checking targets and observing results…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在核对目标并观察结果…"
+          }
+        }
+      }
+    },
+    "Review force stop…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复查强制停止…"
+          }
+        }
+      }
+    },
+    "Prepare graceful stop…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "准备正常停止…"
+          }
+        }
+      }
+    },
+    "Confirm exact unprotected targets for SIGTERM; force stop requires a separate confirmation. Browser ownership remains unverified.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "对精确的非受保护目标确认 SIGTERM，强制停止需另行确认；浏览器归属仍未核实。"
+          }
+        }
+      }
+    },
+    "PID %d: %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PID %d：%@"
+          }
+        }
+      }
+    },
+    "%lld exact targets: %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 个精确目标：%@"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

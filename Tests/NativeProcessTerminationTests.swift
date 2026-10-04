@@ -12,11 +12,11 @@ struct NativeProcessTerminationTests {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("moekit-stop-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: false)
         defer { try? FileManager.default.removeItem(at: root) }
-        let source = try #require(Bundle(for: ProcessFixtureBundle.self).url(forResource: "ProcessTerminationFixture", withExtension: "c"))
-        let executable = root.appendingPathComponent("owned-worker")
+        let source = try #require(Bundle(for: ProcessFixtureBundle.self).url(forResource: "ProcessTerminationFixtureSource", withExtension: "txt"))
+        let executable = root.resolvingSymlinksInPath().appendingPathComponent("owned-worker")
         let compiler = Process()
         compiler.executableURL = URL(fileURLWithPath: "/usr/bin/clang")
-        compiler.arguments = ["-Wall", "-Wextra", "-Werror", source.path, "-o", executable.path]
+        compiler.arguments = ["-x", "c", "-Wall", "-Wextra", "-Werror", source.path, "-o", executable.path]
         try compiler.run()
         compiler.waitUntilExit()
         #expect(compiler.terminationStatus == 0)

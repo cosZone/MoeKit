@@ -52,7 +52,7 @@ final class ProcessInventoryStore {
     private(set) var unavailableProjectCount = 0
     let termination = ProcessTerminationStore()
     var plan: StopPlan? {
-        didSet { if plan?.id != oldValue?.id { termination.cancelReview() } }
+        didSet { if plan?.id != oldValue?.id { termination.reset() } }
     }
     var errorMessage: String?
     private(set) var projects: [ProcessProjectScope] = []

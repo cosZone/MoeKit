@@ -1,8 +1,8 @@
 import Foundation
 
 /// PID is not an identity. Preserve the kernel's full start timestamp and the
-/// executable observed with it. These fields still do not prove ownership or
-/// detect a same-path re-exec; a future executor needs stronger evidence.
+/// executable observed with it. A kernel execution version is additionally
+/// required for termination; inventory identity still does not prove ownership.
 struct ProcessIdentity: Hashable, Sendable {
     let pid: Int32
     let startSeconds: UInt64?
@@ -227,7 +227,8 @@ struct StopPlanTarget: Identifiable, Sendable {
 }
 
 /// Inspection only. No signal number, group target, executable command or
-/// execution closure is stored in this model; no executor exists in this build.
+/// execution closure is stored here. The separate executor mints fresh one-use
+/// confirmation authority; this inspection model cannot itself execute.
 struct StopPlan: Identifiable, Sendable {
     let id: UUID
     let snapshotID: UUID
@@ -310,5 +311,19 @@ enum ProcessStopPlanner {
             if original.record != fresh { result.insert(.metadataChanged(identity)) }
         }
         return result
+    }
+}
+
+/// Preserve exact spellings without invisible controls changing confirmation
+/// layout or bidirectional order. Escapes are display-only, never signal input.
+enum ProcessDisplayText {
+    static func escape(_ value: String) -> String {
+        value.unicodeScalars.map { scalar in
+            switch scalar.properties.generalCategory {
+            case .control, .format, .lineSeparator, .paragraphSeparator:
+                return String(format: "\\u{%X}", scalar.value)
+            default: return String(scalar)
+            }
+        }.joined()
     }
 }

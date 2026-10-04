@@ -198,6 +198,7 @@ jobs:
             -only-testing:MoeKitTests/ToolPreparationViewTests/testToolPreparationRenders \
             -only-testing:MoeKitTests/MoleAnalysisViewTests/testAnalysisSheetRenders \
             -only-testing:MoeKitTests/InstallerTrashViewTests/testInstallerConfirmationRenders \
+            -only-testing:MoeKitTests/ProcessStopViewTests/testStopConfirmationRenders \
             -resultBundlePath ChineseRenderResults.xcresult
       - name: Check SwiftUI bundle and smoke-launch explicit demo
         run: |
@@ -341,7 +342,10 @@ jobs:
                         -only-testing:MoeKitTests/InstallerFileAccessTests
                         -only-testing:MoeKitTests/InstallerTrashExecutorTests
                         -only-testing:MoeKitTests/InstallerUseEvidenceTests
-                        -only-testing:MoeKitTests/InstallerTrashStoreTests)
+                        -only-testing:MoeKitTests/InstallerTrashStoreTests
+                        -only-testing:MoeKitTests/ProcessTerminationTests
+                        -only-testing:MoeKitTests/ProcessTerminationStoreTests
+                        -only-testing:MoeKitTests/NativeProcessTerminationTests)
           fi
           xcodebuild -project MoeKit.xcodeproj -alltargets -configuration Release \
             ENABLE_TESTABILITY=YES CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= \
@@ -375,7 +379,8 @@ jobs:
                       "CatalogWriteCoordinatorTests", "WorkspaceOperationPrivacyTests",
                       "ToolPreparationTests", "ToolPreparationStoreTests",
                       "MoleAnalysisModelsTests", "MoleAnalysisFilesTests", "MoleAnalysisStoreTests",
-                      "InstallerFileAccessTests", "InstallerTrashExecutorTests", "InstallerUseEvidenceTests", "InstallerTrashStoreTests")
+                      "InstallerFileAccessTests", "InstallerTrashExecutorTests", "InstallerUseEvidenceTests", "InstallerTrashStoreTests",
+                      "ProcessTerminationTests", "ProcessTerminationStoreTests", "NativeProcessTerminationTests")
           if summary.get("passedTests", 0) < 27 or summary.get("failedTests") != 0 or summary.get("skippedTests") != 0:
               raise SystemExit(f"Optimized catalog tests must execute and pass without skips: {summary}")
           if any(suite not in inventory for suite in required):

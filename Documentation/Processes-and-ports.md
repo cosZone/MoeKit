@@ -1,11 +1,11 @@
-# Processes & Ports: read-only milestone
+# Processes & Ports: snapshots and confirmed stopping
 
-This module is an on-demand, local, native macOS inventory. It does not stop a process, launch a command, create a background daemon, poll periodically, or infer that a process is abandoned. The stop-plan sheet is an inspection artifact only; no signal executor exists.
+This module is an on-demand, local, native macOS inventory. It never scans or stops automatically, launches arbitrary commands, creates a background daemon, or infers abandonment. A separate fresh confirmation can now stop exact eligible current-user identities.
 
 ## What is observed
 
 - Readable processes owned by the current effective user; system-wide enumeration is used only to identify that subset
-- PID, kernel start timestamp (seconds and microseconds), UID, executable path, process name, parent PID and process group
+- PID, kernel start timestamp (seconds and microseconds), execution version when available, UID, executable path, process name, parent PID and process group
 - Current working directory and TCP listening socket endpoints, when readable
 - Explicit capture time, partial coverage, per-row metadata limits, and unknown values
 
@@ -19,11 +19,11 @@ Canonical current working directory containment in an already-added project is o
 
 Browser/GUI-app, IDE, shell, database, VM and shared-service hints are highlighted for individual review. These conservative heuristics are not an exhaustive safety guarantee. In particular, a Chrome helper cannot be assumed to be a disposable automation instance. Process groups are never treated as exclusive sessions.
 
-## Inspection plan, not execution
+## Review and separate execution confirmation
 
-The plan preserves exactly the selected identities and their metadata. It never expands a selection to parents, children, or a process group. Changing the visible selection, search, project filter, scan or Demo mode invalidates the open preview. A pure revalidation model covers stale/future snapshots, PID reuse, observed executable-path changes, UID changes, changing metadata, missing processes, selection changes and incomplete snapshots. Its outcome is never permission to signal a PID. A same-path re-exec is not detected by PID/start-time/UID/path comparison; a future executor needs additional exec-generation evidence and cannot use this model alone.
+The inspection plan preserves only the selected identities and metadata; it is not authority to signal anything. A separate executor rereads selected targets, refuses protected/incomplete/changed targets, and creates a one-use 60-second confirmation. Confirmed graceful stop submits SIGTERM through a kernel audit token; only a still-running exact identity can get a separate confirmed SIGKILL review. Names, groups, parents and children never expand targets. Signal submission does not prove exit, and a target's own shutdown can affect dependent work.
 
-Any future executor needs independent review: recompute protections, parent availability and shared-group/dependency risks from the entire fresh snapshot (the pure identity comparison only checks selected records and observer context); fresh identity and ownership checks; exact positive targets; cooperative shutdown before termination; per-target results and observed exits; separately confirmed force escalation; no kill-by-name, negative process-group targets, privileged helper or automatic cleanup. Rechecking a PID identity does not eliminate the check-to-signal race.
+Browser/app, shared-service, system, self and ancestor protections fail closed. Dedicated headless browser sessions remain unsupported because current evidence cannot establish ownership. No argv/environment/profile collection or privilege expansion is introduced. See [identity mechanism, limits and tests](Process-termination-design.md).
 
 ## Lifetime and privacy
 
@@ -43,6 +43,6 @@ Association details distinguish unreadable/unresolved working directories, no us
 
 A refresh clears the old selection and inspection plan. The previous snapshot stays visible with an explicit notice during refresh and after cancellation/failure, and a successful scan replaces it. Selection in the table is disabled during a scan. Cancelled and failed first scans have distinct empty states; a late result/error from cancelled work cannot replace the current state. Port/search/project filter changes constrain selection and invalidate the inspection plan; clearing filters never selects additional targets.
 
-The plan counts protected targets separately from other review warnings and retains exact association evidence. Protection flags are conservative hints, not authorization to stop other targets. This change adds no signal executor, no ownership assertion, no argv/environment inspection, and no background scanning.
+The plan counts protected targets separately from other review warnings and retains exact association evidence. Protection flags are conservative hints, not authorization to stop other targets. Stopping adds no ownership assertion, argv/environment inspection or background scanning. It requires its own fresh confirmation after inspection.
 
 Manual native acceptance still required: use synthetic/approved fixtures to check the port control and local-address search; cancel both first and refresh scans; retry after a provider error; confirm old rows carry their old timestamp; change filters with an open plan; switch Demo modes while scanning; check narrow-window layout and VoiceOver names. Automated fixture tests do not establish real libproc permission coverage or visual acceptance.

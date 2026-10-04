@@ -151,7 +151,7 @@ struct ProcessWorkspaceView: View {
             }.width(min: 120, ideal: 145, max: 200)
         }
         .tableStyle(.inset(alternatesRowBackgrounds: true))
-        .disabled(inventory.isScanning)
+        .disabled(inventory.isScanning || inventory.termination.isBusy)
         .overlay {
             if inventory.rows.isEmpty {
                 ContentUnavailableView {
@@ -281,12 +281,12 @@ private struct ProcessDetailRow: View {
     var body: some View {
         GridRow(alignment: .top) {
             Text(title).foregroundStyle(.secondary)
-            Text(value).frame(maxWidth: .infinity, alignment: .leading)
+            Text(ProcessDisplayText.escape(value)).frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }
 
-private struct ProcessStopPlanView: View {
+struct ProcessStopPlanView: View {
     @Environment(\.dismiss) private var dismiss
     let plan: StopPlan
     let termination: ProcessTerminationStore
@@ -346,8 +346,14 @@ private struct ProcessStopPlanView: View {
                 if let error = termination.errorMessage {
                     Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
                 }
-                ForEach(termination.results) { result in
-                    Text("PID \(result.record.identity.pid): \(result.message)").font(.caption).textSelection(.enabled)
+                if !termination.results.isEmpty {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 8) {
+                            ForEach(termination.results) { result in
+                                Text("PID \(result.record.identity.pid): \(result.message)").font(.caption).textSelection(.enabled)
+                            }
+                        }.frame(maxWidth: .infinity, alignment: .leading)
+                    }.frame(maxHeight: 150)
                 }
                 if let review = termination.review {
                     Text(review.mode == .graceful ? "Confirm graceful stop (SIGTERM)" : "Confirm force stop (SIGKILL)")
@@ -368,7 +374,7 @@ private struct ProcessStopPlanView: View {
                     }
                 } else {
                     HStack {
-                        if termination.isBusy { ProgressView().controlSize(.small); Text("Checking exact targets…") }
+                        if termination.isBusy { ProgressView().controlSize(.small); Text("Checking targets and observing results…") }
                         else if !termination.forceCandidates.isEmpty {
                             Button("Review force stop…") {
                                 termination.prepare(termination.forceCandidates, mode: .force)

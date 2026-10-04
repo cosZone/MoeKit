@@ -4,6 +4,12 @@ import Testing
 
 @Suite("Exact process termination confirmation")
 struct ProcessTerminationTests {
+    @Test("Control and direction markers cannot disguise confirmation identities")
+    func escapedIdentity() {
+        #expect(ProcessDisplayText.escape("/tmp/line\nname\u{202E}txt") == "/tmp/line\\u{A}name\\u{202E}txt")
+        #expect(ProcessDisplayText.escape("/tmp/项目") == "/tmp/项目")
+    }
+
     @Test("Preparation never sends; each confirmation is single use")
     func oneUse() async throws {
         let system = FakeTerminationSystem()

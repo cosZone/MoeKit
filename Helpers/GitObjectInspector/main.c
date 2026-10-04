@@ -225,6 +225,9 @@ int main(int argc, char **argv) {
                           {STDIN_FILENO, POLLIN, 0}, {ready[0], POLLIN, 0}};
     int result = 0;
     bool child_ready = false, child_exited = false, not_ancestor = false;
+#ifdef __APPLE__
+    double missing_metrics_since = -1;
+#endif
     while (!result) {
         if (cancelled) { result = CANCELLED; break; }
         double current = now();

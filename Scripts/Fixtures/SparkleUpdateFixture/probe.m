@@ -10,7 +10,28 @@
 #import <unistd.h>
 #import <errno.h>
 #import <string.h>
+#import <stdlib.h>
+#import <limits.h>
 
+// POSIX physical paths are identity inputs; Foundation standardization may
+// intentionally remove /private and must not be used for identity comparisons.
+static NSString *physicalPath(NSString *path) {
+    if (![path hasPrefix:@"/"] || [path lengthOfBytesUsingEncoding:NSUTF8StringEncoding] >= PATH_MAX) return nil;
+    char resolved[PATH_MAX];
+    return realpath(path.fileSystemRepresentation, resolved) ? [NSString stringWithUTF8String:resolved] : nil;
+}
+static BOOL parseIdentity(const char *value, uint64_t *result) {
+    if (!value[0]) return NO;
+    for (const char *p = value; *p; p++) if (*p < '0' || *p > '9') return NO;
+    errno = 0; char *end = NULL;
+    unsigned long long number = strtoull(value, &end, 10);
+    if (errno || !end || *end) return NO;
+    *result = number; return YES;
+}
+static BOOL sameRoot(struct stat a, struct stat b) {
+    return a.st_dev == b.st_dev && a.st_ino == b.st_ino && S_ISDIR(a.st_mode) && S_ISDIR(b.st_mode) &&
+        a.st_uid == geteuid() && b.st_uid == geteuid() && (a.st_mode & 0777) == 0700 && (b.st_mode & 0777) == 0700;
+}
 static BOOL sameProcess(struct proc_bsdinfo a, struct proc_bsdinfo b) {
     return a.pbi_pid == b.pbi_pid && a.pbi_uid == b.pbi_uid && a.pbi_ruid == b.pbi_ruid &&
         a.pbi_start_tvsec == b.pbi_start_tvsec && a.pbi_start_tvusec == b.pbi_start_tvusec;
@@ -21,34 +42,44 @@ static int fail(NSString *reason) {
 }
 int main(int argc, const char *argv[]) {
     @autoreleasepool {
-        if (argc != 5 || geteuid() == 0 || ![NSProcessInfo.processInfo.environment[@"GITHUB_ACTIONS"] isEqualToString:@"true"] ||
+        if (argc != 7 || geteuid() == 0 || ![NSProcessInfo.processInfo.environment[@"GITHUB_ACTIONS"] isEqualToString:@"true"] ||
             ![NSProcessInfo.processInfo.environment[@"RUNNER_ENVIRONMENT"] isEqualToString:@"github-hosted"]) return fail(@"CI gate");
-        NSString *root = [NSString stringWithUTF8String:argv[1]], *identifier = [NSString stringWithUTF8String:argv[2]];
+        NSString *namedRoot = [NSString stringWithUTF8String:argv[1]], *identifier = [NSString stringWithUTF8String:argv[2]];
         NSString *marker = [NSString stringWithUTF8String:argv[3]];
         NSRegularExpression *markerPattern = [NSRegularExpression regularExpressionWithPattern:@"^[a-f0-9]{32}$" options:0 error:NULL];
         NSRegularExpression *identifierPattern = [NSRegularExpression regularExpressionWithPattern:@"^org\\.moekit\\.CIFixture\\.r[a-f0-9]{32}\\.[a-z]+$" options:0 error:NULL];
-        if ([markerPattern numberOfMatchesInString:marker options:0 range:NSMakeRange(0, marker.length)] != 1 ||
-            [identifierPattern numberOfMatchesInString:identifier options:0 range:NSMakeRange(0, identifier.length)] != 1 ||
-            ![identifier hasPrefix:[@"org.moekit.CIFixture.r" stringByAppendingFormat:@"%@.", marker]] ||
-            ![root.lastPathComponent hasPrefix:@"moekit-sparkle-"] ||
-            ![root isEqualToString:root.stringByResolvingSymlinksInPath]) return fail(@"fixture identity");
-        struct stat before, after;
-        if (lstat(root.fileSystemRepresentation, &before) || !S_ISDIR(before.st_mode) || before.st_uid != geteuid() ||
-            (before.st_mode & 0777) != 0700) return fail(@"root identity");
-        int rootFD = open(root.fileSystemRepresentation, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
-        if (rootFD < 0) return fail(@"root descriptor");
+        if ([markerPattern numberOfMatchesInString:marker options:0 range:NSMakeRange(0, marker.length)] != 1) return fail(@"marker syntax");
+        if ([identifierPattern numberOfMatchesInString:identifier options:0 range:NSMakeRange(0, identifier.length)] != 1 ||
+            ![identifier hasPrefix:[@"org.moekit.CIFixture.r" stringByAppendingFormat:@"%@.", marker]]) return fail(@"bundle identifier");
+        NSString *caseName = nil;
+        for (NSString *candidate in @[@"valid", @"tampered-feed", @"tampered-archive", @"wrong-key", @"invalid-archive", @"cancel",
+            @"equal-version", @"older-version", @"preview-filtered", @"preview-allowed"]) {
+            if ([identifier hasSuffix:[@"." stringByAppendingString:[candidate stringByReplacingOccurrencesOfString:@"-" withString:@""]]]) caseName = candidate;
+        }
+        if (!caseName) return fail(@"case identifier");
+        uint64_t expectedDevice = 0, expectedInode = 0;
+        if (!parseIdentity(argv[4], &expectedDevice) || !parseIdentity(argv[5], &expectedInode)) return fail(@"root identity syntax");
+        NSString *root = physicalPath(namedRoot);
+        if (!root || ![root.lastPathComponent hasPrefix:@"moekit-sparkle-"]) return fail(@"root physical path");
+        struct stat before, after, named, pinned;
+        if (lstat(root.fileSystemRepresentation, &before) || lstat(namedRoot.fileSystemRepresentation, &named) ||
+            !sameRoot(before, named) || (uint64_t)before.st_dev != expectedDevice || (uint64_t)before.st_ino != expectedInode)
+            return fail(@"root identity");
+        int rootFD = open(namedRoot.fileSystemRepresentation, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+        if (rootFD < 0 || fstat(rootFD, &pinned) || !sameRoot(before, pinned)) return fail(@"root descriptor");
         int markerFD = openat(rootFD, "owner-marker", O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC);
         char markerBytes[33] = {0}; struct stat markerInfo;
         BOOL markerValid = markerFD >= 0 && !fstat(markerFD, &markerInfo) && S_ISREG(markerInfo.st_mode) &&
             markerInfo.st_nlink == 1 && markerInfo.st_uid == geteuid() && read(markerFD, markerBytes, sizeof(markerBytes)) == 32 &&
             [marker isEqualToString:[[NSString alloc] initWithBytes:markerBytes length:32 encoding:NSUTF8StringEncoding]];
         if (markerFD >= 0) close(markerFD);
-        close(rootFD);
         if (!markerValid) return fail(@"owner marker");
         NSString *prefix = [root stringByAppendingString:@"/"];
-        NSString *cache = [NSHomeDirectory() stringByAppendingPathComponent:[@"Library/Caches" stringByAppendingPathComponent:identifier]];
+        NSString *cacheParent = physicalPath([NSHomeDirectory() stringByAppendingPathComponent:@"Library/Caches"]);
+        if (!cacheParent) return fail(@"cache parent physical path");
+        NSString *cache = [cacheParent stringByAppendingPathComponent:identifier];
         NSString *cachePrefix = [cache stringByAppendingString:@"/"];
-        NSData *trackedData = [[NSString stringWithUTF8String:argv[4]] dataUsingEncoding:NSUTF8StringEncoding];
+        NSData *trackedData = [[NSString stringWithUTF8String:argv[6]] dataUsingEncoding:NSUTF8StringEncoding];
         NSArray *tracked = [NSJSONSerialization JSONObjectWithData:trackedData options:0 error:NULL];
         if (![tracked isKindOfClass:NSArray.class] || tracked.count > 32) return fail(@"tracked identity input");
         for (NSDictionary *entry in tracked) {
@@ -85,22 +116,25 @@ int main(int argc, const char *argv[]) {
             // A stable zombie cannot execute or launch more fixture helpers.
             // The Python owner separately reaps its original direct child.
             if (second.pbi_status == SZOMB) continue;
-            if (pathLength <= 0 || pathLength >= (int)sizeof(path)) return fail(@"process executable unavailable");
-            NSString *executable = [NSString stringWithUTF8String:path];
-            if (!executable) return fail(@"process executable encoding");
             NSDictionary *known = nil;
             for (NSDictionary *entry in tracked) {
                 if ([entry[@"pid"] intValue] == pids[i] && [entry[@"uid"] unsignedIntValue] == first.pbi_uid &&
                     [entry[@"start_seconds"] unsignedLongLongValue] == first.pbi_start_tvsec &&
                     [entry[@"start_microseconds"] unsignedLongLongValue] == first.pbi_start_tvusec) { known = entry; break; }
             }
-            if ([executable hasPrefix:prefix] || [executable hasPrefix:cachePrefix] || known) {
+            NSString *executable = pathLength > 0 && pathLength < (int)sizeof(path) ? [NSString stringWithUTF8String:path] : nil;
+            if (!executable && !known) return fail(@"process executable unavailable");
+            // Keep known identities alive even after replacement unlinks or
+            // relocates the old executable. Canonicalization never erases them.
+            NSString *physicalExecutable = physicalPath(executable);
+            if (!physicalExecutable && !known) return fail(@"executable physical path unavailable");
+            if ([physicalExecutable hasPrefix:prefix] || [physicalExecutable hasPrefix:cachePrefix] || known) {
                 NSString *role = known ? known[@"role"] :
-                    [executable hasSuffix:@"/Sparkle.framework/Versions/B/Autoupdate"] ? @"installer" :
-                    [executable hasSuffix:@"/Updater.app/Contents/MacOS/Updater"] ? @"progress-agent" : @"fixture-process";
+                    [physicalExecutable hasSuffix:@"/Sparkle.framework/Versions/B/Autoupdate"] ? @"installer" :
+                    [physicalExecutable hasSuffix:@"/Updater.app/Contents/MacOS/Updater"] ? @"progress-agent" : @"fixture-process";
                 [processes addObject:@{@"pid": @(pids[i]), @"uid": @(first.pbi_uid),
                     @"start_seconds": @(first.pbi_start_tvsec), @"start_microseconds": @(first.pbi_start_tvusec),
-                    @"role": role, @"scope": known ? @"tracked-identity" : [executable hasPrefix:prefix] ? @"owned-root" : @"exact-fixture-cache"}];
+                    @"role": role, @"scope": known ? @"tracked-identity" : [physicalExecutable hasPrefix:prefix] ? @"owned-root" : @"exact-fixture-cache"}];
             }
         }
         }
@@ -124,7 +158,12 @@ int main(int argc, const char *argv[]) {
         NSUInteger liveApps = 0;
         for (NSRunningApplication *application in applications) {
             if (application.terminated) continue;
-            if (!application.bundleURL || ![application.bundleURL.path hasPrefix:prefix] ||
+            NSString *expectedApp = [root stringByAppendingPathComponent:[caseName stringByAppendingPathComponent:@"Installed/SparkleFixture.app"]];
+            NSString *physicalApp = application.bundleURL ? physicalPath(application.bundleURL.path) : nil;
+            struct stat appInfo;
+            if (!physicalApp || ![physicalApp isEqualToString:expectedApp] ||
+                ![physicalPath(expectedApp) isEqualToString:expectedApp] || lstat(expectedApp.fileSystemRepresentation, &appInfo) ||
+                !S_ISDIR(appInfo.st_mode) || appInfo.st_uid != geteuid() ||
                 ![application.bundleIdentifier isEqualToString:identifier]) return fail(@"app identity mismatch");
             liveApps++;
         }
@@ -143,8 +182,9 @@ int main(int argc, const char *argv[]) {
             } else if (status == BOOTSTRAP_UNKNOWN_SERVICE) services[suffix] = @"absent";
             else return fail(@"bootstrap lookup uncertain");
         }
-        if (lstat(root.fileSystemRepresentation, &after) || before.st_dev != after.st_dev || before.st_ino != after.st_ino ||
-            after.st_uid != geteuid() || !S_ISDIR(after.st_mode) || (after.st_mode & 0777) != 0700) return fail(@"root changed");
+        if (lstat(root.fileSystemRepresentation, &after) || lstat(namedRoot.fileSystemRepresentation, &named) ||
+            fstat(rootFD, &pinned) || !sameRoot(before, after) || !sameRoot(before, named) || !sameRoot(before, pinned)) return fail(@"root changed");
+        close(rootFD);
         NSDictionary *result = @{@"schema": @1, @"bundle_id": identifier, @"uid": @(geteuid()), @"app_count": @(liveApps),
             @"owned_processes": processes, @"services": services, @"idle": @(absent && liveApps == 0 && processes.count == 0)};
         NSData *json = [NSJSONSerialization dataWithJSONObject:result options:NSJSONWritingSortedKeys error:NULL];

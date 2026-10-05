@@ -269,7 +269,7 @@ class Lifetime:
                 self.tracked[identity] = {key: event[key] for key in ("pid", "uid", "start_seconds", "start_microseconds")}
                 self.tracked[identity]["role"] = "fixture-host"
         output = run([self.probe, self.owned.path, self.bundle_id, self.owned.marker,
-                      json.dumps(list(self.tracked.values()), separators=(",", ":"))], timeout=5, transient_exit=3)
+                      str(self.owned.identity.st_dev), str(self.owned.identity.st_ino), json.dumps(list(self.tracked.values()), separators=(",", ":"))], timeout=5, transient_exit=3)
         self.owned.verify()
         if output is None:
             # Process births during enumeration do not establish either
@@ -289,6 +289,38 @@ class Lifetime:
         self.snapshots += 1
         self.owned.verify()
         return snapshot
+
+
+def preflight_probe(owned, probe):
+    """Exercise physical/system-alias identity before launching any updater."""
+    identifier = f"org.moekit.CIFixture.r{owned.marker}.valid"
+    arguments = [identifier, owned.marker, str(owned.identity.st_dev), str(owned.identity.st_ino), "[]"]
+    paths = [owned.path]
+    physical = str(owned.path)
+    if physical.startswith("/private/"):
+        alias = Path(physical[len("/private"):])
+        require(alias.is_dir() and os.path.samefile(alias, owned.path), "System alias did not resolve to owned root")
+        paths.append(alias)
+    require(len(paths) == 2, "macOS private-path alias regression was not exercised")
+    for path in paths:
+        owned.verify()
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            result = run([probe, path, *arguments], timeout=5, transient_exit=3)
+            owned.verify()
+            if result is not None: break
+        else: raise RuntimeError("Native alias preflight inventory did not settle")
+        snapshot = json.loads(result)
+        require(snapshot.get("idle") is True and snapshot.get("bundle_id") == identifier,
+                "Native alias preflight did not establish empty owned fixture")
+    # A matching path spelling cannot substitute for the pinned directory inode.
+    rejected = subprocess.run([str(probe), str(owned.path), identifier, owned.marker,
+                               str(owned.identity.st_dev), str(owned.identity.st_ino + 1), "[]"],
+                              stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=5)
+    owned.verify()
+    require(rejected.returncode == 2 and rejected.stderr.strip() == b"Fixture lifetime probe unknown: root identity",
+            "Native root identity mismatch was not specifically refused")
+    return {"physical_and_system_alias": True, "mismatched_inode_rejected": True}
 
 
 def collect_cases(names, callback, evidence):
@@ -490,6 +522,7 @@ def main():
         probe = owned.path / "FixtureLifetimeProbe"
         run(["/usr/bin/xcrun", "clang", "-fobjc-arc", "-fmodules", "-Wall", "-Wextra", "-Werror", "-Wno-unused-parameter",
              "-mmacosx-version-min=15.0", "-framework", "AppKit", ROOT / "Scripts/Fixtures/SparkleUpdateFixture/probe.m", "-o", probe])
+        evidence["probe_preflight"] = preflight_probe(owned, probe)
         entitlements = owned.path / "empty-entitlements.plist"
         write_new(entitlements, plistlib.dumps({}))
         test_key, other_key = owned.path / "PUBLIC-RFC8032-vector1.txt", owned.path / "PUBLIC-RFC8032-vector2.txt"

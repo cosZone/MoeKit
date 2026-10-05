@@ -7,6 +7,7 @@ from pathlib import Path
 import sys
 import unittest
 from unittest import mock
+from types import SimpleNamespace
 import urllib.error
 import urllib.request
 
@@ -200,6 +201,50 @@ class HarnessBoundaryTests(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, "marker"): lifetime.sample([])
         finally:
             fixture.os.close(root.fd)
+
+    def test_native_alias_preflight_preserves_pinned_identity_arguments(self):
+        root = SimpleNamespace(path=Path("/private/var/folders/owned/moekit-sparkle-fixture"), marker="c" * 32,
+                               identity=SimpleNamespace(st_dev=7, st_ino=19), verify=mock.Mock())
+        identifier = "org.moekit.CIFixture.r" + root.marker + ".valid"
+        success = json.dumps({"idle": True, "bundle_id": identifier})
+        refusal = SimpleNamespace(returncode=2, stderr=b"Fixture lifetime probe unknown: root identity\n")
+        with mock.patch.object(Path, "is_dir", return_value=True), mock.patch.object(fixture.os.path, "samefile", return_value=True), \
+             mock.patch.object(fixture, "run", return_value=success) as native, \
+             mock.patch.object(fixture.subprocess, "run", return_value=refusal) as mismatch:
+            result = fixture.preflight_probe(root, "/not-executed")
+        self.assertTrue(result["physical_and_system_alias"])
+        self.assertEqual(str(native.call_args_list[0].args[0][1]), str(root.path))
+        self.assertEqual(str(native.call_args_list[1].args[0][1]), "/var/folders/owned/moekit-sparkle-fixture")
+        for call in native.call_args_list:
+            self.assertEqual(call.args[0][4:6], ["7", "19"])
+        self.assertEqual(mismatch.call_args.args[0][4:6], ["7", "20"])
+
+    def test_alias_preflight_rejects_wrong_namespace_before_native_probe(self):
+        root = SimpleNamespace(path=Path("/private/var/folders/owned/moekit-sparkle-fixture"), marker="c" * 32,
+                               identity=SimpleNamespace(st_dev=7, st_ino=19), verify=mock.Mock())
+        with mock.patch.object(Path, "is_dir", return_value=True), mock.patch.object(fixture.os.path, "samefile", return_value=False), \
+             mock.patch.object(fixture, "run") as native:
+            with self.assertRaisesRegex(RuntimeError, "System alias"): fixture.preflight_probe(root, "/not-executed")
+            native.assert_not_called()
+
+    def test_native_probe_uses_physical_identity_not_foundation_spelling(self):
+        source = (Path(__file__).parent / "probe.m").read_text()
+        self.assertNotIn("stringByResolvingSymlinksInPath", source)
+        self.assertIn("realpath(path.fileSystemRepresentation", source)
+        self.assertIn("before.st_dev != expectedDevice", source)
+        self.assertIn("before.st_ino != expectedInode", source)
+        self.assertIn("fstat(rootFD, &pinned)", source)
+        self.assertIn("[physicalApp isEqualToString:expectedApp]", source)
+        self.assertNotIn("[application.bundleURL.path hasPrefix:prefix]", source)
+
+    def test_tracked_native_identity_is_not_discarded_when_old_path_is_gone(self):
+        source = (Path(__file__).parent / "probe.m").read_text()
+        self.assertIn('if (!executable && !known) return fail(@"process executable unavailable")', source)
+        self.assertLess(source.index("NSDictionary *known = nil"), source.index("if (!executable && !known)"))
+        self.assertIn('if (!physicalExecutable && !known) return fail(@"executable physical path unavailable")', source)
+        self.assertIn('[physicalExecutable hasPrefix:cachePrefix] || known)', source)
+        self.assertIn('NSString *role = known ? known[@"role"]', source)
+        self.assertIn('known ? @"tracked-identity"', source)
 
     def test_native_source_uses_real_cancel_and_install_checkpoint(self):
         source = (Path(__file__).parent / "main.m").read_text()

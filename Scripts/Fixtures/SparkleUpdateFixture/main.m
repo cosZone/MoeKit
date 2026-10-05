@@ -7,12 +7,15 @@
 #import <signal.h>
 #import <stdlib.h>
 #import <limits.h>
+#import <libproc.h>
+#import <errno.h>
 
 static NSDictionary *configuration;
 static int rootFD = -1;
 static int eventsFD = -1;
 static struct stat pinnedRoot;
 static NSString *caseName;
+static struct stat pinnedEvents;
 
 static BOOL intact(void) {
     struct stat pinned, named, markerInfo;
@@ -43,13 +46,23 @@ static BOOL intact(void) {
     close(caseFD); if (installedFD >= 0) close(installedFD);
     NSString *expected = [root stringByAppendingPathComponent:[caseName stringByAppendingPathComponent:@"Installed/SparkleFixture.app"]];
     char expectedPath[PATH_MAX], actualPath[PATH_MAX];
-    return valid && namespaceIntact && realpath(expected.fileSystemRepresentation, expectedPath) &&
+    struct stat eventInfo, namedEvent;
+    NSString *eventPath = [root stringByAppendingPathComponent:[caseName stringByAppendingPathComponent:@"events.jsonl"]];
+    BOOL logIntact = eventsFD < 0 || (!fstat(eventsFD, &eventInfo) && !lstat(eventPath.fileSystemRepresentation, &namedEvent) &&
+        S_ISREG(namedEvent.st_mode) && namedEvent.st_nlink == 1 && namedEvent.st_uid == geteuid() &&
+        eventInfo.st_dev == pinnedEvents.st_dev && eventInfo.st_ino == pinnedEvents.st_ino &&
+        namedEvent.st_dev == pinnedEvents.st_dev && namedEvent.st_ino == pinnedEvents.st_ino);
+    return valid && namespaceIntact && logIntact && realpath(expected.fileSystemRepresentation, expectedPath) &&
         realpath(NSBundle.mainBundle.bundlePath.fileSystemRepresentation, actualPath) && !strcmp(expectedPath, actualPath);
 }
 
 static void event(NSString *name, NSDictionary *extra) {
     if (!intact()) _exit(90);
-    NSMutableDictionary *value = [@{@"event": name, @"version": configuration[@"CFBundleVersion"], @"case": caseName} mutableCopy];
+    struct proc_bsdinfo process = {0};
+    if (proc_pidinfo(getpid(), PROC_PIDTBSDINFO, 0, &process, sizeof(process)) != sizeof(process)) _exit(95);
+    NSMutableDictionary *value = [@{@"event": name, @"version": configuration[@"CFBundleVersion"], @"case": caseName,
+        @"pid": @(getpid()), @"uid": @(geteuid()), @"start_seconds": @(process.pbi_start_tvsec),
+        @"start_microseconds": @(process.pbi_start_tvusec)} mutableCopy];
     [value addEntriesFromDictionary:extra ?: @{}];
     NSData *data = [NSJSONSerialization dataWithJSONObject:value options:NSJSONWritingSortedKeys error:NULL];
     if (!data || write(eventsFD, data.bytes, data.length) != (ssize_t)data.length || write(eventsFD, "\n", 1) != 1 || fsync(eventsFD)) _exit(91);
@@ -63,6 +76,11 @@ static void finish(NSString *name, NSDictionary *extra) {
 @interface FixtureDriver : NSObject <NSApplicationDelegate, SPUUpdaterDelegate, SPUUserDriver>
 @property(nonatomic, strong) SPUUpdater *updater;
 @property(nonatomic) uint64_t downloadedBytes;
+@property(nonatomic) uint64_t expectedBytes;
+@property(nonatomic, copy) void (^cancelDownload)(void);
+@property(nonatomic) BOOL cancellationRequested;
+@property(nonatomic, copy) void (^installReply)(SPUUserUpdateChoice);
+- (void)awaitInstallerCheckpoint;
 @end
 @implementation FixtureDriver
 - (void)applicationDidFinishLaunching:(NSNotification *)notification {
@@ -118,7 +136,9 @@ static void finish(NSString *name, NSDictionary *extra) {
     event(@"feed_loaded", @{@"signature_verified": @(verified)});
 }
 - (void)updater:(SPUUpdater *)updater didExtractUpdate:(SUAppcastItem *)item {
-    (void)updater; (void)item; event(@"extraction_completed", @{});
+    (void)updater; (void)item; // In Sparkle 2.10.0 this callback means installer startup completed,
+    // not successful archive validation or extraction.
+    event(@"installer_started", @{});
 }
 - (void)updater:(SPUUpdater *)updater willInstallUpdate:(SUAppcastItem *)item {
     (void)updater; (void)item;
@@ -133,8 +153,8 @@ static void finish(NSString *name, NSDictionary *extra) {
 - (void)showUpdateFoundWithAppcastItem:(SUAppcastItem *)item state:(SPUUserUpdateState *)state reply:(void (^)(SPUUserUpdateChoice))reply {
     (void)state;
     event(@"found", @{@"offered_version": item.versionString, @"signature_verified": @(item.signingValidationStatus == SPUAppcastSigningValidationStatusSucceeded)});
-    if ([caseName isEqualToString:@"cancel"]) { reply(SPUUserUpdateChoiceSkip); finish(@"cancelled", @{}); }
-    else { if (!intact()) _exit(93); reply(SPUUserUpdateChoiceInstall); }
+    if (!intact()) _exit(93);
+    reply(SPUUserUpdateChoiceInstall);
 }
 - (void)showUpdateReleaseNotesWithDownloadData:(SPUDownloadData *)data { (void)data; }
 - (void)showUpdateReleaseNotesFailedToDownloadWithError:(NSError *)error { (void)error; }
@@ -145,14 +165,59 @@ static void finish(NSString *name, NSDictionary *extra) {
         [codes addObject:@{@"domain": current.domain, @"code": @(current.code)}];
     reply(); finish(@"error", @{@"errors": codes, @"download_bytes": @(self.downloadedBytes)});
 }
-- (void)showDownloadInitiatedWithCancellation:(void (^)(void))cancellation { (void)cancellation; event(@"download_started", @{}); }
-- (void)showDownloadDidReceiveExpectedContentLength:(uint64_t)length { (void)length; }
-- (void)showDownloadDidReceiveDataOfLength:(uint64_t)length { self.downloadedBytes += length; }
+- (void)showDownloadInitiatedWithCancellation:(void (^)(void))cancellation {
+    self.cancelDownload = cancellation;
+    event(@"download_started", @{});
+}
+- (void)showDownloadDidReceiveExpectedContentLength:(uint64_t)length { self.expectedBytes = length; }
+- (void)showDownloadDidReceiveDataOfLength:(uint64_t)length {
+    self.downloadedBytes += length;
+    if ([caseName isEqualToString:@"cancel"] && !self.cancellationRequested && self.cancelDownload &&
+        self.downloadedBytes > 0 && self.expectedBytes > self.downloadedBytes) {
+        self.cancellationRequested = YES;
+        event(@"cancel_requested", @{@"download_bytes": @(self.downloadedBytes), @"expected_bytes": @(self.expectedBytes)});
+        void (^cancel)(void) = self.cancelDownload;
+        self.cancelDownload = nil;
+        cancel();
+    }
+}
+- (void)userDidCancelDownload:(SPUUpdater *)updater {
+    (void)updater;
+    finish(@"cancelled", @{@"download_bytes": @(self.downloadedBytes), @"expected_bytes": @(self.expectedBytes),
+        @"cancellation_requested": @(self.cancellationRequested)});
+}
 - (void)showDownloadDidStartExtractingUpdate { event(@"extraction_ui_started", @{@"download_bytes": @(self.downloadedBytes)}); }
 - (void)showExtractionReceivedProgress:(double)progress { (void)progress; }
 - (void)showReadyToInstallAndRelaunch:(void (^)(SPUUserUpdateChoice))reply {
     if (!intact()) _exit(94);
-    event(@"ready_to_install", @{});
+    event(@"ready_to_install", @{@"download_bytes": @(self.downloadedBytes)});
+    self.installReply = reply;
+    [self awaitInstallerCheckpoint];
+}
+- (void)awaitInstallerCheckpoint {
+    if (!intact()) _exit(96);
+    int caseFD = openat(rootFD, caseName.fileSystemRepresentation, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+    struct stat directory;
+    if (caseFD < 0 || fstat(caseFD, &directory) || directory.st_ino != [configuration[@"FixtureCaseInode"] unsignedLongLongValue] ||
+        (uint64_t)directory.st_dev != [configuration[@"FixtureCaseDevice"] unsignedLongLongValue]) _exit(97);
+    int fd = openat(caseFD, "install-ack", O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC);
+    int savedErrno = errno;
+    close(caseFD);
+    if (fd < 0) {
+        if (savedErrno != ENOENT) _exit(98);
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC / 10), dispatch_get_main_queue(), ^{ [self awaitInstallerCheckpoint]; });
+        return;
+    }
+    struct stat info;
+    char bytes[33] = {0};
+    ssize_t count = read(fd, bytes, sizeof(bytes));
+    BOOL valid = !fstat(fd, &info) && S_ISREG(info.st_mode) && info.st_uid == geteuid() && info.st_nlink == 1 && count == 32 &&
+        [configuration[@"FixtureMarker"] isEqualToString:[[NSString alloc] initWithBytes:bytes length:32 encoding:NSUTF8StringEncoding]];
+    close(fd);
+    if (!valid || !self.installReply) _exit(99);
+    event(@"installer_checkpoint_accepted", @{});
+    void (^reply)(SPUUserUpdateChoice) = self.installReply;
+    self.installReply = nil;
     reply(SPUUserUpdateChoiceInstall);
 }
 - (void)showInstallingUpdateWithApplicationTerminated:(BOOL)terminated retryTerminatingApplication:(void (^)(void))retry {
@@ -167,6 +232,15 @@ int main(void) {
         configuration = NSBundle.mainBundle.infoDictionary;
         caseName = configuration[@"FixtureCase"];
         NSString *identifier = NSBundle.mainBundle.bundleIdentifier;
+        NSArray *allowedCases = @[@"valid", @"tampered-feed", @"tampered-archive", @"wrong-key", @"invalid-archive", @"cancel",
+            @"equal-version", @"older-version", @"preview-filtered", @"preview-allowed"];
+        NSString *marker = configuration[@"FixtureMarker"];
+        if (![marker isKindOfClass:NSString.class] || marker.length != 32 ||
+            [marker rangeOfCharacterFromSet:[[NSCharacterSet characterSetWithCharactersInString:@"0123456789abcdef"] invertedSet]].location != NSNotFound ||
+            ![caseName isKindOfClass:NSString.class] || ![allowedCases containsObject:caseName]) return 80;
+        NSString *exactIdentifier = [NSString stringWithFormat:@"org.moekit.CIFixture.r%@.%@", marker,
+            [caseName stringByReplacingOccurrencesOfString:@"-" withString:@""]];
+        if (![identifier isEqualToString:exactIdentifier]) return 80;
         // LaunchServices relaunch need not inherit the CI environment. The Python
         // entrypoint gates hosted CI; this host instead requires its signed,
         // generated fixture configuration and pinned private namespace.
@@ -184,6 +258,7 @@ int main(void) {
         if (eventsFD < 0 || fstat(eventsFD, &log) || !S_ISREG(log.st_mode) || log.st_nlink != 1 || log.st_uid != geteuid() ||
             (uint64_t)log.st_dev != [configuration[@"FixtureEventDevice"] unsignedLongLongValue] ||
             log.st_ino != [configuration[@"FixtureEventInode"] unsignedLongLongValue]) return 82;
+        pinnedEvents = log;
         sigset_t mask; sigemptyset(&mask); sigaddset(&mask, SIGALRM); sigprocmask(SIG_UNBLOCK, &mask, NULL);
         signal(SIGALRM, SIG_DFL); alarm(110); // no name/PID/group cleanup signal is ever needed
         NSApplication *application = NSApplication.sharedApplication;

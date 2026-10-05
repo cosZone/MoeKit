@@ -41,10 +41,11 @@ def require(condition, message):
         raise RuntimeError(message)
 
 
-def run(args, *, timeout=90):
+def run(args, *, timeout=90, transient_exit=None):
     result = subprocess.run([str(x) for x in args], stdin=subprocess.DEVNULL,
                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=timeout, check=False)
     require(len(result.stdout) <= 2_000_000, "Command diagnostics exceeded fixture budget")
+    if transient_exit is not None and result.returncode == transient_exit: return None
     require(result.returncode == 0, f"Fixture tool failed ({Path(str(args[0])).name}): {result.stdout.decode(errors='replace')[-12000:]}")
     return result.stdout.decode().strip()
 
@@ -108,6 +109,8 @@ class FixtureServer:
         self.payloads = {}
         self.requests = []
         self.completed_responses = {}
+        self.sent_bytes = {}
+        self.active_responses = {}
         self.lock = threading.Lock()
         parent = self
         class Handler(http.server.BaseHTTPRequestHandler):
@@ -122,11 +125,20 @@ class FixtureServer:
                 self.send_header("Content-Length", str(len(data)))
                 self.send_header("Content-Type", "application/xml" if parsed.path.endswith(".xml") else "application/octet-stream")
                 self.end_headers()
+                with parent.lock: parent.active_responses[parsed.path] = parent.active_responses.get(parsed.path, 0) + 1
                 try:
-                    self.wfile.write(data)
-                    self.wfile.flush()
+                    # Leave a deterministic cancellation window AFTER actual
+                    # native receipt; never substitute skipping the version.
+                    chunks = (data[offset:offset + 16384] for offset in range(0, len(data), 16384)) if "/cancel/" in parsed.path and parsed.path.endswith(".zip") else (data,)
+                    for chunk in chunks:
+                        self.wfile.write(chunk)
+                        self.wfile.flush()
+                        with parent.lock: parent.sent_bytes[parsed.path] = parent.sent_bytes.get(parsed.path, 0) + len(chunk)
+                        if "/cancel/" in parsed.path and parsed.path.endswith(".zip"): time.sleep(0.03)
                     with parent.lock: parent.completed_responses[parsed.path] = len(data)
                 except (BrokenPipeError, ConnectionResetError): pass
+                finally:
+                    with parent.lock: parent.active_responses[parsed.path] -= 1
             def log_message(self, *args): pass
         self.server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         self.server.daemon_threads = True
@@ -192,15 +204,110 @@ def build_app(owned, directory, version, info, executable, framework, entitlemen
     return app
 
 
-def read_events(path):
-    info = path.lstat()
-    require(stat.S_ISREG(info.st_mode) and info.st_nlink == 1 and info.st_size <= 200_000, "Fixture event file changed or exceeded budget")
-    data = path.read_text()
-    # A write can be in progress; only complete newline-delimited events count.
-    return [json.loads(line) for line in data.splitlines() if line and data.endswith("\n")] if data else []
+class CaseNamespace:
+    """Pin each namespace and the append-only event inode before launch."""
+    def __init__(self, owned, case, installed, events):
+        self.owned, self.case, self.installed, self.events = owned, case, installed, events
+        self.identities = {path: path.lstat() for path in (case, installed, events)}
+        self.verify()
+
+    def verify(self):
+        self.owned.verify()
+        for path, expected in self.identities.items():
+            actual = path.lstat()
+            require((actual.st_dev, actual.st_ino) == (expected.st_dev, expected.st_ino) and
+                    actual.st_uid == os.geteuid() and stat.S_IFMT(actual.st_mode) == stat.S_IFMT(expected.st_mode),
+                    "Fixture case namespace changed")
+            if path == self.events:
+                require(stat.S_ISREG(actual.st_mode) and actual.st_nlink == 1 and actual.st_size <= 200_000,
+                        "Fixture event inode changed or exceeded budget")
+            else:
+                require(stat.S_ISDIR(actual.st_mode) and stat.S_IMODE(actual.st_mode) == 0o700,
+                        "Fixture directory permissions changed")
+
+    def read(self):
+        self.verify()
+        result = read_events(self.events, self.identities[self.events])
+        self.verify()
+        return result
 
 
-def scenario(name, owned, server, binary, framework, signer, test_key, other_key, entitlements, output):
+def read_events(path, expected=None):
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    try:
+        info = os.fstat(fd)
+        require(stat.S_ISREG(info.st_mode) and info.st_nlink == 1 and info.st_uid == os.geteuid()
+                and info.st_size <= 200_000, "Fixture event file changed or exceeded budget")
+        if expected is not None:
+            require((info.st_dev, info.st_ino) == (expected.st_dev, expected.st_ino), "Fixture event identity changed")
+        data = os.read(fd, 200_001)
+        require(len(data) <= 200_000, "Fixture event budget exceeded")
+    finally:
+        os.close(fd)
+    # Preserve complete records even while the next JSON line is being written.
+    return [json.loads(line) for line in data.split(b"\n")[:-1] if line]
+
+
+def process_identity(value):
+    return tuple(value[key] for key in ("pid", "uid", "start_seconds", "start_microseconds"))
+
+
+class Lifetime:
+    """No signaling. Capture identities before installation can move old code."""
+    def __init__(self, owned, bundle_id, probe):
+        self.owned, self.bundle_id, self.probe = owned, bundle_id, probe
+        self.tracked = {}
+        self.snapshots = 0
+        self.changing_snapshots = 0
+
+    def sample(self, events):
+        self.owned.verify()
+        for event in events:
+            if event.get("event") == "launch":
+                identity = process_identity(event)
+                require(identity[0] > 0 and identity[1] == os.geteuid(), "Native launch identity invalid")
+                self.tracked[identity] = {key: event[key] for key in ("pid", "uid", "start_seconds", "start_microseconds")}
+                self.tracked[identity]["role"] = "fixture-host"
+        output = run([self.probe, self.owned.path, self.bundle_id, self.owned.marker,
+                      json.dumps(list(self.tracked.values()), separators=(",", ":"))], timeout=5, transient_exit=3)
+        self.owned.verify()
+        if output is None:
+            # Process births during enumeration do not establish either
+            # idleness or checkpoint ownership. Retry only inside the caller's
+            # existing phase deadline; namespace/identity errors stay fatal.
+            self.changing_snapshots += 1
+            return None
+        snapshot = json.loads(output)
+        require(snapshot.get("schema") == 1 and snapshot.get("bundle_id") == self.bundle_id and snapshot.get("uid") == os.geteuid()
+                and type(snapshot.get("idle")) is bool and isinstance(snapshot.get("owned_processes"), list),
+                "Invalid native lifetime probe response")
+        for process in snapshot["owned_processes"]:
+            identity = process_identity(process)
+            require(identity[0] > 0 and identity[1] == os.geteuid(), "Native helper identity invalid")
+            self.tracked[identity] = process
+        require(len(self.tracked) <= 32, "Fixture process lifetime budget exceeded")
+        self.snapshots += 1
+        self.owned.verify()
+        return snapshot
+
+
+def collect_cases(names, callback, evidence):
+    """Only a completed, explicitly settled case may yield to the next case."""
+    for name in names:
+        try:
+            result = callback(name)
+            require(type(result.get("passed")) is bool and result.get("settled") is True,
+                    "Missing explicit settled case outcome")
+        except Exception as error:
+            evidence["cases"][name] = {"passed": False, "settled": False, "aborted": True, "failure": str(error)}
+            print(f"ABORT native Sparkle {name}: {error}", flush=True)
+            raise
+        evidence["cases"][name] = result
+        print(f"{'PASS' if result['passed'] else 'FAIL'} native Sparkle {name}: {result}", flush=True)
+    evidence["all_passed"] = len(evidence["cases"]) == len(names) and all(r["passed"] for r in evidence["cases"].values())
+
+
+def scenario(name, owned, server, binary, framework, signer, test_key, other_key, entitlements, output, probe):
     owned.verify()
     case = owned.directory(name)
     events_path = case / "events.jsonl"
@@ -208,6 +315,7 @@ def scenario(name, owned, server, binary, framework, signer, test_key, other_key
     event_identity = events_path.stat()
     installed = owned.directory(name, "Installed")
     candidate = owned.directory(name, "Candidate")
+    namespace = CaseNamespace(owned, case, installed, events_path)
     route = f"/{owned.marker}/{name}"
     bundle_id = f"org.moekit.CIFixture.r{owned.marker}.{name.replace('-', '')}"
     info = {"CFBundleIdentifier": bundle_id, "CFBundleName": "SparkleFixture", "CFBundleExecutable": "SparkleFixture",
@@ -249,6 +357,7 @@ def scenario(name, owned, server, binary, framework, signer, test_key, other_key
         feed_data = feed_data.replace(b"Owned update", b"Wrong update")
     server.add(route + "/appcast.xml", feed_data)
     server.add(route + "/update.zip", archive_data)
+    lifetime = Lifetime(owned, bundle_id, probe)
     original_digest = tree_digest(old)
     neighbor = case / "outside-neighbor.txt"
     write_new(neighbor, b"unrelated fixture neighbor survives\n")
@@ -258,32 +367,50 @@ def scenario(name, owned, server, binary, framework, signer, test_key, other_key
     started = time.monotonic()
     with os.fdopen(log_fd, "wb") as log:
         process = subprocess.Popen([str(old / "Contents/MacOS/SparkleFixture")], stdin=subprocess.DEVNULL, stdout=log, stderr=log)
-        # The synthetic host self-expires; never terminate by PID/name or kill its
-        # descendants. A timeout is a failed fixture, not affirmative evidence.
+        # The host self-expires. Never signal it or descendants. Unknown
+        # lifetimes/namespace changes abort the batch instead of being skipped.
         terminal = None
+        acknowledged = False
         while time.monotonic() - started < 105:
-            owned.verify()
-            events = read_events(events_path)
+            events = namespace.read()
+            snapshot = lifetime.sample(events)
+            if snapshot is not None and not acknowledged and any(e["event"] == "ready_to_install" for e in events):
+                roles = {entry["role"] for entry in snapshot["owned_processes"]}
+                if {"installer", "progress-agent"}.issubset(roles):
+                    namespace.verify()
+                    write_new(case / "install-ack", owned.marker.encode())
+                    acknowledged = True
             terminal = next((e for e in events if e["event"] in ("relaunched", "error", "not_found", "cancelled", "start_error", "preference_setup_error")), None)
             if terminal: break
             if process.poll() is not None and name not in ("valid", "preview-allowed"): break
             time.sleep(0.1)
-        if not terminal:
-            process.wait(timeout=12) # helper's independent 110s self-expiry
-            raise RuntimeError(f"Native fixture {name} did not produce a terminal event; exit={process.returncode}")
-        process.wait(timeout=15)
-    # Let the relaunched fixture finish its own 250ms termination callback.
-    time.sleep(0.5)
-    owned.verify()
-    events = read_events(events_path)
+        process.wait(timeout=15)  # independent native 110-second self-expiry
+    # Require exact app/helper identities and ALL pinned Sparkle services gone.
+    # Track captured identities even if Sparkle moved their executable paths.
+    deadline, empty_since = time.monotonic() + 25, None
+    while time.monotonic() < deadline:
+        events = namespace.read()
+        snapshot = lifetime.sample(events)
+        with server.lock: serving = any(path.startswith(route + "/") and count > 0 for path, count in server.active_responses.items())
+        if snapshot is not None and snapshot["idle"] and not serving:
+            if empty_since is None: empty_since = time.monotonic()
+            if time.monotonic() - empty_since >= 1.0: break
+        else: empty_since = None
+        time.sleep(0.2)
+    else: raise RuntimeError(f"{name}: owned app/installer/server lifetime did not settle")
+    namespace.verify()
+    events = namespace.read()
     write_new(output / f"{name}.events.json", json.dumps(events, indent=2).encode())
+    terminal = next((e for e in events if e["event"] in ("relaunched", "error", "not_found", "cancelled", "start_error", "preference_setup_error")), {"event": "missing"})
     offered = any(e["event"] == "found" for e in events)
-    extracted = any(e["event"] == "extraction_completed" for e in events)
+    prepared = any(e["event"] == "ready_to_install" for e in events)
+    installer_started = any(e["event"] == "installer_started" for e in events)
     verified_feed = any(e["event"] == "feed_loaded" and e.get("signature_verified") is True for e in events)
     received_bytes = max((e.get("download_bytes", 0) for e in events), default=0)
     with server.lock:
         requested = [p for p in server.requests if p.startswith(route + "/")]
         completed = dict(server.completed_responses)
+        sent = dict(server.sent_bytes)
     downloaded = route + "/update.zip" in requested
     delivered_archive = completed.get(route + "/update.zip") == len(archive_data) and received_bytes == len(archive_data)
     error_codes = {entry["code"] for entry in terminal.get("errors", []) if entry.get("domain") == "SUSparkleErrorDomain"}
@@ -291,41 +418,48 @@ def scenario(name, owned, server, binary, framework, signer, test_key, other_key
     unchanged = tree_digest(old) == original_digest
     success = name in ("valid", "preview-allowed")
     require(neighbor.read_bytes() == b"unrelated fixture neighbor survives\n", "Unrelated neighbor changed")
-    require(route + "/appcast.xml" in requested and completed.get(route + "/appcast.xml") == len(feed_data),
-            f"{name}: native feed response was not completed")
-    if success:
-        require(terminal["event"] == "relaunched" and terminal.get("preferences_preserved") is True and
-                offered and verified_feed and delivered_archive and extracted and installed_version == "2" and not unchanged,
-                f"{name}: actual install/relaunch/preferences proof missing: {terminal}")
-    else:
-        require(unchanged and installed_version == "1" and not any(e["event"] in ("ready_to_install", "will_install", "relaunched") for e in events),
-                f"{name}: failed/cancelled update changed the old app")
-        if name in ("equal-version", "older-version", "preview-filtered"):
-            require(terminal["event"] == "not_found" and terminal.get("code") == 1001 and verified_feed and not offered and not downloaded,
-                    f"{name}: native version/channel filter failed")
-        elif name == "cancel":
-            require(terminal["event"] == "cancelled" and verified_feed and offered and not downloaded, "Cancellation did not stop download")
-        elif name == "tampered-feed":
-            # Pinned 2.10.0 SUAppcastDriver wraps verifier SUValidationError (3002)
-            # in SUAppcastParseError (1000). Network/launch errors cannot pass.
-            require(terminal["event"] == "error" and {1000, 3002}.issubset(error_codes) and not offered and not downloaded,
-                    "Tampered feed did not produce native signature rejection")
+    failure = None
+    try:
+        require(route + "/appcast.xml" in requested and completed.get(route + "/appcast.xml") == len(feed_data),
+                f"{name}: native feed response was not completed")
+        if success:
+            require(terminal["event"] == "relaunched" and terminal.get("preferences_preserved") is True and
+                    offered and verified_feed and delivered_archive and prepared and acknowledged and installed_version == "2" and not unchanged,
+                    f"{name}: actual install/relaunch/preferences proof missing: {terminal}")
         else:
-            require(terminal["event"] == "error" and verified_feed and offered and delivered_archive and not extracted,
-                    f"{name}: complete native archive rejection evidence missing")
-            if name == "invalid-archive":
-                require(3000 in error_codes and 3002 not in error_codes, "Malformed archive did not reach native unarchiving failure")
+            require(unchanged and installed_version == "1" and not any(e["event"] in ("ready_to_install", "will_install", "relaunched") for e in events),
+                    f"{name}: failed/cancelled update changed the old app")
+            if name in ("equal-version", "older-version", "preview-filtered"):
+                require(terminal["event"] == "not_found" and terminal.get("code") == 1001 and verified_feed and not offered and not downloaded,
+                        f"{name}: native version/channel filter failed")
+            elif name == "cancel":
+                require(terminal["event"] == "cancelled" and terminal.get("cancellation_requested") is True and verified_feed and offered and downloaded
+                        and 0 < received_bytes < len(archive_data) and 0 < sent.get(route + "/update.zip", 0) < len(archive_data)
+                        and route + "/update.zip" not in completed and not installer_started,
+                        "Cancellation did not interrupt a genuine partial native download")
+            elif name == "tampered-feed":
+                # Pinned 2.10.0 SUAppcastDriver wraps verifier SUValidationError (3002)
+                # in SUAppcastParseError (1000). Network/launch errors cannot pass.
+                require(terminal["event"] == "error" and {1000, 3002}.issubset(error_codes) and not offered and not downloaded,
+                        "Tampered feed did not produce native signature rejection")
             else:
-                # SUUpdateValidator's pre-extraction signature rejection is
-                # SUInstallationError (4005), underlying SUValidationError (3002).
-                require({4005, 3002}.issubset(error_codes), "Archive signature rejection codes are missing")
-    result = {"passed": True, "terminal": terminal["event"], "offered": offered, "archive_requested": downloaded,
+                require(terminal["event"] == "error" and verified_feed and offered and delivered_archive and not prepared,
+                        f"{name}: complete native archive rejection evidence missing")
+                if name == "invalid-archive":
+                    require(3000 in error_codes and 3002 not in error_codes, "Malformed archive did not reach native unarchiving failure")
+                else:
+                    # SUUpdateValidator's pre-extraction signature rejection is
+                    # SUInstallationError (4005), underlying SUValidationError (3002).
+                    require({4005, 3002}.issubset(error_codes), "Archive signature rejection codes are missing")
+    except RuntimeError as error:
+        failure = str(error)
+    result = {"passed": failure is None, "settled": True, "failure": failure, "terminal": terminal["event"], "offered": offered, "archive_requested": downloaded,
               "feed_signature_verified": verified_feed, "archive_received_bytes": received_bytes,
-              "archive_response_completed": delivered_archive, "extraction_completed": extracted,
+              "archive_response_completed": delivered_archive, "ready_to_install": prepared, "installer_started_callback": installer_started,
+              "installer_checkpoint": acknowledged, "lifetime_probe_samples": lifetime.snapshots, "changing_lifetime_snapshots": lifetime.changing_snapshots,
               "sparkle_error_codes": sorted(error_codes), "installed_version": installed_version, "old_app_unchanged": unchanged,
               "preferences_preserved": terminal.get("preferences_preserved", False), "neighbor_unchanged": True,
               "elapsed_seconds": round(time.monotonic() - started, 2)}
-    print(f"PASS native Sparkle {name}: {result}", flush=True)
     return result
 
 
@@ -353,16 +487,17 @@ def main():
         run(["/usr/bin/xcrun", "clang", "-fobjc-arc", "-fmodules", "-Wall", "-Wextra", "-Werror", "-Wno-unused-parameter",
              "-mmacosx-version-min=15.0", "-F", framework.parent, "-framework", "AppKit", "-framework", "Sparkle",
              "-Wl,-rpath,@executable_path/../Frameworks", ROOT / "Scripts/Fixtures/SparkleUpdateFixture/main.m", "-o", binary])
+        probe = owned.path / "FixtureLifetimeProbe"
+        run(["/usr/bin/xcrun", "clang", "-fobjc-arc", "-fmodules", "-Wall", "-Wextra", "-Werror", "-Wno-unused-parameter",
+             "-mmacosx-version-min=15.0", "-framework", "AppKit", ROOT / "Scripts/Fixtures/SparkleUpdateFixture/probe.m", "-o", probe])
         entitlements = owned.path / "empty-entitlements.plist"
         write_new(entitlements, plistlib.dumps({}))
         test_key, other_key = owned.path / "PUBLIC-RFC8032-vector1.txt", owned.path / "PUBLIC-RFC8032-vector2.txt"
         write_new(test_key, base64.b64encode(PUBLIC_TEST_SEED))
         write_new(other_key, base64.b64encode(PUBLIC_OTHER_SEED))
         server = FixtureServer()
-        for name in CASES:
-            evidence["cases"][name] = scenario(name, owned, server, binary, framework, package_root / "bin/sign_update",
-                                                test_key, other_key, entitlements, output)
-        evidence["all_passed"] = len(evidence["cases"]) == len(CASES) and all(r["passed"] for r in evidence["cases"].values())
+        collect_cases(CASES, lambda name: scenario(name, owned, server, binary, framework, package_root / "bin/sign_update",
+                                                test_key, other_key, entitlements, output, probe), evidence)
     except Exception as error:
         evidence["failure"] = str(error)
         raise

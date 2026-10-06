@@ -40,6 +40,7 @@ Tools → Mole → Cleanup 新增原生批量缓存清理：主动检查用户�
 
 ```sh
 mise install
+mise exec -- tuist install
 mise exec -- tuist generate --no-open
 xcodebuild -workspace MoeKit.xcworkspace -scheme MoeKit \
   -configuration Debug -destination 'platform=macOS' \

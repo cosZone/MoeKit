@@ -12,9 +12,15 @@ final class MoleAnalysisStore {
     private(set) var liveResultID: UUID?
     @ObservationIgnored var onContextChange: (@MainActor () -> Void)?
     private(set) var errorMessage: String?
-    private(set) var isPreparing = false
-    private(set) var isRunning = false
-    private(set) var isCancelling = false
+    private(set) var isPreparing = false {
+        didSet { UpdateInstallationSafety.shared.changed(self) }
+    }
+    private(set) var isRunning = false {
+        didSet { UpdateInstallationSafety.shared.changed(self) }
+    }
+    private(set) var isCancelling = false {
+        didSet { UpdateInstallationSafety.shared.changed(self) }
+    }
     private(set) var isDemoEnabled = false
     @ObservationIgnored private let executor: any MoleAnalysisExecuting
     @ObservationIgnored private var task: Task<Void, Never>?

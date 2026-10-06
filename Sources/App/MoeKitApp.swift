@@ -19,9 +19,14 @@ struct MoeKitApp: App {
                         openWorkspace: { openWindow(id: "workspace", value: "main") },
                         openSettings: { openSettings() },
                         checkUpdates: {
-                            openWindow(id: "updates")
-                            appDelegate.updates.check()
-                        }
+                            if appDelegate.automaticUpdates.isStarted {
+                                appDelegate.automaticUpdates.check()
+                            } else {
+                                openWindow(id: "updates")
+                                appDelegate.updates.check()
+                            }
+                        },
+                        canCheckUpdates: { !appDelegate.automaticUpdates.isStarted || appDelegate.automaticUpdates.canCheck }
                     )
                 }
                 .task {
@@ -35,6 +40,7 @@ struct MoeKitApp: App {
             CommandGroup(replacing: .appInfo) {
                 Button("About MoeKit") { openWindow(id: "about") }
                 Button("Check for updates…") { appDelegate.entryPoints.showUpdates() }
+                    .disabled(appDelegate.automaticUpdates.isStarted && !appDelegate.automaticUpdates.canCheck)
             }
             CommandGroup(replacing: .help) {
                 Button("Getting started…") {
@@ -52,7 +58,10 @@ struct MoeKitApp: App {
             }
         }
         Settings {
-            SettingsView(checkForUpdates: { appDelegate.entryPoints.showUpdates() })
+            SettingsView(checkForUpdates: {
+                openWindow(id: "updates")
+                appDelegate.updates.check()
+            }, automaticUpdates: appDelegate.automaticUpdates)
                 .environment(store)
                 .environment(appDelegate.entryPoints.preferences)
         }

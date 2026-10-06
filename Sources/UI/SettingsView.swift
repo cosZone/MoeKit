@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SettingsView: View {
     var checkForUpdates: () -> Void = {}
+    var automaticUpdates: SparkleUpdateStore? = nil
     @Environment(WorkspaceStore.self) private var store
     @Environment(AppVisibilityPreferences.self) private var visibility
     @Environment(\.openWindow) private var openWindow
@@ -45,10 +46,14 @@ struct SettingsView: View {
                         .installerCaptureIdentity("icons.recovery", text: String(localized: "Both icons are hidden. Open MoeKit from Finder or Spotlight to return to the workspace and settings."))
                 }
             }
-            Section("Updates") {
-                Button("Check for updates…", action: checkForUpdates)
-                Text("Review newer releases and download them from GitHub. Automatic installation is not enabled.")
-                    .font(.caption).foregroundStyle(.secondary)
+            if let automaticUpdates {
+                AutomaticUpdateSettings(updates: automaticUpdates, openManualReleases: checkForUpdates)
+            } else {
+                Section("Updates") {
+                    Button("Check for updates…", action: checkForUpdates)
+                    Text("Review newer releases and download them from GitHub. Automatic installation is not enabled.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
             }
             Section("Getting started") {
                 Button("Open getting started") {

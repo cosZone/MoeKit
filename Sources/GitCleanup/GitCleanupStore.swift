@@ -5,7 +5,9 @@ import Observation
 final class GitCleanupStore {
     private(set) var plan: GitCleanupPlan?
     private(set) var receipt: GitCleanupReceipt?
-    private(set) var isBusy = false
+    private(set) var isBusy = false {
+        didSet { UpdateInstallationSafety.shared.changed(self) }
+    }
     private(set) var isMutating = false
     private(set) var error: String?
     private(set) var outcome: String?

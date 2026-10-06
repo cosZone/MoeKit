@@ -66,6 +66,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
           test "$(tuist version)" = '4.148.3'
           test "$(xcodebuild -version | head -1)" = 'Xcode 16.4'
+          tuist install --cache-path "$(mktemp -d "$RUNNER_TEMP/moekit-swiftpm-cache.XXXXXX")"
           tuist generate --no-open
       - name: Archive both architectures with script sandboxing enabled
         run: |
@@ -109,6 +110,7 @@ jobs:
                           set(app.parent.parent.iterdir()) == {app.parent},
                           "The archive must install only MoeKit.app.")
           release.verify_app(app, {"marketing_version": "0.1.0", "run_number": "1"}, provenance=False)
+          release.verify_upstream_sparkle(app)
           print(json.dumps({"source_sha": os.environ["SOURCE_SHA"],
                             "script_sandboxing": True,
                             "architectures_per_code_object": list(release.ARCHITECTURES),
@@ -158,7 +160,10 @@ jobs:
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
           python3 Scripts/verify-source.py
           python3 Scripts/test-preview-release.py
+          python3 Scripts/test-sparkle-appcast.py
+          python3 Scripts/test-sparkle-appcast.py --native-signer
           python3 Scripts/test-ui-render-artifacts.py
+          python3 Scripts/test-sparkle-render-artifacts.py
           python3 Scripts/test-mole-supervisor.py
           python3 Scripts/test-git-object-inspector.py
           python3 Scripts/test-installer-fixture-evidence.py
@@ -179,7 +184,9 @@ jobs:
       - name: Prepare pinned Mole analyzer for synthetic fixture tests
         run: python3 Scripts/prepare-mole-ci-fixture.py
       - name: Generate Xcode workspace
-        run: tuist generate --no-open
+        run: |
+          tuist install --cache-path "$(mktemp -d "$RUNNER_TEMP/moekit-swiftpm-cache.XXXXXX")"
+          tuist generate --no-open
       - name: Build app and tests, then run the built tests
         run: |
           set -euo pipefail
@@ -209,6 +216,7 @@ jobs:
             -only-testing:MoeKitTests/UISnapshotTests/testFirstUseWorkspacesRender \
             -only-testing:MoeKitTests/UISnapshotTests/testSettingsModeGuidanceRenders \
             -only-testing:MoeKitTests/ReleaseCheckViewTests/testUpdatePanelAndHiddenIconsRender \
+            -only-testing:MoeKitTests/AutomaticUpdateSettingsTests/testAutomaticUpdateSettingsRender \
             -only-testing:MoeKitTests/ToolPreparationViewTests/testToolPreparationRenders \
             -only-testing:MoeKitTests/MoleAnalysisViewTests/testAnalysisSheetRenders \
             -only-testing:MoeKitTests/InstallerTrashViewTests/testInstallerConfirmationRenders \
@@ -259,11 +267,13 @@ jobs:
           if [ -d TestResults.xcresult ]; then
             xcrun xcresulttool export attachments --path TestResults.xcresult --output-path UIRenderArtifacts
             python3 Scripts/verify-ui-render-artifacts.py UIRenderArtifacts en
+            python3 Scripts/verify-sparkle-render-artifacts.py UIRenderArtifacts en
             python3 Scripts/verify-cache-render-artifacts.py UIRenderArtifacts en
           fi
           if [ -d ChineseRenderResults.xcresult ]; then
             xcrun xcresulttool export attachments --path ChineseRenderResults.xcresult --output-path ChineseUIRenderArtifacts
             python3 Scripts/verify-ui-render-artifacts.py ChineseUIRenderArtifacts zh-Hans
+            python3 Scripts/verify-sparkle-render-artifacts.py ChineseUIRenderArtifacts zh-Hans
             python3 Scripts/verify-cache-render-artifacts.py ChineseUIRenderArtifacts zh-Hans
           fi
       - name: Preserve owned-view render evidence
@@ -337,6 +347,7 @@ jobs:
           test "$(tuist version)" = '4.148.3'
           xcodebuild -version
           swift --version
+          tuist install --cache-path "$(mktemp -d "$RUNNER_TEMP/moekit-swiftpm-cache.XXXXXX")"
           tuist generate --no-open
       - name: Build and test optimized Release without signing secrets
         run: |
@@ -375,6 +386,9 @@ jobs:
                         -only-testing:MoeKitTests/ReleaseVersionTests
                         -only-testing:MoeKitTests/ReleaseTransportTests
                         -only-testing:MoeKitTests/ReleaseCheckStoreTests
+                        -only-testing:MoeKitTests/SparkleUpdateTests
+                        -only-testing:MoeKitTests/UpdateInstallationSafetyTests
+                        -only-testing:MoeKitTests/AppUpdateTerminationTests
                         -only-testing:MoeKitTests/AppEntryPointTests
                         -only-testing:MoeKitTests/ProcessTerminationTests
                         -only-testing:MoeKitTests/ProcessTerminationStoreTests
@@ -417,7 +431,8 @@ jobs:
                       "InstallerFileAccessTests", "InstallerTrashExecutorTests", "InstallerUseEvidenceTests", "InstallerTrashStoreTests",
                       "GitPlainIndexTests", "GitCleanupInspectionTests", "GitCleanupAuthorityTests", "GitCleanupStoreTests", "GitCleanupExecutorTests",
                       "CleanupExecutorTests", "CleanupStoreTests", "ProcessTerminationTests", "ProcessTerminationStoreTests", "NativeProcessTerminationTests",
-                      "ReleaseVersionTests", "ReleaseCheckStoreTests", "ReleaseTransportTests", "AppEntryPointTests")
+                      "ReleaseVersionTests", "ReleaseCheckStoreTests", "ReleaseTransportTests", "AppEntryPointTests",
+                      "SparkleUpdateTests", "UpdateInstallationSafetyTests", "AppUpdateTerminationTests")
           if summary.get("passedTests", 0) < 27 or summary.get("failedTests") != 0 or summary.get("skippedTests") != 0:
               raise SystemExit(f"Optimized catalog tests must execute and pass without skips: {summary}")
           if any(suite not in inventory for suite in required):

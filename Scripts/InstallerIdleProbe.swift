@@ -73,7 +73,7 @@ enum InstallerIdleProbe {
                     switch fullEvidence {
                     case .noUseObserved: accepted = true
                     case .observedUse(let reason):
-                        printExactTargetHandles(target)
+                        await printObservedUseDiagnostics(fixture: fixture, target: target)
                         throw ProbeFailure("Unexpected use of the owned fixture: \(reason)")
                     case .unavailable(let reason):
                         if !hadOtherUnavailable, env["MOEKIT_INSTALLER_CONDITIONAL_IDLE"] == "1",
@@ -173,51 +173,128 @@ enum InstallerIdleProbe {
         print("Owned positive-control duplicate closed successfully: descriptor=\(fd), closeOnExec=true.")
     }
 
-    /// Diagnosis only: no process names, argv, paths, unrelated handles or
-    /// absence conclusion. Known use remains a failure even if its opener has
-    /// already closed by the time this bounded second observation runs.
-    private static func printExactTargetHandles(_ target: InstallerUseTarget, observerOnly: Bool = false) {
+    /// These three one-second slots only describe holders after a failed
+    /// observation. They never retry the provider, return eligibility, or write
+    /// evidence. The original observed-use result remains fatal even if a later
+    /// sample has no matches. Synchronous kernel calls have cooperative bounds.
+    private static func printObservedUseDiagnostics(fixture: ProbeFixture, target: InstallerUseTarget) async {
+        let started = ProcessInfo.processInfo.systemUptime
+        for sample in 1...3 {
+            let deadline = started + Double(sample)
+            do {
+                try fixture.validate()
+                printExactTargetHandles(target, deadline: deadline, sample: sample,
+                                        elapsed: ProcessInfo.processInfo.systemUptime - started)
+                try fixture.validate()
+                if sample < 3 {
+                    let remaining = deadline - ProcessInfo.processInfo.systemUptime
+                    if remaining > 0 { try await Task.sleep(for: .seconds(remaining)) }
+                }
+            } catch {
+                print("Exact owned-target holder diagnostics stopped: fixture validation or wait failed; original observed use still blocks.")
+                return
+            }
+        }
+    }
+
+    /// Diagnosis only: no process names, argv, raw executable paths, unrelated
+    /// handles or absence conclusion. Only fixed redacted path hints are logged;
+    /// a hint is neither executable authentication nor proof that use is benign.
+    /// PID/UID/start-time identity is bracketed around reads before publishing a
+    /// holder. An identity change discards that process's matches, never its
+    /// original blocking result. Output is capped at 16 exact-target matches.
+    private static func printExactTargetHandles(_ target: InstallerUseTarget, observerOnly: Bool = false,
+        deadline: TimeInterval = ProcessInfo.processInfo.systemUptime + 1,
+        sample: Int = 1, elapsed: TimeInterval = 0) {
         let system = NativeInstallerUseSystem()
-        let deadline = ProcessInfo.processInfo.systemUptime + 3
         var matches: [[String: Any]] = []
-        var inspected = 0, failures = 0, truncated = false
+        var inspected = 0, failures = 0, unstableIdentities = 0, truncated = false
         do {
-            let pids = try (observerOnly ? [system.observerPID] : system.processes(maximum: 4096))
+            let pids: [Int32]
+            if ProcessInfo.processInfo.systemUptime < deadline {
+                pids = try (observerOnly ? [system.observerPID] : system.processes(maximum: 4096))
+            } else { pids = []; truncated = true }
             for pid in pids {
                 guard ProcessInfo.processInfo.systemUptime < deadline, matches.count < 16 else { truncated = true; break }
                 do {
                     let identity = try system.identity(pid: pid)
-                    guard identity.uid == system.currentUID, identity.pid == pid else { failures += 1; continue }
+                    guard identity.uid == system.currentUID, identity.pid == pid,
+                          identity.startSeconds > 0, identity.startMicroseconds < 1_000_000 else { failures += 1; continue }
                     if identity.isZombie { continue }
+                    guard ProcessInfo.processInfo.systemUptime < deadline else { truncated = true; break }
                     inspected += 1
-                    for handle in try system.descriptors(pid: pid, maximum: 16_384) where handle.isVnode {
-                        guard ProcessInfo.processInfo.systemUptime < deadline, matches.count < 16 else { truncated = true; break }
-                        guard let fd = Int32(exactly: handle.number) else { failures += 1; continue }
+                    var processMatches: [[String: Any]] = []
+                    do {
+                        for handle in try system.descriptors(pid: pid, maximum: 16_384) where handle.isVnode {
+                            guard ProcessInfo.processInfo.systemUptime < deadline,
+                                  matches.count + processMatches.count < 16 else { truncated = true; break }
+                            guard let fd = Int32(exactly: handle.number) else { failures += 1; continue }
+                            do {
+                                if try system.descriptorIdentity(pid: pid, descriptor: fd) == target.identity {
+                                    processMatches.append(["kind": "fd", "descriptor": fd,
+                                        "excludedObserverHandle": pid == system.observerPID && target.observerRetainedFileDescriptors.contains(fd)])
+                                }
+                            } catch { failures += 1 }
+                        }
+                    } catch { failures += 1 }
+                    if ProcessInfo.processInfo.systemUptime < deadline, matches.count + processMatches.count < 16 {
                         do {
-                            if try system.descriptorIdentity(pid: pid, descriptor: fd) == target.identity {
-                                matches.append(["pid": pid, "isObserver": pid == system.observerPID, "kind": "fd",
-                                                "descriptor": fd, "excludedObserverHandle": pid == system.observerPID && target.observerRetainedFileDescriptors.contains(fd)])
+                            for handle in try system.fileports(pid: pid, maximum: 16_384) where handle.isVnode {
+                                guard ProcessInfo.processInfo.systemUptime < deadline,
+                                      matches.count + processMatches.count < 16 else { truncated = true; break }
+                                do {
+                                    if try system.fileportIdentity(pid: pid, port: handle.number) == target.identity {
+                                        processMatches.append(["kind": "fileport", "descriptor": handle.number,
+                                                               "excludedObserverHandle": false])
+                                    }
+                                } catch { failures += 1 }
                             }
                         } catch { failures += 1 }
-                    }
-                    guard ProcessInfo.processInfo.systemUptime < deadline, matches.count < 16 else { truncated = true; break }
-                    for handle in try system.fileports(pid: pid, maximum: 16_384) where handle.isVnode {
-                        guard ProcessInfo.processInfo.systemUptime < deadline, matches.count < 16 else { truncated = true; break }
-                        do {
-                            if try system.fileportIdentity(pid: pid, port: handle.number) == target.identity {
-                                matches.append(["pid": pid, "isObserver": pid == system.observerPID, "kind": "fileport", "descriptor": handle.number])
-                            }
-                        } catch { failures += 1 }
+                    } else { truncated = true }
+                    guard !processMatches.isEmpty else { continue }
+                    guard ProcessInfo.processInfo.systemUptime < deadline else { truncated = true; break }
+                    let pathHint = executablePathHint(pid: pid)
+                    guard identity == (try system.identity(pid: pid)) else { unstableIdentities += 1; continue }
+                    guard ProcessInfo.processInfo.systemUptime < deadline else { truncated = true; break }
+                    for var match in processMatches {
+                        match["pid"] = identity.pid
+                        match["uid"] = identity.uid
+                        match["startSeconds"] = identity.startSeconds
+                        match["startMicroseconds"] = identity.startMicroseconds
+                        match["identityStableAcrossReads"] = true
+                        match["isObserver"] = pid == system.observerPID
+                        match["executablePathHint"] = pathHint
+                        matches.append(match)
                     }
                 } catch { failures += 1 }
             }
         } catch { failures += 1 }
         let output: [String: Any] = ["diagnosticOnly": true, "knownUseStillBlocks": true, "matches": matches,
                                      "scope": observerOnly ? "observer-only-before-full-negative" : "current-user-after-observed-use",
-                                     "inspectedCurrentUserProcesses": inspected, "readFailures": failures, "truncated": truncated]
+                                     "sample": sample, "sampleCount": observerOnly ? 1 : 3, "elapsedSeconds": elapsed,
+                                     "pathHintIsTrustProof": false, "emptyMatchesAreIdleProof": false,
+                                     "inspectedCurrentUserProcesses": inspected, "readFailures": failures,
+                                     "unstableIdentities": unstableIdentities, "truncated": truncated]
         if let bytes = try? JSONSerialization.data(withJSONObject: output, options: [.sortedKeys]) {
             print("Exact owned-target handle snapshot: \(String(decoding: bytes, as: UTF8.self))")
         }
+    }
+
+    /// Read only for an exact-target holder, inside its identity bracket. Do not
+    /// emit the raw path or basename, even for unexpected or malformed paths.
+    private static func executablePathHint(pid: Int32) -> String {
+        // PROC_PIDPATHINFO_MAXSIZE is 4 * MAXPATHLEN (PATH_MAX on macOS).
+        // Swift cannot import the SDK's C expression macro.
+        var bytes = [UInt8](repeating: 0, count: 4 * Int(PATH_MAX))
+        let count = bytes.withUnsafeMutableBytes { proc_pidpath(pid, $0.baseAddress, UInt32($0.count)) }
+        guard count > 0, Int(count) < bytes.count,
+              let end = bytes.firstIndex(of: 0), end > 0,
+              let path = String(bytes: bytes[..<end], encoding: .utf8), path.hasPrefix("/") else { return "unavailable" }
+        if path.hasPrefix("/System/Library/") { return "system-library-path-redacted" }
+        if path.hasPrefix("/usr/libexec/") { return "usr-libexec-path-redacted" }
+        if path.hasPrefix("/usr/bin/") { return "usr-bin-path-redacted" }
+        if path.hasPrefix("/usr/sbin/") { return "usr-sbin-path-redacted" }
+        return "other-path-redacted"
     }
 
     private static func physicalURL(_ path: String) throws -> URL {
@@ -261,7 +338,7 @@ enum InstallerIdleProbe {
         guard case .observedHandleUse = positive else { throw ProbeFailure("Fresh conditional handle-positive observation failed.") }
         try closeOwnedDuplicate(&duplicate, fixture: fixture)
         let negative = try await retryHandleDiagnostic(fixture: fixture, target: target, deadline: deadline)
-        if case .observedHandleUse = negative { printExactTargetHandles(target) }
+        if case .observedHandleUse = negative { await printObservedUseDiagnostics(fixture: fixture, target: target) }
         guard negative == .noHandleUseObserved else { throw ProbeFailure("Fresh complete conditional handle-negative observation failed.") }
         let after = try await completeNonemptyInventory()
         guard NSArray(array: before).isEqual(to: after) else {

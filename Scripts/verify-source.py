@@ -140,7 +140,15 @@ if project_path.is_file():
     require('com.yusixian.MoeKit' in project_path.read_text(), "Stable app bundle ID missing")
 package_path = ROOT / "Package.swift"
 if package_path.is_file():
-    require(not re.search(r"\.package\s*\(", package_path.read_text()), "Review new third-party dependencies before adding them")
+    package = package_path.read_text()
+    require(re.findall(r'\.package\(url: "([^"]+)", exact: "([^"]+)"\)', package) ==
+            [("https://github.com/sparkle-project/Sparkle", "2.10.0")], "Only reviewed Sparkle 2.10.0 may be linked")
+    require(len(re.findall(r"\.package\s*\(", package)) == 1, "Unexpected additional dependency")
+    lock = json.loads((ROOT / "Package.resolved").read_text())
+    require(lock.get("pins") == [{"identity": "sparkle", "kind": "remoteSourceControl",
+            "location": "https://github.com/sparkle-project/Sparkle",
+            "state": {"revision": "eef1a539a373c1f1a320624b1130fc5de7b2e100", "version": "2.10.0"}}],
+            "Sparkle lockfile differs from the reviewed immutable revision")
 
 if errors:
     print("Source checks failed:", file=sys.stderr)

@@ -33,7 +33,12 @@ def valid_environment():
 def valid_plist():
     return {"CFBundleIdentifier": release.BUNDLE_ID, "CFBundleExecutable": "MoeKit",
             "CFBundlePackageType": "APPL", "CFBundleName": "MoeKit", "CFBundleInfoDictionaryVersion": "6.0",
-            "CFBundleShortVersionString": "0.1.0", "CFBundleVersion": "1",
+            "CFBundleShortVersionString": "0.1.0", "CFBundleVersion": "2.0.1",
+            "SUFeedURL": "https://raw.githubusercontent.com/cosZone/MoeKit/updates/appcast.xml",
+            "SUPublicEDKey": release.appcast_module().load_config()["publicEDKey"],
+            "SURequireSignedFeed": True, "SUVerifyUpdateBeforeExtraction": True,
+            "SUSignedFeedFailureExpirationInterval": 0, "SUAutomaticallyUpdate": False,
+            "SUEnableSystemProfiling": False, "SUEnableJavaScript": False,
             "LSMinimumSystemVersion": "15.0", "MoeKitSourceCommit": "a" * 40,
             "MoeKitPreviewVersion": "0.1.0-preview.1", "MoeKitBuildRunID": "101",
             "MoeKitBuildRunAttempt": "1"}
@@ -74,6 +79,29 @@ def write_zip_code(archive):
         item.create_system = 3
         item.external_attr = 0o100755 << 16
         archive.writestr(item, SYNTHETIC_MACHO)
+    for relative, data in synthetic_sparkle_resources().items():
+        item = zipfile.ZipInfo("MoeKit.app/" + relative)
+        item.create_system = 3; item.external_attr = 0o100644 << 16
+        archive.writestr(item, data)
+    for relative, target in release.SPARKLE_LINKS.items():
+        item = zipfile.ZipInfo("MoeKit.app/" + relative)
+        item.create_system = 3; item.external_attr = 0o120777 << 16
+        archive.writestr(item, target.encode())
+
+
+def synthetic_sparkle_resources():
+    files = {path: b"Synthetic resource; never executed" for path in release.SPARKLE_FILES
+             if path not in release.SPARKLE_EXECUTABLES and path not in release.SPARKLE_SIGNATURE_FILES}
+    for relative, identifier in release.SPARKLE_CODE:
+        if relative.endswith("/Autoupdate"):
+            continue
+        framework = relative == release.SPARKLE_ROOT
+        plist = relative + ("/Versions/B/Resources/Info.plist" if framework else "/Contents/Info.plist")
+        files[plist] = plistlib.dumps({"CFBundleIdentifier": identifier,
+            "CFBundleExecutable": "Sparkle" if framework else Path(relative).stem,
+            "CFBundlePackageType": "FMWK" if framework else ("XPC!" if relative.endswith(".xpc") else "APPL"),
+            "CFBundleVersion": "2064", "CFBundleShortVersionString": "2.10.0"})
+    return files
 
 
 def synthetic_app(parent):
@@ -81,8 +109,15 @@ def synthetic_app(parent):
     (app / "Contents/MacOS").mkdir(parents=True)
     (app / "Contents/Info.plist").write_bytes(plistlib.dumps(valid_plist()))
     for relative in release.EXECUTABLE_PATHS:
+        (app / relative).parent.mkdir(parents=True, exist_ok=True)
         (app / relative).write_bytes(SYNTHETIC_MACHO)
         (app / relative).chmod(0o755)
+    for relative, data in synthetic_sparkle_resources().items():
+        (app / relative).parent.mkdir(parents=True, exist_ok=True)
+        (app / relative).write_bytes(data)
+    for relative, target in release.SPARKLE_LINKS.items():
+        (app / relative).parent.mkdir(parents=True, exist_ok=True)
+        (app / relative).symlink_to(target)
     return app
 
 
@@ -95,8 +130,9 @@ def compile_native_fixture(temporary, executable):
                            "MACOSX_DEPLOYMENT_TARGET", "LANG", "LC_ALL", "LC_CTYPE"}
     environment = {key: value for key, value in os.environ.items() if key in allowed_environment}
     try:
+        library = ["-dynamiclib", "-install_name", "@rpath/Sparkle.framework/Versions/B/Sparkle"] if executable.name == "Sparkle" else []
         result = subprocess.run(["/usr/bin/xcrun", "clang", "-arch", "arm64", "-arch", "x86_64",
-                                 "-mmacosx-version-min=15.0", str(source), "-o", str(executable)],
+                                 "-mmacosx-version-min=15.0", *library, str(source), "-o", str(executable)],
                                 stdin=subprocess.DEVNULL, check=False, stdout=subprocess.PIPE,
                                 stderr=subprocess.PIPE, env=environment, timeout=120)
     except subprocess.TimeoutExpired:
@@ -115,6 +151,15 @@ def compile_native_fixture(temporary, executable):
 class Inputs(unittest.TestCase):
     def test_expected_default_branch_dispatch(self):
         self.assertEqual(release.validate_inputs(valid_environment())["marketing_version"], "0.1.0")
+
+    def test_ci_public_key_must_equal_the_reviewed_public_key(self):
+        public = "synthetic-public-key-comparison-only"
+        with patch.object(release.appcast_module(), "load_config", return_value={"publicEDKey": public}):
+            for supplied in ("", "different-key", public + "\n"):
+                with patch.dict(os.environ, {"SPARKLE_ED_PUBLIC_KEY": supplied}), self.assertRaises(release.ReleaseError):
+                    release.validate_public_key_input()
+            with patch.dict(os.environ, {"SPARKLE_ED_PUBLIC_KEY": public}):
+                self.assertEqual(release.validate_public_key_input(), public)
 
     def test_rejects_shell_and_version_ambiguities(self):
         for version in ("0.1.0;whoami", "$(whoami)", "0.1.0-preview.1\n", "v0.1.0-preview.1",
@@ -244,17 +289,18 @@ class BundleCodeLayout(unittest.TestCase):
                     ("Contents/MacOS/GitObjectInspector", "com.yusixian.MoeKit.GitObjectInspector"))
         self.assertEqual(release.HELPERS, expected)
         self.assertEqual(release.EXECUTABLE_PATHS,
-                         {"Contents/MacOS/MoeKit", *(path for path, _ in expected)})
+                         {"Contents/MacOS/MoeKit", *(path for path, _ in expected), *release.SPARKLE_EXECUTABLES})
         self.assertEqual(release.code_objects(self.app),
-                         tuple((self.app / path, identifier) for path, identifier in expected) +
+                         tuple((self.app / path, identifier) for path, identifier in expected + release.SPARKLE_CODE) +
                          ((self.app, "com.yusixian.MoeKit"),))
-        self.assertEqual(release.VERIFIED_CODE_PATHS, [path for path, _ in expected] + ["."])
+        self.assertEqual(release.VERIFIED_CODE_PATHS, [path for path, _ in expected + release.SPARKLE_CODE] + ["."])
+        self.assertEqual(len(release.SPARKLE_EXECUTABLES), 5)
 
     def test_only_three_exact_executables_and_both_architectures(self):
         command = self.verify()
         self.assertEqual({call.args[2] for call in command.call_args_list},
                          {str(self.app / relative) for relative in release.EXECUTABLE_PATHS})
-        self.assertEqual(len(command.call_args_list), 3)
+        self.assertEqual(len(command.call_args_list), 8)
         for bad_architectures in ("arm64", "x86_64", "arm64 x86_64 i386", ""):
             with self.subTest(architectures=bad_architectures):
                 for broken in release.EXECUTABLE_PATHS:
@@ -299,7 +345,7 @@ class BundleCodeLayout(unittest.TestCase):
                 path.unlink()
                 if relative.startswith("Contents/Helpers/"):
                     path.parent.rmdir()
-        for relative in ("Contents/Frameworks", "Contents/Resources/Hidden.app", "Contents/Resources/Hidden.bundle"):
+        for relative in ("Contents/Frameworks/Hidden.framework", "Contents/Resources/Hidden.app", "Contents/Resources/Hidden.bundle"):
             path = self.app / relative
             path.mkdir(parents=True)
             with self.subTest(path=relative), self.assertRaises(release.ReleaseError):
@@ -365,6 +411,75 @@ class GitInspectorBundleCodeLayout(BundleCodeLayout):
     helper_path = release.GIT_HELPER_PATH
 
 
+class SparkleLayout(BundleCodeLayout):
+    helper_path = release.SPARKLE_VERSION_ROOT + "/Autoupdate"
+
+    def test_pinned_sparkle_paths_and_identity_are_explicit(self):
+        prefix = "Contents/Frameworks/Sparkle.framework/Versions/B/"
+        self.assertEqual(release.SPARKLE_CODE, (
+            (prefix + "XPCServices/Installer.xpc", "org.sparkle-project.InstallerLauncher"),
+            (prefix + "XPCServices/Downloader.xpc", "org.sparkle-project.DownloaderService"),
+            (prefix + "Autoupdate", "org.sparkle-project.Sparkle.Autoupdate"),
+            (prefix + "Updater.app", "org.sparkle-project.Sparkle.Updater"),
+            ("Contents/Frameworks/Sparkle.framework", "org.sparkle-project.Sparkle")))
+        self.assertEqual(release.SPARKLE_LAYOUT["package_sha256"],
+                         "17e28312b8e18ab7cdbbe09a6fb28cc55a5479ec6c371dbc07cdecd2a14fd959")
+
+    def test_only_exact_relative_framework_links_are_allowed(self):
+        link = self.app / release.SPARKLE_ROOT / "Versions/Current"
+        link.unlink()
+        for target in ("/tmp", "../B", "C", "B/", "B/../B"):
+            link.symlink_to(target)
+            with self.subTest(target=target), self.assertRaises(release.ReleaseError):
+                self.verify()
+            link.unlink()
+
+    def test_missing_framework_content_and_unknown_code_are_rejected(self):
+        path = self.app / release.SPARKLE_VERSION_ROOT / "Resources/Info.plist"
+        data = path.read_bytes(); path.unlink()
+        with self.assertRaises(release.ReleaseError): self.verify()
+        path.write_bytes(data)
+        for name in ("Versions/C/Sparkle", "Versions/B/extra.dylib", "Versions/B/XPCServices/Extra.xpc/Contents/MacOS/Extra"):
+            extra = self.app / release.SPARKLE_ROOT / name
+            extra.parent.mkdir(parents=True, exist_ok=True); extra.write_bytes(SYNTHETIC_MACHO)
+            with self.subTest(name=name), self.assertRaises(release.ReleaseError): self.verify()
+            extra.unlink()
+
+    def test_only_standard_header_omission_is_accepted(self):
+        for part in ("Headers", "PrivateHeaders", "Modules"):
+            (self.app / release.SPARKLE_ROOT / part).unlink()
+            shutil.rmtree(self.app / release.SPARKLE_VERSION_ROOT / part)
+        self.verify()
+
+    def test_unsigned_vendor_hashes_are_mandatory_before_resigning(self):
+        # The synthetic layout has intentionally non-vendor bytes, so never
+        # accept it as the official upstream package before release signing.
+        with self.assertRaises(release.ReleaseError): release.verify_upstream_sparkle(self.app)
+        relative = release.SPARKLE_VERSION_ROOT + "/Sparkle"
+        expected = release.sha256(self.app / relative)
+        with patch.object(release, "SPARKLE_FILES", {relative: expected}):
+            release.verify_upstream_sparkle(self.app)
+            (self.app / relative).write_bytes(SYNTHETIC_MACHO + b"changed")
+            with self.assertRaises(release.ReleaseError): release.verify_upstream_sparkle(self.app)
+
+    def test_zip_and_directory_hashes_include_exact_link_targets(self):
+        archive = self.root / "fixture.zip"
+        with zipfile.ZipFile(archive, "w") as output:
+            output.writestr("MoeKit.app/Contents/Info.plist", plistlib.dumps(valid_plist()))
+            write_zip_code(output)
+        self.assertEqual(release.inspect_zip(archive, self.context), release.app_content_digest(self.app))
+        with self.assertRaises(release.ReleaseError): release.inspect_zip(archive, self.context, upstream=True)
+
+    def test_update_security_settings_fail_closed(self):
+        path = self.app / "Contents/Info.plist"
+        for key, value in (("SUPublicEDKey", "wrong"), ("SUFeedURL", "https://attacker.example/feed.xml"),
+                           ("SURequireSignedFeed", False), ("SUVerifyUpdateBeforeExtraction", False),
+                           ("SUSignedFeedFailureExpirationInterval", 1728000), ("SUAutomaticallyUpdate", True),
+                           ("SUEnableJavaScript", True), ("SUEnableInstallerLauncherService", True)):
+            path.write_bytes(plistlib.dumps(valid_plist() | {key: value}))
+            with self.subTest(key=key), self.assertRaises(release.ReleaseError): self.verify()
+
+
 class CodeObjectSigning(unittest.TestCase):
     helper_path = release.HELPER_PATH
     helper_id = release.HELPER_ID
@@ -384,7 +499,7 @@ class CodeObjectSigning(unittest.TestCase):
         keychain = Path("synthetic/preview.keychain-db")
         with patch.object(release, "run") as command:
             release.sign_code_objects(self.app, self.identity, keychain)
-        self.assertEqual(len(command.call_args_list), 3)
+        self.assertEqual(len(command.call_args_list), 8)
         for call, (path, identifier) in zip(command.call_args_list, release.code_objects(self.app)):
             self.assertEqual(call.args, ("/usr/bin/codesign", "--force", "--sign", self.identity,
                                         "--keychain", str(keychain), "--identifier", identifier,
@@ -397,12 +512,12 @@ class CodeObjectSigning(unittest.TestCase):
     def test_each_architecture_has_identifier_runtime_entitlements_and_strict_requirement_checks(self):
         with patch.object(release, "run", return_value=b"") as command, patch.object(release, "captured_run", side_effect=self.display) as display:
             release.verify_code_objects(self.app)
-        self.assertEqual(len(display.call_args_list), 6)
+        self.assertEqual(len(display.call_args_list), 16)
         pairs = {(call.args[-1], call.args[3]) for call in display.call_args_list}
         self.assertEqual(pairs, {(str(path), architecture) for path, _ in release.code_objects(self.app)
                                  for architecture in release.ARCHITECTURES})
         verifications = [call for call in command.call_args_list if call.kwargs["operation"] == "codesign-verify"]
-        self.assertEqual(len(verifications), 3)
+        self.assertEqual(len(verifications), 8)
         for call, (path, identifier) in zip(verifications, release.code_objects(self.app)):
             self.assertEqual(call.args, ("/usr/bin/codesign", "--verify", "--strict", "--all-architectures",
                                         f'-R=identifier "{identifier}"', str(path)))
@@ -449,8 +564,8 @@ class CodeObjectSigning(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             calls = self.verify_development(Path(temporary))
         extractions = [args for args, operation in calls if operation == "certificate-extract"]
-        self.assertEqual(len(extractions), 6)
-        self.assertEqual(len({args[4] for args in extractions}), 6)
+        self.assertEqual(len(extractions), 16)
+        self.assertEqual(len({args[4] for args in extractions}), 16)
         requirements = [args[-2] for args, operation in calls
                         if operation == "codesign-verify" and "certificate leaf" in args[-2]]
         self.assertEqual(requirements, [f'-R=identifier "{identifier}" and anchor apple generic '
@@ -485,6 +600,11 @@ class GitInspectorCodeObjectSigning(CodeObjectSigning):
     helper_id = release.GIT_HELPER_ID
 
 
+class SparkleCodeObjectSigning(CodeObjectSigning):
+    helper_path = release.SPARKLE_VERSION_ROOT + "/Autoupdate"
+    helper_id = "org.sparkle-project.Sparkle.Autoupdate"
+
+
 class TagSafety(unittest.TestCase):
     class API:
         def __init__(self, responses):
@@ -517,6 +637,9 @@ class TagSafety(unittest.TestCase):
 
 class Publication(unittest.TestCase):
     def setUp(self):
+        self.feed_verify = patch.object(release.appcast_module(), "verify_release").start()
+        self.feed_publish = patch.object(release.appcast_module(), "publish_feed").start()
+        self.addCleanup(patch.stopall)
         self.temp = tempfile.TemporaryDirectory()
         self.old_cwd = Path.cwd()
         os.chdir(self.temp.name)
@@ -528,12 +651,13 @@ class Publication(unittest.TestCase):
             archive.writestr("MoeKit.app/Contents/Info.plist", plistlib.dumps(valid_plist()))
             write_zip_code(archive)
         (directory / self.dmg_name).write_bytes(b"Synthetic DMG fixture; native validation is tested on macOS.")
+        (directory / "appcast.xml").write_bytes(b"Synthetic feed; signature coverage is in test-sparkle-appcast.py")
         notes = write_notes(self.context)
         info = signed_metadata(self.context, digest=release.inspect_zip(directory / self.zip_name, self.context),
                                artifacts={name: release.sha256(directory / name) for name in (self.dmg_name, self.zip_name)},
                                notes_hash=release.sha256(notes))
         release.write_json(directory / "BUILD_INFO.json", info)
-        release.write_checksums(directory, (self.dmg_name, self.zip_name, "BUILD_INFO.json"))
+        release.write_checksums(directory, (self.dmg_name, self.zip_name, "BUILD_INFO.json", "appcast.xml"))
 
     def tearDown(self):
         os.chdir(self.old_cwd)
@@ -606,7 +730,8 @@ class Publication(unittest.TestCase):
             with patch.dict(os.environ, {"GITHUB_STEP_SUMMARY": ""}), redirect_stdout(io.StringIO()):
                 release.publish()
         self.assertEqual({item["name"] for item in api.assets},
-                         {self.dmg_name, self.zip_name, "BUILD_INFO.json", "SHA256SUMS.txt"})
+                         {self.dmg_name, self.zip_name, "BUILD_INFO.json", "appcast.xml", "SHA256SUMS.txt"})
+        self.feed_publish.assert_called_once()
         created = next(body for method, path, body in api.calls if method == "POST" and path.endswith("/releases"))
         self.assertEqual(created["name"], "v0.1.0-preview.1")
         self.assertTrue(created["body"].startswith("[下载 DMG（推荐）]"))
@@ -637,13 +762,13 @@ class Publication(unittest.TestCase):
         Path("Preview", self.dmg_name).unlink()
         self.assert_publish_stops_before_api()
         Path("Preview", self.dmg_name).write_bytes(b"restored fixture")
-        Path("Preview", "appcast.xml").write_text("unexpected")
-        release.write_checksums(Path("Preview"), (self.dmg_name, self.zip_name, "BUILD_INFO.json"))
+        Path("Preview", "unexpected.bin").write_text("unexpected")
+        release.write_checksums(Path("Preview"), (self.dmg_name, self.zip_name, "BUILD_INFO.json", "appcast.xml"))
         self.assert_publish_stops_before_api()
 
     def test_tampered_dmg_even_with_new_checksums_stops_publication(self):
         Path("Preview", self.dmg_name).write_bytes(b"tampered image")
-        release.write_checksums(Path("Preview"), (self.dmg_name, self.zip_name, "BUILD_INFO.json"))
+        release.write_checksums(Path("Preview"), (self.dmg_name, self.zip_name, "BUILD_INFO.json", "appcast.xml"))
         self.assert_publish_stops_before_api()
 
     def test_missing_native_verification_flags_stop_publication(self):
@@ -653,7 +778,7 @@ class Publication(unittest.TestCase):
             info = json.loads(json.dumps(original))
             info["package_verification"][flag] = False
             release.write_json(path, info)
-            release.write_checksums(Path("Preview"), (self.dmg_name, self.zip_name, "BUILD_INFO.json"))
+            release.write_checksums(Path("Preview"), (self.dmg_name, self.zip_name, "BUILD_INFO.json", "appcast.xml"))
             with self.subTest(flag=flag):
                 self.assert_publish_stops_before_api()
 
@@ -667,7 +792,7 @@ class Publication(unittest.TestCase):
         info = json.loads(path.read_text())
         info["artifacts"]["extra.zip"] = "0" * 64
         release.write_json(path, info)
-        release.write_checksums(Path("Preview"), (self.dmg_name, self.zip_name, "BUILD_INFO.json"))
+        release.write_checksums(Path("Preview"), (self.dmg_name, self.zip_name, "BUILD_INFO.json", "appcast.xml"))
         self.assert_publish_stops_before_api()
 
     def test_wrong_app_digest_stops_publication(self):
@@ -675,7 +800,7 @@ class Publication(unittest.TestCase):
         info = json.loads(path.read_text())
         info["app_content_sha256"] = "0" * 64
         release.write_json(path, info)
-        release.write_checksums(Path("Preview"), (self.dmg_name, self.zip_name, "BUILD_INFO.json"))
+        release.write_checksums(Path("Preview"), (self.dmg_name, self.zip_name, "BUILD_INFO.json", "appcast.xml"))
         self.assert_publish_stops_before_api()
 
 
@@ -853,7 +978,7 @@ class DmgSafety(unittest.TestCase):
         digest = release.app_content_digest(app)
         def command(*args, operation):
             if operation == "dmg-stage":
-                shutil.copytree(args[1], args[2])
+                shutil.copytree(args[1], args[2], symlinks=True)
             if operation == "dmg-attach":
                 raise release.ReleaseError("Synthetic partial attach failure.")
             return b""
@@ -870,7 +995,7 @@ class DmgSafety(unittest.TestCase):
         def command(*args, operation):
             calls.append((args, operation))
             if operation == "dmg-stage":
-                shutil.copytree(args[1], args[2])
+                shutil.copytree(args[1], args[2], symlinks=True)
             return b""
         writable_filesystem = type("FilesystemFlags", (), {"f_flag": 0})()
         with patch.object(release, "run", side_effect=command), patch.object(release, "cleanup_dmg_mount") as cleanup:
@@ -893,7 +1018,7 @@ class DmgSafety(unittest.TestCase):
         workflow = (Path(release.__file__).resolve().parents[1] / ".github/workflows/preview-release.yml").read_text()
         expected = ["Preview/MoeKit-v${{ inputs.version }}-macOS.dmg",
                     "Preview/MoeKit-v${{ inputs.version }}-macOS.zip",
-                    "Preview/SHA256SUMS.txt", "Preview/BUILD_INFO.json"]
+                    "Preview/SHA256SUMS.txt", "Preview/BUILD_INFO.json", "Preview/appcast.xml"]
         actual = [line.strip() for line in workflow.splitlines() if line.strip().startswith("Preview/")]
         self.assertEqual(actual, expected)
         self.assertNotIn("macOS-universal.zip", workflow)
@@ -945,6 +1070,22 @@ class NativeFixtureCompilation(unittest.TestCase):
 
 @unittest.skipUnless(sys.platform == "darwin", "Native hdiutil/universal signing integration requires macOS; no app execution")
 class NativeDmgIntegration(unittest.TestCase):
+    def test_each_nested_sparkle_identity_is_verified_independently(self):
+        with tempfile.TemporaryDirectory(prefix="moekit-sparkle-code-test-") as name:
+            root = Path(name)
+            app = synthetic_app(root)
+            for relative in release.EXECUTABLE_PATHS:
+                compile_native_fixture(root, app / relative)
+            release.sign_code_objects(app, "-")
+            release.verify_code_objects(app)
+            for index, (relative, _) in enumerate(release.SPARKLE_CODE):
+                changed = root / f"case-{index}" / "MoeKit.app"
+                shutil.copytree(app, changed, symlinks=True)
+                release.run("/usr/bin/codesign", "--force", "--sign", "-", "--identifier", "com.invalid.nested",
+                            "--options", "runtime", "--timestamp=none", str(changed / relative), operation="codesign-sign")
+                with self.subTest(code_object=relative), self.assertRaises(release.ReleaseError):
+                    release.verify_code_objects(changed)
+
     def test_universal_fixture_round_trips_signed_zip_and_readonly_dmg(self):
         # This is a synthetic never-executed app, with ad-hoc signing and no
         # credentials. Avoid TemporaryDirectory: failed detach must never cause
@@ -953,9 +1094,7 @@ class NativeDmgIntegration(unittest.TestCase):
         context = release.validate_inputs(valid_environment())
         with patch.dict(os.environ, {"RUNNER_TEMP": str(temporary)}):
             try:
-                app = temporary / "MoeKit.app"
-                (app / "Contents/MacOS").mkdir(parents=True)
-                (app / "Contents/Info.plist").write_bytes(plistlib.dumps(valid_plist()))
+                app = synthetic_app(temporary)
                 for relative in release.EXECUTABLE_PATHS:
                     compile_native_fixture(temporary, app / relative)
                 release.sign_code_objects(app, "-")
@@ -986,9 +1125,7 @@ class NativeDmgIntegration(unittest.TestCase):
         # Every input is compiled here and never launched. No keychain or network.
         with tempfile.TemporaryDirectory(prefix="moekit-code-test-") as name:
             temporary = Path(name)
-            app = temporary / "MoeKit.app"
-            (app / "Contents/MacOS").mkdir(parents=True)
-            (app / "Contents/Info.plist").write_bytes(plistlib.dumps(valid_plist()))
+            app = synthetic_app(temporary)
             for relative in release.EXECUTABLE_PATHS:
                 compile_native_fixture(temporary, app / relative)
             release.sign_code_objects(app, "-")
@@ -1000,7 +1137,7 @@ class NativeDmgIntegration(unittest.TestCase):
                 for variant in ("identifier", "runtime", "entitlements", "tampered", "thin", "unsigned"):
                     with self.subTest(helper=helper_path, variant=variant):
                         altered = temporary / Path(helper_path).name / variant / "MoeKit.app"
-                        shutil.copytree(app, altered)
+                        shutil.copytree(app, altered, symlinks=True)
                         helper = altered / helper_path
                         if variant in {"identifier", "runtime", "entitlements"}:
                             extra = ("--entitlements", str(entitlements)) if variant == "entitlements" else ()

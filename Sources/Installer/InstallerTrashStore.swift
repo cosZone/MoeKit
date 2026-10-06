@@ -11,7 +11,9 @@ final class InstallerTrashStore {
     private(set) var restorePlan: InstallerRestorePlan?
     private(set) var installationFinished = false
     private(set) var isDemoEnabled = false
-    private(set) var isBusy = false
+    private(set) var isBusy = false {
+        didSet { UpdateInstallationSafety.shared.changed(self) }
+    }
     private(set) var isCancelling = false
     private(set) var errorMessage: String?
     private(set) var lastOutcome: InstallerTrashOutcome?

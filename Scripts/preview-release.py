@@ -11,6 +11,7 @@ from __future__ import annotations
 import base64
 import datetime
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path, PurePosixPath
@@ -35,10 +36,34 @@ GIT_HELPER_PATH = "Contents/MacOS/GitObjectInspector"
 GIT_HELPER_ID = BUNDLE_ID + ".GitObjectInspector"
 # Exact reviewed original helpers only. Never broaden this from bundle discovery.
 HELPERS = ((HELPER_PATH, HELPER_ID), (GIT_HELPER_PATH, GIT_HELPER_ID))
-VERIFIED_CODE_PATHS = [relative for relative, _ in HELPERS] + ["."]
-EXECUTABLE_PATHS = frozenset({"Contents/MacOS/MoeKit", *(relative for relative, _ in HELPERS)})
+SPARKLE_ROOT = "Contents/Frameworks/Sparkle.framework"
+SPARKLE_VERSION_ROOT = SPARKLE_ROOT + "/Versions/B"
+SPARKLE_CODE = (
+    (SPARKLE_VERSION_ROOT + "/XPCServices/Installer.xpc", "org.sparkle-project.InstallerLauncher"),
+    (SPARKLE_VERSION_ROOT + "/XPCServices/Downloader.xpc", "org.sparkle-project.DownloaderService"),
+    (SPARKLE_VERSION_ROOT + "/Autoupdate", "org.sparkle-project.Sparkle.Autoupdate"),
+    (SPARKLE_VERSION_ROOT + "/Updater.app", "org.sparkle-project.Sparkle.Updater"),
+    (SPARKLE_ROOT, "org.sparkle-project.Sparkle"),
+)
+SPARKLE_EXECUTABLES = frozenset(SPARKLE_VERSION_ROOT + "/" + path for path in (
+    "Sparkle", "Autoupdate", "Updater.app/Contents/MacOS/Updater",
+    "XPCServices/Installer.xpc/Contents/MacOS/Installer",
+    "XPCServices/Downloader.xpc/Contents/MacOS/Downloader"))
+ALL_CODE = HELPERS + SPARKLE_CODE
+VERIFIED_CODE_PATHS = [relative for relative, _ in ALL_CODE] + ["."]
+EXECUTABLE_PATHS = frozenset({"Contents/MacOS/MoeKit", *(relative for relative, _ in HELPERS), *SPARKLE_EXECUTABLES})
+POLICY_ROOT = Path(__file__).resolve().parents[1] / "Configurations"
+SPARKLE_LAYOUT = json.loads((POLICY_ROOT / "Sparkle-layout.json").read_text())
+SPARKLE_LINKS = {SPARKLE_ROOT + "/" + name: target for name, target in SPARKLE_LAYOUT["links"].items()}
+SPARKLE_FILES = {SPARKLE_ROOT + "/" + name: digest for name, digest in SPARKLE_LAYOUT["files"].items()}
+SPARKLE_DIRECTORIES = {SPARKLE_ROOT, *(SPARKLE_ROOT + "/" + name for name in SPARKLE_LAYOUT["directories"])}
+SPARKLE_SIGNATURE_FILES = {name for name in SPARKLE_FILES if name.endswith("/_CodeSignature/CodeResources")}
+SPARKLE_OPTIONAL = {SPARKLE_ROOT + "/" + name for name in ("Headers", "PrivateHeaders", "Modules")}
+SPARKLE_OPTIONAL.update(name for name in SPARKLE_FILES | SPARKLE_LINKS if any(
+    name == SPARKLE_VERSION_ROOT + "/" + part or name.startswith(SPARKLE_VERSION_ROOT + "/" + part + "/")
+    for part in ("Headers", "PrivateHeaders", "Modules")))
 ARCHITECTURES = ("arm64", "x86_64")
-SECRET_NAMES = ("SIGNING_CERTIFICATE_P12", "SIGNING_CERTIFICATE_PASSWORD", "DEVELOPMENT_TEAM")
+SECRET_NAMES = ("SIGNING_CERTIFICATE_P12", "SIGNING_CERTIFICATE_PASSWORD", "DEVELOPMENT_TEAM", "SPARKLE_ED_PRIVATE_KEY", "SPARKLE_ED_PUBLIC_KEY")
 VERSION_RE = re.compile(r"(0|[1-9][0-9]{0,3})\.(0|[1-9][0-9]{0,3})\.(0|[1-9][0-9]{0,3})-preview\.(0|[1-9][0-9]{0,5})\Z")
 SHA_RE = re.compile(r"[0-9a-f]{40}\Z")
 MACHO_MAGICS = {bytes.fromhex(value) for value in (
@@ -48,6 +73,16 @@ MACHO_MAGICS = {bytes.fromhex(value) for value in (
 
 class ReleaseError(Exception):
     """Only fixed, non-secret diagnostic text belongs in these errors."""
+
+
+def appcast_module():
+    name = "moekit_sparkle_appcast"
+    if name not in sys.modules:
+        spec = importlib.util.spec_from_file_location(name, Path(__file__).with_name("sparkle_appcast.py"))
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[name] = module
+        spec.loader.exec_module(module)
+    return sys.modules[name]
 
 
 def require(condition: bool, message: str) -> None:
@@ -148,6 +183,7 @@ def validate_inputs(environment: dict[str, str]) -> dict[str, str]:
         require(bool(re.fullmatch(r"[1-9][0-9]{0,14}", environment.get(name, ""))), "Invalid GitHub run metadata.")
     return {"version": version, "source_sha": sha,
             "marketing_version": version.split("-preview.")[0],
+            "build_number": appcast_module().build_number(version),
             "run_id": environment["GITHUB_RUN_ID"],
             "run_number": environment["GITHUB_RUN_NUMBER"],
             "run_attempt": environment["GITHUB_RUN_ATTEMPT"]}
@@ -159,7 +195,16 @@ def validate() -> dict[str, str]:
     # Untracked build products are allowed; tracked source modifications are not.
     run("git", "diff", "--exit-code", "HEAD", "--", operation="source-clean")
     release_notes(context)
+    validate_public_key_input()
     return context
+
+
+def validate_public_key_input() -> str:
+    public_key = appcast_module().load_config(require_key=True)["publicEDKey"]
+    supplied = os.environ.get("SPARKLE_ED_PUBLIC_KEY", "")
+    require(bool(supplied), "Missing or empty Actions secret: SPARKLE_ED_PUBLIC_KEY")
+    require(supplied == public_key, "SPARKLE_ED_PUBLIC_KEY differs from the committed public key; review the public-key configuration.")
+    return public_key
 
 
 def release_notes(context: dict[str, str]) -> tuple[str, str]:
@@ -256,10 +301,23 @@ def validate_info(info: dict, context: dict[str, str]) -> None:
     require(info.get("CFBundleIdentifier") == BUNDLE_ID, "Unexpected app bundle identifier.")
     require(info.get("CFBundleExecutable") == "MoeKit", "Unexpected app executable.")
     require(info.get("CFBundleShortVersionString") == context["marketing_version"], "Unexpected app marketing version.")
-    require(info.get("CFBundleVersion") == context["run_number"], "Unexpected app build number.")
+    require(info.get("CFBundleVersion") == context.get("build_number", context["run_number"]), "Unexpected app build number.")
     require(info.get("LSMinimumSystemVersion") == "15.0", "Unexpected macOS deployment target.")
     require("NSMainStoryboardFile" not in info and "NSMainNibFile" not in info,
             "SwiftUI-only app must not declare a main storyboard or nib.")
+    config = appcast_module().load_config()
+    require(SPARKLE_LAYOUT["version"] == config["version"] and SPARKLE_LAYOUT["revision"] == config["revision"] and
+            SPARKLE_LAYOUT["package_sha256"] == config["checksum"], "Sparkle layout and package pins disagree.")
+    require(info.get("SUFeedURL") == config["feedURL"] and info.get("SUPublicEDKey") == config["publicEDKey"],
+            "App update feed or public key differs from the reviewed configuration.")
+    policy = {"SURequireSignedFeed": True, "SUVerifyUpdateBeforeExtraction": True,
+                       "SUSignedFeedFailureExpirationInterval": 0, "SUAutomaticallyUpdate": False,
+                       "SUEnableSystemProfiling": False, "SUEnableJavaScript": False}
+    require({key for key in info if key.startswith("SU")} == set(policy) | {"SUFeedURL", "SUPublicEDKey"},
+            "Unexpected Sparkle update configuration key.")
+    for key, value in policy.items():
+        require(type(info.get(key)) is type(value) and info[key] == value,
+                "App update security settings differ from the reviewed policy.")
 
 
 def verify_provenance(info: dict, context: dict[str, str]) -> None:
@@ -270,8 +328,39 @@ def verify_provenance(info: dict, context: dict[str, str]) -> None:
             info.get("MoeKitBuildRunAttempt") == context["run_attempt"], "App build-run provenance mismatch.")
 
 
+def verify_link(relative: str, target: str) -> None:
+    require(SPARKLE_LINKS.get(relative) == target, "Unexpected app symlink or link target.")
+
+
+def verify_sparkle_inventory(files: set[str], links: set[str]) -> None:
+    require(set(SPARKLE_FILES) - SPARKLE_OPTIONAL - SPARKLE_SIGNATURE_FILES <= files,
+            "Required pinned Sparkle framework content is missing.")
+    require(set(SPARKLE_LINKS) - SPARKLE_OPTIONAL <= links,
+            "Required pinned Sparkle framework links are missing.")
+    # Optional development headers/modules may be removed by standard Xcode copy
+    # phases. Never accept a remaining link whose exact official target is absent.
+    for relative in links & SPARKLE_OPTIONAL:
+        group = relative.rsplit("/", 1)[-1]
+        require(any(name.startswith(SPARKLE_VERSION_ROOT + "/" + group + "/") for name in files),
+                "Optional Sparkle header or module link is dangling.")
+
+
+def verify_upstream_sparkle(app: Path) -> None:
+    """Before our re-signing, prove copied vendor bytes match the pinned archive.
+
+    Run only on unsigned archives; code signatures necessarily change afterward.
+    Bundle structure and all-file/link digests are checked again after signing.
+    """
+    for relative, expected in SPARKLE_FILES.items():
+        path = app / relative
+        if relative in SPARKLE_OPTIONAL and not path.exists():
+            continue
+        require(path.is_file() and not path.is_symlink() and sha256(path) == expected,
+                "Embedded Sparkle bytes differ at reviewed path: " + relative)
+
+
 def verify_bundle_entry(relative: str, *, directory: bool, mode: int, magic: bytes) -> None:
-    """The release contains exactly the app and two reviewed original helpers.
+    """The release contains the app, two original helpers and pinned Sparkle.
 
     Apply the same layout policy before signing and before unpacking ZIP input.
     Paths here have already been checked for traversal and canonical spelling.
@@ -280,6 +369,19 @@ def verify_bundle_entry(relative: str, *, directory: bool, mode: int, magic: byt
     require(bool(parts) and parts[0] == "Contents", "Unexpected app bundle root entry.")
     if len(parts) == 1:
         require(directory, "App Contents must be a directory.")
+        return
+    if relative == "Contents/Frameworks":
+        require(directory, "Frameworks must be a directory.")
+        return
+    if relative.startswith("Contents/Frameworks/"):
+        require((directory and relative in SPARKLE_DIRECTORIES) or
+                (not directory and relative in SPARKLE_FILES),
+                "Unexpected path in the pinned Sparkle framework.")
+        if not directory:
+            if relative in SPARKLE_EXECUTABLES:
+                require(magic in MACHO_MAGICS and bool(mode & 0o111), "Expected Sparkle executable is not Mach-O code.")
+            else:
+                require(magic not in MACHO_MAGICS and not mode & 0o111, "Unexpected executable Sparkle resource.")
         return
     require(parts[1] in {"Info.plist", "PkgInfo", "MacOS", "Resources", "_CodeSignature"},
             "Unexpected app bundle contents.")
@@ -304,12 +406,15 @@ def verify_bundle_entry(relative: str, *, directory: bool, mode: int, magic: byt
 
 def verify_app(app: Path, context: dict[str, str], *, provenance: bool = True) -> None:
     require(app.is_dir() and not app.is_symlink(), "App bundle is missing or unsafe.")
-    files = set()
+    files, links = set(), set()
     # Inspect links and layout before opening metadata or executable paths.
     for path in app.rglob("*"):
         mode = path.lstat().st_mode
-        require(stat.S_ISREG(mode) or stat.S_ISDIR(mode), "Unexpected symlink or special file in app bundle.")
         relative = path.relative_to(app).as_posix()
+        if stat.S_ISLNK(mode):
+            verify_link(relative, os.readlink(path)); links.add(relative)
+            continue
+        require(stat.S_ISREG(mode) or stat.S_ISDIR(mode), "Unexpected special file in app bundle.")
         magic = b""
         if stat.S_ISREG(mode):
             with path.open("rb") as stream:
@@ -317,6 +422,7 @@ def verify_app(app: Path, context: dict[str, str], *, provenance: bool = True) -
             files.add(relative)
         verify_bundle_entry(relative, directory=stat.S_ISDIR(mode), mode=mode, magic=magic)
     require(EXECUTABLE_PATHS <= files, "The app and reviewed helper executables are required.")
+    verify_sparkle_inventory(files, links)
     info = plistlib.loads((app / "Contents/Info.plist").read_bytes())
     if provenance:
         verify_provenance(info, context)
@@ -329,7 +435,7 @@ def verify_app(app: Path, context: dict[str, str], *, provenance: bool = True) -
 
 def code_objects(app: Path) -> tuple[tuple[Path, str], ...]:
     # Fixed inside-out order. Never discover signable code by glob or --deep.
-    return tuple((app / relative, identifier) for relative, identifier in HELPERS) + ((app, BUNDLE_ID),)
+    return tuple((app / relative, identifier) for relative, identifier in ALL_CODE) + ((app, BUNDLE_ID),)
 
 
 def sign_code_objects(app: Path, identity: str, keychain: Path | None = None) -> None:
@@ -342,7 +448,7 @@ def sign_code_objects(app: Path, identity: str, keychain: Path | None = None) ->
 
 
 def verify_code_objects(app: Path) -> None:
-    """Strictly verify all three objects and inspect every architecture, even off-host."""
+    """Strictly verify every exact object and architecture, even off-host."""
     for path, identifier in code_objects(app):
         run("/usr/bin/codesign", "--verify", "--strict", "--all-architectures",
             '-R=identifier "' + identifier + '"', str(path), operation="codesign-verify")
@@ -397,18 +503,23 @@ def app_content_digest(app: Path) -> str:
     require(app.is_dir() and not app.is_symlink(), "App bundle is missing or unsafe.")
     files = {}
     for path in app.rglob("*"):
-        require(not path.is_symlink() and (path.is_file() or path.is_dir()), "Unexpected app file type.")
-        if path.is_file():
-            files[path.relative_to(app).as_posix()] = sha256(path)
+        relative = path.relative_to(app).as_posix()
+        if path.is_symlink():
+            target = os.readlink(path); verify_link(relative, target)
+            files[relative] = "symlink:" + target
+        else:
+            require(path.is_file() or path.is_dir(), "Unexpected app file type.")
+            if path.is_file():
+                files[relative] = sha256(path)
     require(bool(files), "App bundle is empty.")
     return content_digest(files)
 
 
-def inspect_zip(path: Path, context: dict[str, str]) -> str:
+def inspect_zip(path: Path, context: dict[str, str], *, upstream: bool = False) -> str:
     with zipfile.ZipFile(path) as archive:
         names = archive.namelist()
         require(len(names) == len(set(names)), "ZIP contains duplicate paths.")
-        files = {}
+        files, links = {}, set()
         for item in archive.infolist():
             parts = PurePosixPath(item.filename).parts
             require(bool(parts) and parts[0] in {"MoeKit.app", "__MACOSX"} and
@@ -416,9 +527,16 @@ def inspect_zip(path: Path, context: dict[str, str]) -> str:
                     "ZIP contains an unsafe path.")
             require(item.filename == "/".join(parts) + ("/" if item.is_dir() else ""),
                     "ZIP contains a noncanonical path.")
-            require(not stat.S_ISLNK(item.external_attr >> 16), "ZIP contains an unexpected symlink.")
-            require(stat.S_IFMT(item.external_attr >> 16) in {0, stat.S_IFREG, stat.S_IFDIR},
+            require(stat.S_IFMT(item.external_attr >> 16) in {0, stat.S_IFREG, stat.S_IFDIR, stat.S_IFLNK},
                     "ZIP contains an unexpected special file.")
+            if stat.S_ISLNK(item.external_attr >> 16):
+                require(parts[0] == "MoeKit.app" and len(parts) > 1 and item.file_size <= 128,
+                        "ZIP contains an unexpected symlink.")
+                relative = "/".join(parts[1:])
+                target = archive.read(item).decode("utf-8", errors="strict")
+                verify_link(relative, target); links.add(relative)
+                files[relative] = "symlink:" + target
+                continue
             if parts[0] == "__MACOSX":
                 # ditto's AppleDouble resource metadata only, never arbitrary payloads.
                 require((len(parts) == 1 and item.is_dir()) or
@@ -445,23 +563,32 @@ def inspect_zip(path: Path, context: dict[str, str]) -> str:
                     files[relative] = digest.hexdigest()
                 verify_bundle_entry(relative, directory=item.is_dir(), mode=item.external_attr >> 16, magic=magic)
         require(EXECUTABLE_PATHS <= files.keys(), "ZIP must contain the app and reviewed helper executables.")
+        verify_sparkle_inventory(set(files) - links, links)
+        if upstream:
+            for relative, expected in SPARKLE_FILES.items():
+                if relative in SPARKLE_OPTIONAL and relative not in files:
+                    continue
+                require(files.get(relative) == expected,
+                        "Unsigned ZIP Sparkle bytes differ at reviewed path: " + relative)
         verify_provenance(plistlib.loads(archive.read("MoeKit.app/Contents/Info.plist")), context)
         return content_digest(files)
 
 
 def metadata(context: dict[str, str]) -> dict:
     return {"repository": REPOSITORY, "source_sha": context["source_sha"],
-            "version": context["version"], "build_number": context["run_number"],
+            "version": context["version"], "build_number": context["build_number"],
             "run_id": context["run_id"], "run_attempt": context["run_attempt"],
             "source_url": f"https://github.com/{REPOSITORY}/commit/{context['source_sha']}",
             "run_url": f"https://github.com/{REPOSITORY}/actions/runs/{context['run_id']}",
             "bundle_id": BUNDLE_ID, "configuration": "Release", "architectures": list(ARCHITECTURES),
             "embedded_code": {relative: {"identifier": identifier, "architectures": list(ARCHITECTURES),
-                                          "origin": "original MoeKit source; no bundled third-party CLI"}
-                              for relative, identifier in HELPERS},
+                                          "origin": "original MoeKit source; no bundled third-party CLI" if (relative, identifier) in HELPERS
+                                          else "official Sparkle 2.10.0; pinned distribution"}
+                              for relative, identifier in ALL_CODE},
+            "sparkle_dependency": {key: SPARKLE_LAYOUT[key] for key in ("version", "revision", "package_sha256")},
             "minimum_macos": "15.0", "xcode": "16.4", "tuist": "4.148.3",
             "tests": "Release-configuration unit tests passed on the runner architecture with ENABLE_TESTABILITY=YES; archive built separately from the same source.",
-            "native_ui_verified": False, "notarized": False, "updater": False}
+            "native_ui_verified": False, "notarized": False, "updater": "Sparkle 2.10.0; signed feed and archive required"}
 
 
 def check_metadata(info: dict, context: dict[str, str], *, signed: bool) -> None:
@@ -549,6 +676,7 @@ def prepare() -> None:
     require(text_run("xcodebuild", "-version", operation="toolchain-version").splitlines()[0] == "Xcode 16.4", "Unexpected Xcode version.")
     app = Path("build/MoeKit.xcarchive/Products/Applications/MoeKit.app")
     verify_app(app, context, provenance=False)
+    verify_upstream_sparkle(app)
     plist_path = app / "Contents/Info.plist"
     info = plistlib.loads(plist_path.read_bytes())
     info.update(MoeKitSourceCommit=context["source_sha"], MoeKitPreviewVersion=context["version"],
@@ -558,7 +686,7 @@ def prepare() -> None:
     directory = Path("Unsigned")
     directory.mkdir(exist_ok=False)
     run("/usr/bin/ditto", "-c", "-k", "--sequesterRsrc", "--keepParent", str(app), str(directory / "MoeKit-unsigned.zip"), operation="unsigned-package")
-    inspect_zip(directory / "MoeKit-unsigned.zip", context)
+    inspect_zip(directory / "MoeKit-unsigned.zip", context, upstream=True)
     info = metadata(context)
     info.update(signing="unsigned intermediate; do not distribute", signature_verified=False)
     write_json(directory / "BUILD_INFO.json", info)
@@ -631,7 +759,7 @@ def sign() -> None:
     check_files(directory, ("MoeKit-unsigned.zip", "BUILD_INFO.json"))
     info = json.loads((directory / "BUILD_INFO.json").read_text(encoding="utf-8"))
     check_metadata(info, context, signed=False)
-    inspect_zip(directory / "MoeKit-unsigned.zip", context)
+    inspect_zip(directory / "MoeKit-unsigned.zip", context, upstream=True)
     scratch = signing_directory()
     scratch.mkdir(mode=0o700, exist_ok=False)
     try:
@@ -664,6 +792,7 @@ def sign() -> None:
         run("/usr/bin/ditto", "-x", "-k", str(directory / "MoeKit-unsigned.zip"), str(unpacked), operation="archive-unpack")
         app = unpacked / "MoeKit.app"
         verify_app(app, context)
+        verify_upstream_sparkle(app)
         # codesign also consults the user search list. Cleanup restores the saved list.
         # This does not change the default keychain, trust, or private-key access controls.
         register_signing_keychain(keychain, original)
@@ -685,20 +814,21 @@ def sign() -> None:
         verify_code_objects(packaged_app)
         require(app_content_digest(packaged_app) == app_digest, "ZIP round-trip changed the signed app content.")
         package_dmg(packaged_app, destination / dmg_name, scratch, context, app_digest)
-        _, notes_hash = release_notes(context)
+        notes, notes_hash = release_notes(context)
+        sparkle_info = appcast_module().sign_release(destination, context, notes)
         info = metadata(context)
         info.update(signing="Apple Development", signature_verified=True, expected_team_verified=True,
                     entitlements={}, hardened_runtime=True, secure_timestamp=False,
                     code_objects_verified=VERIFIED_CODE_PATHS.copy(),
                     gatekeeper="Unnotarized development preview; macOS may block it. Not Developer ID distribution.",
-                    app_content_sha256=app_digest, release_notes_sha256=notes_hash,
+                    app_content_sha256=app_digest, release_notes_sha256=notes_hash, sparkle=sparkle_info,
                     artifacts={name: sha256(destination / name) for name in (dmg_name, zip_name)},
                     package_verification={"dmg_integrity": True, "dmg_read_only": True,
                                           "dmg_app_signature_verified": True, "zip_app_signature_verified": True,
                                           "identical_app_content": True})
         write_json(destination / "BUILD_INFO.json", info)
-        write_checksums(destination, (dmg_name, zip_name, "BUILD_INFO.json"))
-        check_files(destination, (dmg_name, zip_name, "BUILD_INFO.json"))
+        write_checksums(destination, (dmg_name, zip_name, "BUILD_INFO.json", "appcast.xml"))
+        check_files(destination, (dmg_name, zip_name, "BUILD_INFO.json", "appcast.xml"))
         print("Verified development signature, expected team, universal app, and identical app content in read-only DMG and ZIP.")
     finally:
         cleanup()
@@ -777,10 +907,11 @@ def publish() -> None:
     context = validate()
     directory = Path("Preview")
     dmg_name, zip_name = package_names(context)
-    names = (dmg_name, zip_name, "BUILD_INFO.json")
+    names = (dmg_name, zip_name, "BUILD_INFO.json", "appcast.xml")
     check_files(directory, names)
     info = json.loads((directory / "BUILD_INFO.json").read_text(encoding="utf-8"))
     check_metadata(info, context, signed=True)
+    appcast_module().verify_release(directory, context, info.get("sparkle"))
     require(inspect_zip(directory / zip_name, context) == info["app_content_sha256"], "ZIP app content provenance mismatch.")
     require(all(info["artifacts"][name] == sha256(directory / name) for name in (dmg_name, zip_name)),
             "Package hashes do not match verified packaging provenance.")
@@ -826,6 +957,9 @@ def publish() -> None:
     result = api.request("PATCH", base + f"/releases/{release_id}", {"draft": False, "prerelease": True, "make_latest": "false"})
     require(result.get("draft") is False and result.get("prerelease") is True and result.get("tag_name") == tag,
             "Could not confirm prerelease publication; inspect repository state before retrying.")
+    # The signed feed points only at already-public, verified immutable assets.
+    # A feed failure does not roll back or overwrite a completed release.
+    appcast_module().publish_feed(api, directory, context)
     url = f"https://github.com/{REPOSITORY}/releases/tag/{tag}"
     print("Published verified development preview: " + url)
     summary = os.environ.get("GITHUB_STEP_SUMMARY")
@@ -835,11 +969,15 @@ def publish() -> None:
 
 
 def main() -> int:
-    commands = {"validate": validate, "prepare": prepare, "sign": sign, "cleanup": cleanup, "publish": publish}
+    commands = {"validate": validate, "prepare": prepare, "sign": sign, "cleanup": cleanup, "publish": publish,
+                "sparkle-tools": lambda: appcast_module().prepare_tools(),
+                "sparkle-cleanup": lambda: appcast_module().cleanup_tools(),
+                "build-settings": lambda: print(json.dumps({"build_number": validate_inputs(dict(os.environ))["build_number"],
+                                    "public_key": validate_public_key_input()}))}
     try:
         require(len(sys.argv) == 2 and sys.argv[1] in commands, "Choose validate, prepare, sign, cleanup, or publish.")
         commands[sys.argv[1]]()
-    except ReleaseError as error:
+    except (ReleaseError, appcast_module().SparkleError) as error:
         print("::error::" + str(error), file=sys.stderr)
         return 1
     except Exception:

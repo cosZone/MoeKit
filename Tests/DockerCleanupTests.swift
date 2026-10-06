@@ -638,3 +638,20 @@ final class DockerConfirmationRenderTests: XCTestCase {
 #endif
 
 @MainActor private final class DockerConfirmationCallbacks { var confirmed = 0; var cancelled = 0 }
+
+@Suite("Docker terminal response contract")
+struct DockerTerminalResponseTests {
+    @Test(arguments: [201, 202, 206])
+    func unexpectedSuccessStatusRemainsUncertain(_ status: Int) async throws {
+        let transport = FixtureDockerTransport(); transport.setImages([imageJSON()])
+        let executor = NativeDockerCleanupExecutor(transport: transport)
+        let inventory = try await executor.inspect(endpoint: .init(name: "Fixture", socketPath: "/fixture/owned.sock"), cancellation: DockerCancellation())
+        let plan = try await executor.prepare(inventory: inventory, selection: DockerSelection(imageIDs: [dockerImageA]), cancellation: DockerCancellation())
+        transport.setRefusal(status)
+        let result = try await executor.execute(plan: plan, cancellation: DockerCancellation())
+        #expect(result.inventory != nil)
+        #expect(result.items.map(\.state) == [.uncertain])
+        #expect(result.hasUncertainty)
+        #expect(transport.counts().mutations == 1)
+    }
+}

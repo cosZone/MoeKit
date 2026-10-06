@@ -172,7 +172,8 @@ struct DockerEngineSession: Sendable {
                     response = try transport.request(endpoint: fresh.daemon.endpoint, identity: fresh.daemon.socket, peer: fresh.daemon.peer,
                         method: "DELETE", path: path, cancellation: cancellation)
                 }
-                guard (200...299).contains(response.status) else { throw DockerCleanupError.daemon(response.status) }
+                let terminalStatus = target.kind == "container" ? 204 : 200
+                guard response.status == terminalStatus else { throw DockerCleanupError.daemon(response.status) }
                 if target.kind == "cache" {
                     let report = try JSONDecoder().decode(Prune.self, from: response.body)
                     reclaimed = report.SpaceReclaimed

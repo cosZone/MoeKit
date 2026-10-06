@@ -223,6 +223,7 @@ jobs:
             -only-testing:MoeKitTests/MoleAnalysisViewTests/testAnalysisSheetRenders \
             -only-testing:MoeKitTests/InstallerTrashViewTests/testInstallerConfirmationRenders \
             -only-testing:MoeKitTests/CleanupViewTests/testCleanupConfirmationRenders \
+            -only-testing:MoeKitTests/TrashViewTests \
             -only-testing:MoeKitTests/ProcessStopViewTests/testStopConfirmationRenders \
             -resultBundlePath ChineseRenderResults.xcresult
       - name: Check SwiftUI bundle and smoke-launch explicit demo
@@ -385,6 +386,8 @@ jobs:
                         -only-testing:MoeKitTests/GitCleanupExecutorTests
                         -only-testing:MoeKitTests/CleanupExecutorTests
                         -only-testing:MoeKitTests/CleanupStoreTests
+                        -only-testing:MoeKitTests/TrashExecutorTests
+                        -only-testing:MoeKitTests/TrashStoreTests
                         -only-testing:MoeKitTests/ReleaseVersionTests
                         -only-testing:MoeKitTests/ReleaseTransportTests
                         -only-testing:MoeKitTests/ReleaseCheckStoreTests

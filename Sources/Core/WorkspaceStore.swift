@@ -13,6 +13,7 @@ final class WorkspaceStore {
     let moleAnalysis: MoleAnalysisStore
     let installerTrash: InstallerTrashStore
     let gitCleanup: GitCleanupStore
+    let trash: TrashStore
     let dockerCleanup: DockerCleanupStore
     let toolPreparation: ToolPreparationStore
     let gettingStarted: GettingStartedState
@@ -29,6 +30,7 @@ final class WorkspaceStore {
             guard isDemoEnabled != oldValue else { return }
             modeID = UUID()
             toolPreparation.setDemoEnabled(isDemoEnabled)
+            trash.updateContext(.init(isDemoEnabled: isDemoEnabled, modeGeneration: toolPreparation.modeGeneration))
             processes.resetForModeChange()
             gitCleanup.invalidate()
             dockerCleanup.updateDemo(isDemoEnabled)
@@ -81,6 +83,7 @@ final class WorkspaceStore {
          moleAnalysis: MoleAnalysisStore? = nil,
          installerTrash: InstallerTrashStore? = nil,
          gitCleanup: GitCleanupStore? = nil,
+         trash: TrashStore? = nil,
          dockerCleanup: DockerCleanupStore? = nil) {
         self.isDemoEnabled = isDemoEnabled
         self.persistence = persistence
@@ -90,6 +93,7 @@ final class WorkspaceStore {
         self.moleAnalysis = moleAnalysis ?? MoleAnalysisStore()
         self.installerTrash = installerTrash ?? InstallerTrashStore()
         self.gitCleanup = gitCleanup ?? GitCleanupStore()
+        self.trash = trash ?? TrashStore()
         self.dockerCleanup = dockerCleanup ?? DockerCleanupStore()
         self.dockerCleanup.updateDemo(isDemoEnabled)
         // Construct the MainActor model in this initializer, not in a nested
@@ -98,6 +102,11 @@ final class WorkspaceStore {
         self.toolPreparation = preparation
         self.moleAnalysis.setDemoEnabled(isDemoEnabled)
         preparation.setDemoEnabled(isDemoEnabled)
+        self.trash.bindContext { [weak self] in
+            guard let self else { return .init(isDemoEnabled: true, modeGeneration: UUID()) }
+            return .init(isDemoEnabled: self.isDemoEnabled, modeGeneration: self.toolPreparation.modeGeneration)
+        }
+        self.trash.onMutationOutcome = { [weak self] in self?.moleAnalysis.invalidateLiveResult() }
         processes.onEvent = { [weak self] event in self?.recordProcessEvent(event) }
         self.moleAnalysis.onContextChange = { [weak self] in self?.refreshInstallerTrashContext() }
         self.installerTrash.onMutationOutcome = { [weak self] in self?.moleAnalysis.invalidateLiveResult() }

@@ -412,9 +412,13 @@ final class DockerCleanupViewRenderTests: XCTestCase {
                 let capture = DockerViewCapture()
                 let appearance = try XCTUnwrap(NSAppearance(named: dark ? .darkAqua : .aqua))
                 _ = NSApplication.shared
+                let previousAppearance = NSApp.appearance
+                NSApp.appearance = appearance
+                defer { NSApp.appearance = previousAppearance }
                 let hosting = NSHostingView(rootView: DockerCleanupView(store: store).environment(workspace)
                     .environment(\.colorScheme, dark ? .dark : .light).environment(\.locale, Locale.current)
                     .frame(width: size.width, height: size.height)
+                    .background(Color(nsColor: .windowBackgroundColor))
                     .installerCaptureViewport().environment(\.installerCaptureCollector, { capture.regions = $0 }))
                 hosting.sizingOptions = []; hosting.frame = NSRect(origin: .zero, size: size); hosting.appearance = appearance
                 let window = DockerRenderWindow(contentRect: hosting.frame, styleMask: [.titled, .resizable], backing: .buffered, defer: false)
@@ -431,6 +435,12 @@ final class DockerCleanupViewRenderTests: XCTestCase {
                 let name = "docker-\(scenario)-\(language)-\(dark ? "dark" : "light")"
                 let bitmap = try XCTUnwrap(hosting.bitmapImageRepForCachingDisplay(in: hosting.bounds))
                 appearance.performAsCurrentDrawingAppearance { hosting.cacheDisplay(in: hosting.bounds, to: bitmap) }
+                for x in [0, bitmap.pixelsWide / 2, bitmap.pixelsWide - 1] {
+                    for y in [0, bitmap.pixelsHigh / 2, bitmap.pixelsHigh - 1] {
+                        XCTAssertGreaterThan(try XCTUnwrap(bitmap.colorAt(x: x, y: y)).alphaComponent, 0.99,
+                                             "Owned window backing must be opaque")
+                    }
+                }
                 let png = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
                 XCTAssertGreaterThan(png.count, 1000)
                 let attachment = XCTAttachment(data: png, uniformTypeIdentifier: "public.png")
@@ -571,10 +581,15 @@ final class DockerConfirmationRenderTests: XCTestCase {
                 let size = NSSize(width: 720, height: 900)
                 let capture = DockerViewCapture()
                 let appearance = try XCTUnwrap(NSAppearance(named: dark ? .darkAqua : .aqua))
+                _ = NSApplication.shared
+                let previousAppearance = NSApp.appearance
+                NSApp.appearance = appearance
+                defer { NSApp.appearance = previousAppearance }
                 let hosting = NSHostingView(rootView: DockerCleanupConfirmationView(plan: plan, acknowledgement: acknowledgement,
                     onCancel: { callbacks.cancelled += 1 }, onConfirm: { callbacks.confirmed += 1 })
                     .environment(\.colorScheme, dark ? .dark : .light).environment(\.locale, Locale.current)
                     .frame(width: size.width, height: size.height)
+                    .background(Color(nsColor: .windowBackgroundColor))
                     .installerCaptureViewport().environment(\.installerCaptureCollector, { capture.regions = $0 }))
                 hosting.sizingOptions = []; hosting.frame = NSRect(origin: .zero, size: size); hosting.appearance = appearance
                 let window = DockerRenderWindow(contentRect: hosting.frame, styleMask: [.titled], backing: .buffered, defer: false)
@@ -591,6 +606,12 @@ final class DockerConfirmationRenderTests: XCTestCase {
                 XCTAssertEqual(Set(required.filter { id in capture.regions.contains { $0.id == id && !$0.bounds.isEmpty && viewport.contains($0.bounds) } }), Set(required))
                 let bitmap = try XCTUnwrap(hosting.bitmapImageRepForCachingDisplay(in: hosting.bounds))
                 appearance.performAsCurrentDrawingAppearance { hosting.cacheDisplay(in: hosting.bounds, to: bitmap) }
+                for x in [0, bitmap.pixelsWide / 2, bitmap.pixelsWide - 1] {
+                    for y in [0, bitmap.pixelsHigh / 2, bitmap.pixelsHigh - 1] {
+                        XCTAssertGreaterThan(try XCTUnwrap(bitmap.colorAt(x: x, y: y)).alphaComponent, 0.99,
+                                             "Owned window backing must be opaque")
+                    }
+                }
                 let png = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
                 let attachment = XCTAttachment(data: png, uniformTypeIdentifier: "public.png")
                 attachment.name = "docker-confirm-\(cacheScope ? "whole-cache" : "exact")-\(language)-\(dark ? "dark" : "light").png"

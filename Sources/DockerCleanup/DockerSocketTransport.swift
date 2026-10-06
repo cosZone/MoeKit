@@ -12,7 +12,8 @@ struct DockerHTTPResponse: Sendable {
 
 protocol DockerTransport: Sendable {
     func identity(for endpoint: DockerEndpoint) throws -> DockerSocketIdentity
-    func request(endpoint: DockerEndpoint, identity: DockerSocketIdentity, method: String,
+    func peerIdentity(endpoint: DockerEndpoint, identity: DockerSocketIdentity, cancellation: DockerCancellation) throws -> DockerPeerIdentity
+    func request(endpoint: DockerEndpoint, identity: DockerSocketIdentity, peer: DockerPeerIdentity, method: String,
                  path: String, cancellation: DockerCancellation) throws -> DockerHTTPResponse
 }
 
@@ -38,17 +39,25 @@ struct DockerSocketTransport: DockerTransport {
                                     inode: UInt64(metadata.st_ino), owner: UInt32(metadata.st_uid))
     }
 
-    func request(endpoint: DockerEndpoint, identity expected: DockerSocketIdentity, method: String,
-                 path: String, cancellation: DockerCancellation) throws -> DockerHTTPResponse {
+    func peerIdentity(endpoint: DockerEndpoint, identity: DockerSocketIdentity, cancellation: DockerCancellation) throws -> DockerPeerIdentity {
+        let (descriptor, peer) = try connectSocket(endpoint: endpoint, identity: identity,
+            deadline: ProcessInfo.processInfo.systemUptime + timeout, cancellation: cancellation)
+        _ = close(descriptor)
+        return peer
+    }
+
+    private func connectSocket(endpoint: DockerEndpoint, identity expected: DockerSocketIdentity,
+                               deadline: TimeInterval, cancellation: DockerCancellation) throws -> (Int32, DockerPeerIdentity) {
         try cancellation.check()
-        guard try identity(for: endpoint) == expected, Self.allowed(method: method, path: path) else { throw DockerCleanupError.unsafeSocket }
+        guard try identity(for: endpoint) == expected else { throw DockerCleanupError.changed }
         #if canImport(Darwin)
         let descriptor = socket(AF_UNIX, SOCK_STREAM, 0)
         #else
         let descriptor = socket(AF_UNIX, Int32(SOCK_STREAM.rawValue), 0)
         #endif
         guard descriptor >= 0 else { throw DockerCleanupError.unavailable }
-        defer { _ = close(descriptor) }
+        var keep = false
+        defer { if !keep { _ = close(descriptor) } }
         guard fcntl(descriptor, F_SETFL, O_NONBLOCK) == 0 else { throw DockerCleanupError.unavailable }
         _ = fcntl(descriptor, F_SETFD, FD_CLOEXEC)
         #if canImport(Darwin)
@@ -63,7 +72,6 @@ struct DockerSocketTransport: DockerTransport {
         #if canImport(Darwin)
         address.sun_len = UInt8(MemoryLayout<sockaddr_un>.size)
         #endif
-        let deadline = ProcessInfo.processInfo.systemUptime + timeout
         let connected = withUnsafePointer(to: &address) {
             $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { connect(descriptor, $0, socklen_t(MemoryLayout<sockaddr_un>.size)) }
         }
@@ -76,6 +84,20 @@ struct DockerSocketTransport: DockerTransport {
         }
         // A replacement at the original symlink or socket invalidates this connection too.
         guard try identity(for: endpoint) == expected else { throw DockerCleanupError.changed }
+        let peer = try kernelPeer(descriptor)
+        guard peer.uid == 0 || peer.uid == getuid() else { throw DockerCleanupError.unsafeSocket }
+        keep = true
+        return (descriptor, peer)
+    }
+
+    func request(endpoint: DockerEndpoint, identity expected: DockerSocketIdentity, peer expectedPeer: DockerPeerIdentity,
+                 method: String, path: String, cancellation: DockerCancellation) throws -> DockerHTTPResponse {
+        guard Self.allowed(method: method, path: path) else { throw DockerCleanupError.invalidSelection }
+        let deadline = ProcessInfo.processInfo.systemUptime + timeout
+        let (descriptor, peer) = try connectSocket(endpoint: endpoint, identity: expected, deadline: deadline, cancellation: cancellation)
+        defer { _ = close(descriptor) }
+        // Kernel identity is obtained from this connected fd, not from the socket pathname or /info.
+        guard peer == expectedPeer else { throw DockerCleanupError.changed }
         let request = Data("\(method) \(path) HTTP/1.1\r\nHost: localhost\r\nAccept: application/json\r\nConnection: close\r\nContent-Length: 0\r\n\r\n".utf8)
         var sent = 0
         while sent < request.count {
@@ -103,6 +125,39 @@ struct DockerSocketTransport: DockerTransport {
             response.append(contentsOf: buffer.prefix(count))
         }
         return try DockerHTTPParser.parse(response, maximumBodyBytes: maximumResponseBytes)
+    }
+
+    private func kernelPeer(_ descriptor: Int32) throws -> DockerPeerIdentity {
+        #if canImport(Darwin)
+        var token = audit_token_t()
+        var length = socklen_t(MemoryLayout<audit_token_t>.size)
+        guard getsockopt(descriptor, SOL_LOCAL, LOCAL_PEERTOKEN, &token, &length) == 0,
+              length == MemoryLayout<audit_token_t>.size, token.val.5 > 0,
+              token.val.5 <= UInt32(Int32.max) else { throw DockerCleanupError.unsafeSocket }
+        let words = withUnsafeBytes(of: token) { $0.bindMemory(to: UInt32.self).map { UInt64($0) } }
+        return DockerPeerIdentity(pid: Int32(token.val.5), uid: token.val.1, gid: token.val.2, processToken: words)
+        #else
+        struct Credentials { var pid: Int32 = 0; var uid: UInt32 = 0; var gid: UInt32 = 0 }
+        var credentials = Credentials()
+        var length = socklen_t(MemoryLayout<Credentials>.size)
+        guard getsockopt(descriptor, SOL_SOCKET, SO_PEERCRED, &credentials, &length) == 0,
+              length == MemoryLayout<Credentials>.size, credentials.pid > 0 else { throw DockerCleanupError.unsafeSocket }
+        // Linux 6.5+ SO_PEERPIDFD binds a stable process handle to this socket's peer.
+        // 77 is the Linux UAPI socket option; older kernels fail closed (CI-only adapter).
+        var processDescriptor: Int32 = -1
+        length = socklen_t(MemoryLayout<Int32>.size)
+        guard getsockopt(descriptor, SOL_SOCKET, 77, &processDescriptor, &length) == 0,
+              length == MemoryLayout<Int32>.size, processDescriptor >= 0 else { throw DockerCleanupError.unsafeSocket }
+        defer { _ = close(processDescriptor) }
+        var value = stat()
+        var filesystem = statfs()
+        // Require pidfs (Linux 6.9+), whose per-process inode distinguishes PID reuse.
+        // Older anon_inode pidfds do not provide this identity and are refused.
+        guard fstat(processDescriptor, &value) == 0, fstatfs(processDescriptor, &filesystem) == 0,
+              filesystem.f_type == 0x50494446 else { throw DockerCleanupError.unsafeSocket }
+        return DockerPeerIdentity(pid: credentials.pid, uid: credentials.uid, gid: credentials.gid,
+                                  processToken: [UInt64(value.st_dev), UInt64(value.st_ino)])
+        #endif
     }
 
     private func wait(_ descriptor: Int32, events: Int16, deadline: TimeInterval, cancellation: DockerCancellation) throws {

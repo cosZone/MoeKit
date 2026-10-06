@@ -17,10 +17,14 @@ private final class FixtureDockerTransport: DockerTransport, @unchecked Sendable
     var refusal: Int?
     var loseConnectionAfterDelete = false
     var mutationCount = 0
+    var ambiguousMutation = false
+    var mutationGate: DockerFixtureGate?
+    let peer = DockerPeerIdentity(pid: 321, uid: 501, gid: 20, processToken: [321, 1])
     let socket = DockerSocketIdentity(path: "/fixture/owned.sock", device: 1, inode: 2, owner: 501)
 
     func identity(for endpoint: DockerEndpoint) throws -> DockerSocketIdentity { socket }
-    func request(endpoint: DockerEndpoint, identity: DockerSocketIdentity, method: String, path: String,
+    func peerIdentity(endpoint: DockerEndpoint, identity: DockerSocketIdentity, cancellation: DockerCancellation) throws -> DockerPeerIdentity { peer }
+    func request(endpoint: DockerEndpoint, identity: DockerSocketIdentity, peer: DockerPeerIdentity, method: String, path: String,
                  cancellation: DockerCancellation) throws -> DockerHTTPResponse {
         lock.lock(); defer { lock.unlock() }
         try cancellation.check()
@@ -37,6 +41,8 @@ private final class FixtureDockerTransport: DockerTransport, @unchecked Sendable
             }
         } else {
             mutationCount += 1
+            mutationGate?.wait()
+            if ambiguousMutation { throw DockerCleanupError.timeout }
             if let refusal { return DockerHTTPResponse(status: refusal, body: Data("{}".utf8)) }
             if path.hasPrefix("/v1.44/images/") {
                 imageObjects.removeAll { path.contains($0["Id"] as? String ?? "missing") }
@@ -55,6 +61,7 @@ private final class FixtureDockerTransport: DockerTransport, @unchecked Sendable
     func setImages(_ images: [[String: Any]]) { lock.lock(); imageObjects = images; lock.unlock() }
     func setContainers(_ values: [[String: Any]]) { lock.lock(); containerObjects = values; lock.unlock() }
     func setCache(_ values: [[String: Any]]) { lock.lock(); cacheObjects = values; lock.unlock() }
+    func loseMutationResponse(gate: DockerFixtureGate? = nil) { lock.lock(); ambiguousMutation = true; mutationGate = gate; lock.unlock() }
     func setDaemon(_ id: String) { lock.lock(); daemonID = id; lock.unlock() }
     func setRefusal(_ value: Int) { lock.lock(); refusal = value; lock.unlock() }
     func disconnectAfterDelete() { lock.lock(); loseConnectionAfterDelete = true; lock.unlock() }
@@ -207,12 +214,12 @@ struct DockerCleanupStoreTests {
     @Test func openingAndDemoNeverConnect() async throws {
         let transport = FixtureDockerTransport()
         let store = DockerCleanupStore(executor: NativeDockerCleanupExecutor(transport: transport))
-        var demo = true
-        store.bindContext { demo }
+        let demo = DockerDemoFixtureState(enabled: true)
+        store.bindContext { demo.enabled }
         store.inspect()
         #expect(transport.counts().requests == 0)
         #expect(!store.canInspect)
-        demo = false
+        demo.enabled = false
         store.updateDemo(false)
         #expect(store.canInspect)
         #expect(transport.counts().requests == 0)
@@ -235,14 +242,14 @@ struct DockerCleanupStoreTests {
     @Test func immediateDemoSwitchBlocksConfirmation() async throws {
         let transport = FixtureDockerTransport(); transport.setImages([imageJSON()])
         let store = DockerCleanupStore(executor: NativeDockerCleanupExecutor(transport: transport))
-        var demo = false
-        store.bindContext { demo }
+        let demo = DockerDemoFixtureState(enabled: false)
+        store.bindContext { demo.enabled }
         store.inspect()
         for _ in 0..<1_000 where store.isBusy { try await Task.sleep(for: .milliseconds(2)) }
         store.select(DockerSelection(imageIDs: [dockerImageA])); store.prepare()
         for _ in 0..<1_000 where store.isBusy { try await Task.sleep(for: .milliseconds(2)) }
         let plan = try #require(store.plan)
-        demo = true // deliberately before onChange could synchronize the UI
+        demo.enabled = true // deliberately before onChange could synchronize the UI
         store.confirm(planID: plan.id)
         #expect(transport.counts().mutations == 0)
         #expect(store.inventory == nil)
@@ -293,19 +300,34 @@ struct DockerSocketAdapterTests {
         let completed = DispatchSemaphore(value: 0)
         DispatchQueue.global().async {
             defer { completed.signal() }
-            var wait = pollfd(fd: fd, events: Int16(POLLIN), revents: 0)
-            guard poll(&wait, 1, 3_000) > 0 else { return }
-            let connection = accept(fd, nil, nil)
-            guard connection >= 0 else { return }
-            defer { _ = close(connection) }
-            var buffer = [UInt8](repeating: 0, count: 2048)
-            _ = recv(connection, &buffer, buffer.count, 0)
-            let response = Array("HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\n{}".utf8)
-            _ = response.withUnsafeBytes { send(connection, $0.baseAddress, $0.count, 0) }
+            for _ in 0..<3 {
+                var wait = pollfd(fd: fd, events: Int16(POLLIN), revents: 0)
+                guard poll(&wait, 1, 3_000) > 0 else { return }
+                let connection = accept(fd, nil, nil)
+                guard connection >= 0 else { return }
+                defer { _ = close(connection) }
+                var buffer = [UInt8](repeating: 0, count: 2048)
+                guard recv(connection, &buffer, buffer.count, 0) > 0 else { continue }
+                let response = Array("HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\n{}".utf8)
+                _ = response.withUnsafeBytes { send(connection, $0.baseAddress, $0.count, 0) }
+            }
         }
-        let response = try transport.request(endpoint: endpoint, identity: identity, method: "GET", path: "/version", cancellation: DockerCancellation())
+        let peer = try transport.peerIdentity(endpoint: endpoint, identity: identity, cancellation: DockerCancellation())
+        #expect(peer.pid == getpid())
+        #expect(peer.uid == geteuid())
+        let response = try transport.request(endpoint: endpoint, identity: identity, peer: peer, method: "GET", path: "/version", cancellation: DockerCancellation())
         #expect(response.status == 200)
         #expect(response.body == Data("{}".utf8))
+        let wrongPeer = DockerPeerIdentity(pid: peer.pid, uid: peer.uid, gid: peer.gid, processToken: peer.processToken + [0])
+        #expect(throws: DockerCleanupError.changed) {
+            _ = try transport.request(endpoint: endpoint, identity: identity, peer: wrongPeer, method: "GET", path: "/version", cancellation: DockerCancellation())
+        }
+        // The connected peer check rejected the request before any HTTP bytes were sent.
+        try FileManager.default.removeItem(at: alias)
+        try Data("replacement is not a socket".utf8).write(to: alias)
+        #expect(throws: DockerCleanupError.unsafeSocket) {
+            _ = try transport.request(endpoint: endpoint, identity: identity, peer: peer, method: "GET", path: "/version", cancellation: DockerCancellation())
+        }
         #expect(completed.wait(timeout: .now() + 4) == .success)
     }
 }
@@ -353,3 +375,245 @@ struct DockerConfirmationFlowTests {
         #expect(store.selection.isEmpty)
     }
 }
+
+#if canImport(AppKit)
+import AppKit
+import SwiftUI
+import XCTest
+
+/// Owned view pixels and public layout anchors only; no desktop capture or live daemon.
+final class DockerCleanupViewRenderTests: XCTestCase {
+    @MainActor
+    func testDockerStatesRenderWithoutLiveDaemon() async throws {
+        let language = try XCTUnwrap(Bundle.main.preferredLocalizations.first)
+        XCTAssertTrue(["en", "zh-Hans"].contains(language))
+        XCTAssertEqual(String(localized: "Docker cleanup", table: "DockerCleanup"), language == "zh-Hans" ? "Docker 清理" : "Docker cleanup")
+        for scenario in ["first-use", "inventory", "verified-result", "uncertain-result", "demo"] {
+            for dark in [false, true] {
+                let transport = FixtureDockerTransport()
+                transport.setImages([imageJSON()])
+                let store = DockerCleanupStore(executor: NativeDockerCleanupExecutor(transport: transport))
+                let directory = FileManager.default.temporaryDirectory.appendingPathComponent("MoeKit-docker-render-\(UUID())")
+                let workspace = WorkspaceStore(isDemoEnabled: scenario == "demo", persistence: CatalogPersistence(directory: directory))
+                if !["first-use", "demo"].contains(scenario) {
+                    store.inspect(); try await settle(store)
+                    if scenario.contains("result") {
+                        store.select(DockerSelection(imageIDs: [dockerImageA])); store.prepare(); try await settle(store)
+                        let plan = try XCTUnwrap(store.plan)
+                        if scenario == "uncertain-result" { transport.disconnectAfterDelete() }
+                        store.confirm(planID: plan.id); try await settle(store)
+                    }
+                }
+                var required = ["docker.heading", "docker.connect"]
+                if ["inventory", "verified-result"].contains(scenario) { required += ["docker.daemon", "docker.review"] }
+                if scenario.contains("result") { required.append("docker.results") }
+                if scenario == "demo" { required.append("docker.demo") }
+                let size = NSSize(width: 980, height: 1600)
+                let capture = DockerViewCapture()
+                let appearance = try XCTUnwrap(NSAppearance(named: dark ? .darkAqua : .aqua))
+                _ = NSApplication.shared
+                let hosting = NSHostingView(rootView: DockerCleanupView(store: store).environment(workspace)
+                    .environment(\.colorScheme, dark ? .dark : .light).environment(\.locale, Locale.current)
+                    .frame(width: size.width, height: size.height)
+                    .installerCaptureViewport().environment(\.installerCaptureCollector, { capture.regions = $0 }))
+                hosting.sizingOptions = []; hosting.frame = NSRect(origin: .zero, size: size); hosting.appearance = appearance
+                let window = DockerRenderWindow(contentRect: hosting.frame, styleMask: [.titled, .resizable], backing: .buffered, defer: false)
+                window.isReleasedWhenClosed = false; window.appearance = appearance; window.contentView = hosting
+                defer { window.orderOut(nil); window.contentView = nil; window.close() }
+                window.orderFront(nil)
+                for _ in 0..<8 {
+                    hosting.layoutSubtreeIfNeeded(); try await Task.sleep(for: .milliseconds(50)); window.setContentSize(size)
+                }
+                let viewport = CGRect(origin: .zero, size: size).insetBy(dx: -1, dy: -1)
+                let visible = required.filter { id in capture.regions.contains {
+                    $0.id == id && !$0.bounds.isEmpty && viewport.contains($0.bounds)
+                } }
+                let name = "docker-\(scenario)-\(language)-\(dark ? "dark" : "light")"
+                let bitmap = try XCTUnwrap(hosting.bitmapImageRepForCachingDisplay(in: hosting.bounds))
+                appearance.performAsCurrentDrawingAppearance { hosting.cacheDisplay(in: hosting.bounds, to: bitmap) }
+                let png = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
+                XCTAssertGreaterThan(png.count, 1000)
+                let attachment = XCTAttachment(data: png, uniformTypeIdentifier: "public.png")
+                attachment.name = name + ".png"; attachment.lifetime = .keepAlways; add(attachment)
+                let metadata = XCTAttachment(string: """
+                Exact synthetic scenario: \(scenario)
+                Bundle language: \(language)
+                In-memory API calls: \(transport.counts().requests)
+                In-memory mutation calls: \(transport.counts().mutations)
+                Real daemon requests: 0
+                Scope: owned SwiftUI view rendering, not keyboard/VoiceOver acceptance.
+                \(capture.regions.map { "\($0.id): \($0.bounds)" }.joined(separator: "\n"))
+                """)
+                metadata.name = name + "-scope.txt"; metadata.lifetime = .keepAlways; add(metadata)
+                XCTAssertEqual(Set(visible), Set(required), "Missing/clipped Docker controls")
+                if ["first-use", "demo"].contains(scenario) { XCTAssertEqual(transport.counts().requests, 0) }
+                XCTAssertEqual(transport.counts().mutations, scenario.contains("result") ? 1 : 0)
+            }
+        }
+    }
+    @MainActor private func settle(_ store: DockerCleanupStore) async throws {
+        let deadline = ContinuousClock.now + .seconds(10)
+        while store.isBusy && ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(5)) }
+        XCTAssertFalse(store.isBusy)
+    }
+}
+@MainActor private final class DockerViewCapture { var regions: [InstallerCaptureRegion] = [] }
+@MainActor private final class DockerRenderWindow: NSWindow {
+    override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect { frameRect }
+}
+#endif
+
+@MainActor private final class DockerDemoFixtureState {
+    var enabled: Bool
+    init(enabled: Bool) { self.enabled = enabled }
+}
+
+private final class DockerFixtureGate: @unchecked Sendable {
+    private let condition = NSCondition()
+    private var entered = false
+    private var released = false
+    func wait() {
+        condition.lock(); entered = true; condition.broadcast()
+        while !released { condition.wait() }
+        condition.unlock()
+    }
+    var hasEntered: Bool { condition.lock(); defer { condition.unlock() }; return entered }
+    func release() { condition.lock(); released = true; condition.broadcast(); condition.unlock() }
+}
+
+@Suite("Docker delayed mutation outcomes")
+struct DockerDelayedOutcomeTests {
+    @Test(arguments: ["image", "container", "cache"])
+    func presenceCannotResolveLostMutationResponse(_ kind: String) async throws {
+        let transport = FixtureDockerTransport()
+        transport.setImages([imageJSON()])
+        transport.setCache([cacheJSON(id: "pending-cache", inUse: false)])
+        if kind == "container" { transport.setContainers([containerJSON(image: dockerImageB)]) }
+        let engine = NativeDockerCleanupExecutor(transport: transport)
+        let inventory = try await engine.inspect(endpoint: .init(name: "Fixture", socketPath: "/fixture/owned.sock"), cancellation: DockerCancellation())
+        var selection = DockerSelection()
+        if kind == "image" { selection.imageIDs = [dockerImageA] }
+        if kind == "container" { selection.containerIDs = [dockerContainerA] }
+        if kind == "cache" { selection.allUnusedBuildCache = true }
+        let plan = try await engine.prepare(inventory: inventory, selection: selection, cancellation: DockerCancellation())
+        transport.loseMutationResponse()
+        let result = try await engine.execute(plan: plan, cancellation: DockerCancellation())
+        #expect(result.inventory != nil) // reconnection succeeds, but the operation may still be pending
+        #expect(result.hasUncertainty)
+        #expect(result.items.map(\.state) == [.uncertain])
+        #expect(transport.counts().mutations == 1)
+    }
+}
+
+@Suite("Docker operation lifetime") @MainActor
+struct DockerOperationLifetimeTests {
+    @Test(arguments: [false, true])
+    func navigationAndDemoRetainSentMutationOutcome(changeDemo: Bool) async throws {
+        let transport = FixtureDockerTransport(); transport.setImages([imageJSON()])
+        let gate = DockerFixtureGate()
+        let store = DockerCleanupStore(executor: NativeDockerCleanupExecutor(transport: transport))
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("MoeKit-docker-lifetime-\(UUID())")
+        let workspace = WorkspaceStore(isDemoEnabled: false, persistence: CatalogPersistence(directory: directory), dockerCleanup: store)
+        store.bindContext { [weak workspace] in workspace?.isDemoEnabled ?? true }
+        store.inspect(); try await settle(store)
+        store.select(DockerSelection(imageIDs: [dockerImageA])); store.prepare(); try await settle(store)
+        let plan = try #require(store.plan)
+        transport.loseMutationResponse(gate: gate)
+        store.confirm(planID: plan.id)
+        let deadline = ContinuousClock.now + .seconds(5)
+        while !gate.hasEntered && ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(5)) }
+        #expect(gate.hasEntered)
+        defer { gate.release() }
+        store.leave() // Docker -> Caches; owner survives conditional view destruction
+        #expect(workspace.dockerCleanup === store)
+        #expect(store.blocksAppUpdate)
+        if changeDemo { workspace.isDemoEnabled = true; #expect(store.inventory == nil) }
+        gate.release()
+        try await settle(store)
+        #expect(!store.blocksAppUpdate)
+        #expect(store.reports.count == 1)
+        #expect(store.result?.hasUncertainty == true)
+        if changeDemo {
+            #expect(store.isDemoEnabled)
+            #expect(store.inventory == nil) // real result was retained, never presented as demo inventory
+            workspace.isDemoEnabled = false
+        }
+        // Docker view returns and an explicit refresh does not erase the unresolved operation.
+        store.bindContext { [weak workspace] in workspace?.isDemoEnabled ?? true }
+        let reportID = store.result?.id
+        store.inspect(); try await settle(store)
+        #expect(store.result?.id == reportID)
+        #expect(store.result?.hasUncertainty == true)
+        #expect(transport.counts().mutations == 1)
+    }
+    private func settle(_ store: DockerCleanupStore) async throws {
+        let deadline = ContinuousClock.now + .seconds(10)
+        while store.isBusy && ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(5)) }
+        #expect(!store.isBusy)
+    }
+}
+
+#if canImport(AppKit)
+final class DockerConfirmationRenderTests: XCTestCase {
+    @MainActor
+    func testPermanentAndCacheConfirmationRenderAndReset() async throws {
+        let language = try XCTUnwrap(Bundle.main.preferredLocalizations.first)
+        for cacheScope in [false, true] {
+            for dark in [false, true] {
+                let transport = FixtureDockerTransport(); transport.setImages([imageJSON()])
+                transport.setCache([cacheJSON(id: "owned-cache", inUse: false)])
+                let executor = NativeDockerCleanupExecutor(transport: transport)
+                let inventory = try await executor.inspect(endpoint: .init(name: "Owned fixture", socketPath: "/fixture/owned.sock"), cancellation: DockerCancellation())
+                let plan = try await executor.prepare(inventory: inventory,
+                    selection: DockerSelection(imageIDs: [dockerImageA], allUnusedBuildCache: cacheScope), cancellation: DockerCancellation())
+                let acknowledgement = DockerConfirmationAcknowledgement()
+                let callbacks = DockerConfirmationCallbacks()
+                let size = NSSize(width: 720, height: 900)
+                let capture = DockerViewCapture()
+                let appearance = try XCTUnwrap(NSAppearance(named: dark ? .darkAqua : .aqua))
+                let hosting = NSHostingView(rootView: DockerCleanupConfirmationView(plan: plan, acknowledgement: acknowledgement,
+                    onCancel: { callbacks.cancelled += 1 }, onConfirm: { callbacks.confirmed += 1 })
+                    .environment(\.colorScheme, dark ? .dark : .light).environment(\.locale, Locale.current)
+                    .frame(width: size.width, height: size.height)
+                    .installerCaptureViewport().environment(\.installerCaptureCollector, { capture.regions = $0 }))
+                hosting.sizingOptions = []; hosting.frame = NSRect(origin: .zero, size: size); hosting.appearance = appearance
+                let window = DockerRenderWindow(contentRect: hosting.frame, styleMask: [.titled], backing: .buffered, defer: false)
+                window.isReleasedWhenClosed = false; window.appearance = appearance; window.contentView = hosting
+                defer { window.orderOut(nil); window.contentView = nil; window.close() }
+                window.orderFront(nil)
+                for _ in 0..<8 { hosting.layoutSubtreeIfNeeded(); try await Task.sleep(for: .milliseconds(50)); window.setContentSize(size) }
+                XCTAssertFalse(acknowledgement.canSubmit(plan))
+                acknowledgement.submit(plan: plan) { callbacks.confirmed += 1 }
+                XCTAssertEqual(callbacks.confirmed, 0)
+                var required = ["docker.daemon", "docker.confirm.attestation", "docker.confirm.cancel", "docker.confirm.submit"]
+                if cacheScope { required.append("docker.confirm.cache") }
+                let viewport = CGRect(origin: .zero, size: size).insetBy(dx: -1, dy: -1)
+                XCTAssertEqual(Set(required.filter { id in capture.regions.contains { $0.id == id && !$0.bounds.isEmpty && viewport.contains($0.bounds) } }), Set(required))
+                let bitmap = try XCTUnwrap(hosting.bitmapImageRepForCachingDisplay(in: hosting.bounds))
+                appearance.performAsCurrentDrawingAppearance { hosting.cacheDisplay(in: hosting.bounds, to: bitmap) }
+                let png = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
+                let attachment = XCTAttachment(data: png, uniformTypeIdentifier: "public.png")
+                attachment.name = "docker-confirm-\(cacheScope ? "whole-cache" : "exact")-\(language)-\(dark ? "dark" : "light").png"
+                attachment.lifetime = .keepAlways; add(attachment)
+                acknowledgement.irreversible = true
+                XCTAssertEqual(acknowledgement.canSubmit(plan), !cacheScope)
+                if cacheScope { acknowledgement.wholeCache = true }
+                XCTAssertTrue(acknowledgement.canSubmit(plan))
+                acknowledgement.submit(plan: plan) { callbacks.confirmed += 1 }
+                acknowledgement.submit(plan: plan) { callbacks.confirmed += 1 }
+                XCTAssertEqual(callbacks.confirmed, 1)
+                acknowledgement.reset(for: plan.id)
+                XCTAssertFalse(acknowledgement.irreversible)
+                XCTAssertFalse(acknowledgement.wholeCache)
+                XCTAssertFalse(acknowledgement.canSubmit(plan))
+                acknowledgement.cancel { callbacks.cancelled += 1 }
+                XCTAssertEqual(callbacks.cancelled, 1)
+                XCTAssertFalse(acknowledgement.canSubmit(plan))
+                XCTAssertEqual(transport.counts().mutations, 0) // callbacks never submit to even the synthetic engine
+            }
+        }
+    }
+}
+#endif
+
+@MainActor private final class DockerConfirmationCallbacks { var confirmed = 0; var cancelled = 0 }

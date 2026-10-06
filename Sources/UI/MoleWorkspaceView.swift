@@ -15,7 +15,7 @@ struct MoleWorkspaceView: View {
                 }.pickerStyle(.segmented).padding(12)
                 Divider()
                 if cleanupCategory == 0 { CleanupWorkspaceView() }
-                else { DockerCleanupView() }
+                else { DockerCleanupView(store: store.dockerCleanup) }
             }
         } else {
             VStack(spacing: 0) {

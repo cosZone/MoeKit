@@ -7,7 +7,8 @@ final class DockerCleanupStore: AppUpdateBlocking {
     private(set) var inventory: DockerInventory?
     private(set) var selection = DockerSelection()
     private(set) var plan: DockerCleanupPlan?
-    private(set) var result: DockerCleanupResult?
+    private(set) var reports: [DockerCleanupResult] = []
+    var result: DockerCleanupResult? { reports.last }
     private(set) var errorMessage: String?
     private(set) var isBusy = false { didSet { UpdateInstallationSafety.shared.changed(self) } }
     private(set) var isExecuting = false
@@ -91,22 +92,25 @@ final class DockerCleanupStore: AppUpdateBlocking {
         guard !isBusy, !isDemoEnabled, let approved = plan, approved.id == planID,
               approved.selection == selection, approved.inventory.daemon.endpoint == endpoint else { return }
         plan = nil
-        let expected = generation, token = begin()
+        let token = begin()
         isExecuting = true
         task = Task { [self] in
             defer { finish() }
             do {
                 let value = try await executor.execute(plan: approved, cancellation: token)
                 synchronizeContext()
-                guard generation == expected, !isDemoEnabled else { return }
-                result = value
-                inventory = value.inventory
+                // A real mutation's report survives navigation and Demo transitions.
+                // Only live inventory is hidden/discarded at the mode boundary.
+                reports.append(value)
+                if !isDemoEnabled && endpoint == approved.inventory.daemon.endpoint {
+                    inventory = value.inventory
+                }
                 selection = DockerSelection()
             } catch {
                 // No successful operation result means a new explicit refresh/review is required.
                 inventory = nil
                 selection = DockerSelection()
-                report(error, expected: expected)
+                errorMessage = (error as? LocalizedError)?.errorDescription ?? "Docker operation could not be verified."
             }
         }
     }
@@ -120,8 +124,10 @@ final class DockerCleanupStore: AppUpdateBlocking {
         if !isBusy { discardPlans() }
     }
     func leave() {
-        cancel()
-        if !isExecuting { invalidate(clearInventory: false) }
+        // Dismissed review authority never survives navigation. A submitted real
+        // operation stays owned by WorkspaceStore until its report has settled.
+        dismissPlan()
+        if !isExecuting { cancellation.cancel() }
     }
     private func synchronizeContext() {
         if let contextProvider { updateDemo(contextProvider()) }
@@ -130,7 +136,6 @@ final class DockerCleanupStore: AppUpdateBlocking {
         cancellation.cancel()
         generation = UUID()
         plan = nil
-        result = nil
         errorMessage = nil
         selection = DockerSelection()
         if clearInventory { inventory = nil }
@@ -144,7 +149,6 @@ final class DockerCleanupStore: AppUpdateBlocking {
         cancellation = DockerCancellation()
         isBusy = true
         errorMessage = nil
-        result = nil
         return cancellation
     }
     private func finish() { isBusy = false; isExecuting = false; task = nil }

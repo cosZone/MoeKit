@@ -1,18 +1,18 @@
 import SwiftUI
+import Observation
 
 /// Self-contained cleanup category. Opening the view never connects to Docker.
 @MainActor
 struct DockerCleanupView: View {
     @Environment(WorkspaceStore.self) private var workspace
     @State private var store: DockerCleanupStore
-    @State private var acknowledgeIrreversible = false
-    @State private var acknowledgeCacheScope = false
-    init(store: DockerCleanupStore? = nil) { _store = State(initialValue: store ?? DockerCleanupStore()) }
+    init(store: DockerCleanupStore) { _store = State(initialValue: store) }
 
     var body: some View {
         VStack(spacing: 0) {
             HStack {
                 Label(d("Docker cleanup"), systemImage: "shippingbox").fontWeight(.semibold)
+                    .installerCaptureIdentity("docker.heading", text: d("Docker cleanup"))
                 Spacer()
                 if store.isBusy {
                     ProgressView().controlSize(.small)
@@ -25,23 +25,27 @@ struct DockerCleanupView: View {
                     connection
                     if store.isDemoEnabled {
                         Text(d("Docker is unavailable in Demo. No daemon connection is made.")).foregroundStyle(.secondary)
+                            .installerCaptureIdentity("docker.demo", text: d("Docker is unavailable in Demo. No daemon connection is made."))
                     }
-                    if let error = store.errorMessage { Label(d(error), systemImage: "exclamationmark.triangle").foregroundStyle(.orange) }
-                    if let inventory = store.inventory {
-                        identity(inventory.daemon)
+                    if !store.isDemoEnabled, let error = store.errorMessage { Label(d(error), systemImage: "exclamationmark.triangle").foregroundStyle(.orange) }
+                    if !store.isDemoEnabled, let inventory = store.inventory {
+                        DockerDaemonIdentityView(daemon: inventory.daemon)
                         inventoryRows(inventory)
                         Button(d("Review selected operations…")) { store.prepare() }.disabled(!store.canPrepare)
                             .accessibilityIdentifier("docker.review")
+                            .installerCaptureIdentity("docker.review", text: d("Review selected operations…"))
                     }
-                    if let result = store.result { results(result) }
+                    if !store.isDemoEnabled {
+                        ForEach(store.reports) { result in results(result) }
+                    }
                 }.padding(18)
             }
         }
-        .onAppear { store.bindContext { workspace.isDemoEnabled } }
+        .onAppear { store.bindContext { [weak workspace] in workspace?.isDemoEnabled ?? true } }
         .onChange(of: workspace.isDemoEnabled) { _, value in store.updateDemo(value) }
         .onDisappear { store.leave() }
         .sheet(item: Binding(get: { store.plan }, set: { if $0 == nil { store.dismissPlan() } })) { plan in
-            confirmation(plan)
+            DockerCleanupConfirmationView(plan: plan, onCancel: { store.dismissPlan() }, onConfirm: { store.confirm(planID: plan.id) })
         }
     }
 
@@ -58,21 +62,11 @@ struct DockerCleanupView: View {
                 }.frame(maxWidth: 330).disabled(!store.canInspect)
                 Button(d("Connect and refresh inventory")) { store.inspect() }.disabled(!store.canInspect)
                     .accessibilityIdentifier("docker.connect")
+                    .installerCaptureIdentity("docker.connect", text: d("Connect and refresh inventory"))
             }
             Text(store.endpoint.socketPath).font(.system(.caption, design: .monospaced)).textSelection(.enabled)
             Text(d("Only local Unix sockets are supported. Remote contexts, automatic installation, permission changes and network pulls are unavailable."))
                 .font(.caption).foregroundStyle(.secondary)
-        }
-    }
-
-    private func identity(_ daemon: DockerDaemonIdentity) -> some View {
-        GroupBox(d("Connected daemon")) {
-            VStack(alignment: .leading, spacing: 5) {
-                Text("\(safe(daemon.name)) · Docker \(safe(daemon.version)) · \(safe(daemon.operatingSystem))")
-                Text("ID: \(safe(daemon.id))").textSelection(.enabled)
-                Text(daemon.socket.path).textSelection(.enabled)
-                Text(daemon.rootless ? d("Rootless daemon") : d("Rootless mode not reported by daemon"))
-            }.font(.caption).frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -150,44 +144,10 @@ struct DockerCleanupView: View {
         }
     }
 
-    private func confirmation(_ plan: DockerCleanupPlan) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text(d("Confirm permanent Docker cleanup")).font(.title2.bold())
-            identity(plan.inventory.daemon)
-            ScrollView {
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(plan.selection.containerIDs.sorted(), id: \.self) { id in
-                        Text(d("Remove container") + ": " + id).textSelection(.enabled)
-                        if let item = plan.inventory.containers.first(where: { $0.id == id }) { Text(safe(item.title)).font(.caption) }
-                    }
-                    ForEach(plan.selection.imageIDs.sorted(), id: \.self) { id in
-                        Text(d("Remove image") + ": " + id).textSelection(.enabled)
-                        if let item = plan.inventory.images.first(where: { $0.id == id }) { Text(safe(item.tags.joined(separator: ", "))).font(.caption) }
-                    }
-                    if plan.selection.allUnusedBuildCache { Text(d("Remove all unused build cache on this daemon")).fontWeight(.semibold) }
-                }.frame(maxWidth: .infinity, alignment: .leading)
-            }.frame(maxHeight: 220)
-            Text(d("These Docker deletions cannot be undone by MoeKit. Images may need to be rebuilt or pulled manually. Stopped-container writable data is lost. Volumes and running containers are preserved. No network pull is performed."))
-            Toggle(d("I understand this permanently removes the listed Docker objects"), isOn: $acknowledgeIrreversible)
-            if plan.selection.allUnusedBuildCache {
-                Toggle(d("I also approve the entire daemon-wide unused build-cache scope"), isOn: $acknowledgeCacheScope)
-            }
-            Text(d("The confirmation expires after 60 seconds. Docker identity and object usage are checked again before execution."))
-                .font(.caption).foregroundStyle(.secondary)
-            HStack {
-                Spacer()
-                Button(d("Cancel")) { store.dismissPlan() }.keyboardShortcut(.cancelAction)
-                Button(d("Permanently remove"), role: .destructive) { store.confirm(planID: plan.id) }
-                    .disabled(!acknowledgeIrreversible || (plan.selection.allUnusedBuildCache && !acknowledgeCacheScope))
-                    .accessibilityIdentifier("docker.confirm")
-            }
-        }.padding(24).frame(width: 680)
-            .onAppear { acknowledgeIrreversible = false; acknowledgeCacheScope = false }
-    }
-
     private func results(_ result: DockerCleanupResult) -> some View {
-        GroupBox(d("Verified results")) {
+        GroupBox(d("Operation results")) {
             VStack(alignment: .leading, spacing: 8) {
+                Text(d("Operation daemon") + ": " + safe(result.daemon.name) + " · " + safe(result.daemon.id)).font(.caption)
                 if result.cancelled { Text(d("Cancelled. Already-sent Docker operations may still complete; cancellation does not undo them.")) }
                 if result.hasUncertainty { Text(d("Some results remain uncertain. Refresh the inventory before making a new selection.")).foregroundStyle(.orange) }
                 ForEach(result.items) { item in
@@ -200,7 +160,7 @@ struct DockerCleanupView: View {
                 Text(d("Engine-reported reclamation does not guarantee the same physical space is returned to macOS or Docker Desktop’s disk image."))
                     .font(.caption).foregroundStyle(.secondary)
             }.frame(maxWidth: .infinity, alignment: .leading)
-        }
+        }.installerCaptureIdentity("docker.results", text: d("Operation results"))
     }
     private func projectLabels(_ labels: [String: String]) -> some View {
         ForEach(labels.keys.sorted(), id: \.self) { key in
@@ -224,4 +184,98 @@ struct DockerCleanupView: View {
     private func d(_ key: String) -> String { String(localized: String.LocalizationValue(key), table: "DockerCleanup") }
     private func safe(_ text: String) -> String { DockerValidation.safeDisplay(text) }
     private func size(_ value: Int64) -> String { value < 0 ? d("Unknown") : ByteCountFormatter.string(fromByteCount: value, countStyle: .file) }
+}
+
+@MainActor
+struct DockerCleanupConfirmationView: View {
+    let plan: DockerCleanupPlan
+    let onCancel: () -> Void
+    let onConfirm: () -> Void
+    @State private var acknowledgement: DockerConfirmationAcknowledgement
+    init(plan: DockerCleanupPlan, acknowledgement: DockerConfirmationAcknowledgement? = nil,
+         onCancel: @escaping () -> Void, onConfirm: @escaping () -> Void) {
+        self.plan = plan; self.onCancel = onCancel; self.onConfirm = onConfirm
+        _acknowledgement = State(initialValue: acknowledgement ?? DockerConfirmationAcknowledgement())
+    }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text(d("Confirm permanent Docker cleanup")).font(.title2.bold())
+            DockerDaemonIdentityView(daemon: plan.inventory.daemon)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(plan.selection.containerIDs.sorted(), id: \.self) { id in
+                        Text(d("Remove container") + ": " + id).textSelection(.enabled)
+                        if let item = plan.inventory.containers.first(where: { $0.id == id }) { Text(safe(item.title)).font(.caption) }
+                    }
+                    ForEach(plan.selection.imageIDs.sorted(), id: \.self) { id in
+                        Text(d("Remove image") + ": " + id).textSelection(.enabled)
+                        if let item = plan.inventory.images.first(where: { $0.id == id }) { Text(safe(item.tags.joined(separator: ", "))).font(.caption) }
+                    }
+                    if plan.selection.allUnusedBuildCache { Text(d("Remove all unused build cache on this daemon")).fontWeight(.semibold) }
+                }.frame(maxWidth: .infinity, alignment: .leading)
+            }.frame(maxHeight: 220)
+            Text(d("These Docker deletions cannot be undone by MoeKit. Images may need to be rebuilt or pulled manually. Stopped-container writable data is lost. Volumes and running containers are preserved. No network pull is performed."))
+            Toggle(d("I understand this permanently removes the listed Docker objects"), isOn: $acknowledgement.irreversible)
+                .installerCaptureIdentity("docker.confirm.attestation", text: d("I understand this permanently removes the listed Docker objects"))
+            if plan.selection.allUnusedBuildCache {
+                Toggle(d("I also approve the entire daemon-wide unused build-cache scope"), isOn: $acknowledgement.wholeCache)
+                    .installerCaptureIdentity("docker.confirm.cache", text: d("I also approve the entire daemon-wide unused build-cache scope"))
+            }
+            Text(d("The confirmation expires after 60 seconds. Docker identity and object usage are checked again before execution."))
+                .font(.caption).foregroundStyle(.secondary)
+            HStack {
+                Spacer()
+                Button(d("Cancel")) { acknowledgement.cancel(onCancel) }.keyboardShortcut(.cancelAction)
+                    .installerCaptureIdentity("docker.confirm.cancel", text: d("Cancel"))
+                Button(d("Permanently remove"), role: .destructive) { acknowledgement.submit(plan: plan, action: onConfirm) }
+                    .disabled(!acknowledgement.canSubmit(plan))
+                    .accessibilityIdentifier("docker.confirm")
+                    .installerCaptureIdentity("docker.confirm.submit", text: d("Permanently remove"))
+            }
+        }.padding(24).frame(width: 680)
+            .onAppear { acknowledgement.reset(for: plan.id) }
+            .onChange(of: plan.id) { _, id in acknowledgement.reset(for: id) }
+            .onDisappear { acknowledgement.invalidate() }
+    }
+
+    private func d(_ key: String) -> String { String(localized: String.LocalizationValue(key), table: "DockerCleanup") }
+    private func safe(_ text: String) -> String { DockerValidation.safeDisplay(text) }
+}
+
+private struct DockerDaemonIdentityView: View {
+    let daemon: DockerDaemonIdentity
+    var body: some View {
+        GroupBox(d("Connected daemon")) {
+            VStack(alignment: .leading, spacing: 5) {
+                Text("\(safe(daemon.name)) · Docker \(safe(daemon.version)) · \(safe(daemon.operatingSystem))")
+                Text("ID: \(safe(daemon.id))").textSelection(.enabled)
+                    .installerCaptureIdentity("docker.daemon", text: daemon.id)
+                Text(d("Kernel peer") + ": PID \(daemon.peer.pid) · UID \(daemon.peer.uid)").textSelection(.enabled)
+                Text(daemon.socket.path).textSelection(.enabled)
+                Text(daemon.rootless ? d("Rootless daemon") : d("Rootless mode not reported by daemon"))
+            }.font(.caption).frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func d(_ key: String) -> String { String(localized: String.LocalizationValue(key), table: "DockerCleanup") }
+    private func safe(_ text: String) -> String { DockerValidation.safeDisplay(text) }
+}
+
+@MainActor @Observable
+final class DockerConfirmationAcknowledgement {
+    var irreversible = false
+    var wholeCache = false
+    private(set) var planID: UUID?
+    private(set) var consumed = false
+    func reset(for id: UUID) { planID = id; consumed = false; irreversible = false; wholeCache = false }
+    func invalidate() { consumed = true; irreversible = false; wholeCache = false }
+    func canSubmit(_ plan: DockerCleanupPlan) -> Bool {
+        !consumed && planID == plan.id && irreversible && (!plan.selection.allUnusedBuildCache || wholeCache) && plan.expiresAt > Date()
+    }
+    func submit(plan: DockerCleanupPlan, action: () -> Void) {
+        guard canSubmit(plan) else { return }
+        consumed = true
+        action()
+    }
+    func cancel(_ action: () -> Void) { invalidate(); action() }
 }

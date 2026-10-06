@@ -40,9 +40,10 @@ integrated with the other cleanup modules). Opening this view is inert.
 - No `docker system prune`, volume deletion, network pull, CLI execution, shell,
   executable installation, plugin/config loading, Docker credential file reads,
   socket permission changes, privileged helper or daemon start.
-- No container inspect endpoint: container environment/command details are not
-  requested. Inventory uses `/system/df` and `/containers/json?all=1`; only a narrow
-  typed field set is decoded and only Compose project/service labels are displayed.
+- No container inspect endpoint is used. `/containers/json?all=1` itself includes
+  `Command` and other fields in its bounded response; command fields are not decoded,
+  retained in inventory or displayed. Container environment is not requested. Only
+  a narrow typed field set and Compose project/service labels are retained.
 - The direct AF_UNIX HTTP client has a fixed request allowlist, 30-second per-request
   deadline, 16 MiB body limit, 16 KiB header limit, strict HTTP framing and cancellable
   nonblocking IO. It supports Linux Engine API 1.44 when the daemon's advertised
@@ -50,7 +51,17 @@ integrated with the other cleanup modules). Opening this view is inert.
   or remote Docker client. It reads no CLI context/config files.
 - Every request verifies the resolved local socket's device, inode and owner. Regular
   files and world-writable sockets are refused; root/current-user-owned sockets are
-  supported. Every inventory checks daemon identity before and after collection.
+  supported. Before transmitting any HTTP bytes, the connected descriptor must
+  match the confirmed kernel peer identity: macOS `LOCAL_PEERTOKEN` binds the full
+  peer audit token (including effective UID, PID and execution version); Linux CI
+  uses `SO_PEERCRED` and `SO_PEERPIDFD` process-handle identity. Unsupported kernels
+  fail closed. Every inventory checks daemon identity before and after collection.
+  On macOS the supported Docker Desktop endpoint is its stable, root/current-user
+  local proxy process, not the Linux VM's process. A proxy restart or execution-token
+  change requires fresh inspection and confirmation. `/info.ID` is self-reported
+  daemon identity and is never treated as peer authentication. This authenticates
+  the local process instance/owner, not Docker vendor provenance or an arbitrary
+  proxy's hidden backend; custom/remote CLI contexts are never loaded.
 - Image deletion is by full `sha256:` ID with `force=false&noprune=true`; parent images
   are not pruned. Multi-tag conflicts or newly referenced images are retained on
   Docker refusal. Container deletion is by full ID with `force=false&v=false`.
@@ -65,11 +76,16 @@ integrated with the other cleanup modules). Opening this view is inert.
   or return the same physical bytes to macOS.
 - Cancellation prevents subsequent mutations. A request already accepted by Docker
   can still finish. A fresh bounded read attempts to establish what happened; unknown
-  stays unknown. No retry/rollback is fabricated. App update replacement is blocked
+  stays unknown. Current presence after a lost response cannot prove the operation
+  will not finish later. No retry/rollback is fabricated. App update replacement is blocked
   while the operation and its verification are running.
 - Endpoint changes, selection changes, Demo transitions, dismissal and used/expired
-  confirmations invalidate authority. Demo never starts a daemon connection. No
-  receipts claim these permanent Docker deletions can be restored by MoeKit.
+  confirmations invalidate authority. The real operation session is owned by the
+  workspace, so navigating away, changing Demo mode or refreshing does not erase its
+  eventual report. Real inventories/reports are hidden in Demo; reports return in
+  real mode. A submitted operation may finish its already-authorized verification
+  after a mode change. Unresolved reports are retained for the app session, alongside
+  later operations. No receipt claims permanent Docker deletion can be restored.
 
 中文：没有静默联网拉镜像、提权、自动安装、权限修改或远端操作。取消不会撤销 Docker
 已经接收的请求，模糊结果必须重新读取清单后再决定。共享层不叠加成“可回收总量”；
@@ -80,17 +96,24 @@ Docker 报告的回收量不等于 macOS 立刻释放的物理空间。整个操
 - `Tests/DockerCleanupTests.swift`: in-memory daemon fixtures cover stopped references,
   active/unknown container states, exact selected deletion, retained neighbors/volumes,
   daemon changes, confirmation replay, cancellation, conflicts, uncertain outcomes,
-  whole-cache scope, bounded HTTP, controller dismissal and immediate Demo transitions.
+  whole-cache scope, bounded HTTP, controller dismissal, delayed image/container/cache
+  outcomes and navigation/Demo session retention. Native SwiftUI render tests cover
+  first use, inventory, verified/uncertain results, Demo and the actual irreversible
+  confirmation view with its independent whole-cache acknowledgement, reset/dismiss
+  and repeated-submit guards in English/Chinese and light/dark appearances.
   Native macOS socket tests use only fresh `/tmp/mk-docker-*` fixtures, including a
   Desktop-style symlink. They never contact the user's Docker daemon.
 - `Scripts/run-docker-cleanup-fixture.py`: explicit GitHub-hosted-runner-only opt-in,
-  exact source SHA, a unique marker-owned `/tmp/moekit-docker-*` daemon, separate data/
+  verified `github-hosted` Linux environment, exact source SHA, a unique marker-owned `/tmp/moekit-docker-*` daemon, separate data/
   exec roots and Unix socket, empty daemon/client configuration, no host networking
   configuration changes and no package installs. Scratch images use fixture bytes
   and the hosted runner's OS binaries, without registry pulls. The production Swift
   transport/executor removes selected real images and a created container, prunes
   actual unused build cache, and verifies a running container, unselected images and
-  a volume remain. Its daemon log and source-bound JSON proof are preserved by CI.
+  a volume remain. Cleanup revalidates the daemon's executable, exact fixture flags
+  and process start identity, then signals a kernel pidfd; there is no numeric-PID
+  fallback. Uncertain cleanup is left to disposable-runner teardown. Its daemon log
+  and source-bound JSON proof are preserved by CI.
 - Run `python3 Scripts/verify-source.py` locally. This is structural verification,
   not Swift compilation or UI acceptance. Existing Native CI builds the SwiftUI app
   and runs macOS tests; the dedicated Docker workflow validates the real Linux API.
@@ -102,3 +125,12 @@ Docker 报告的回收量不等于 macOS 立刻释放的物理空间。整个操
 Official contracts used: [Docker Engine API 1.44](https://docs.docker.com/reference/api/engine/version/v1.44/),
 [Docker disk usage](https://docs.docker.com/reference/cli/docker/system/df/),
 [Docker pruning](https://docs.docker.com/engine/manage-resources/pruning/).
+
+内核连接身份：macOS 对每条已连接 socket 读取 `LOCAL_PEERTOKEN`，比较 UID、PID 和执行版本等
+完整 audit token，再发送 HTTP。Docker Desktop 使用本机稳定代理进程的身份，并非虚拟机内 PID；
+代理重启后必须重新复查。`/info.ID` 只作为 daemon 自报标识，不能替代内核对端身份。
+切换清理类别、示例模式或刷新清单不会丢弃正在执行的真实操作报告；示例模式隐藏真实数据，
+回到真实模式仍可查看会话内保留的结果。丢失响应后即使暂时仍看到对象，也继续标记结果不确定。
+
+Kernel interface references: [Apple Unix socket options](https://github.com/apple-oss-distributions/xnu/blob/main/bsd/sys/un.h)
+and [Linux socket UAPI](https://github.com/torvalds/linux/blob/master/include/uapi/asm-generic/socket.h).

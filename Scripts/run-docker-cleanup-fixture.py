@@ -7,18 +7,85 @@ No existing daemon is contacted. No package installation or host setting change.
 """
 import json
 import os
+import platform
 from pathlib import Path
 import re
 import shutil
 import signal
 import subprocess
+import sys
 import tempfile
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
 
+def owned_scope(value):
+    owner = Path(value)
+    if (owner.parent != Path("/tmp") or not owner.name.startswith("moekit-docker-")
+            or owner.is_symlink() or not owner.is_dir()
+            or (owner / "MARKER").read_text().strip() != "MOEKIT_OWNED_DOCKER_FIXTURE_V1"):
+        raise RuntimeError("Refusing non-owned fixture cleanup scope")
+    return owner
+
+
+def process_identity(pid, owner):
+    if not 1 < pid < 2**31:
+        raise RuntimeError("Invalid fixture process identity")
+    process = Path("/proc") / str(pid)
+    with (process / "stat").open("rb") as stream:
+        value = stream.read(4097)
+    if len(value) > 4096:
+        raise RuntimeError("Process identity exceeded bounds")
+    end = value.rfind(b") ")
+    if end < 0:
+        raise RuntimeError("Process identity unavailable")
+    fields = value[end + 2:].split()
+    with (process / "cmdline").open("rb") as stream:
+        raw = stream.read(65537)
+    if len(raw) > 65536:
+        raise RuntimeError("Fixture command identity exceeded bounds")
+    argv = [part.decode() for part in raw.split(b"\0") if part]
+    required = {"--data-root=" + str(owner / "data"), "--exec-root=" + str(owner / "exec"),
+                "--host=unix://" + str(owner / "daemon.sock"), "--pidfile=" + str(owner / "daemon.pid"),
+                "--config-file=" + str(owner / "daemon.json")}
+    if not required.issubset(argv):
+        raise RuntimeError("Process does not belong to this daemon fixture")
+    return {"pid": pid, "startTicks": int(fields[19]), "executable": os.readlink(process / "exe"), "argv": argv}
+
+
+def daemon_identity_action(action, value, executable=None):
+    # Called as root only to inspect/signal this test's own root-owned daemon.
+    # pidfd signaling prevents PID reuse after identity validation. No numeric-PID fallback.
+    if os.geteuid() != 0 or platform.system() != "Linux":
+        raise RuntimeError("Owned daemon identity helper requires Linux fixture root")
+    owner = owned_scope(value)
+    if action == "capture":
+        pid = int((owner / "daemon.pid").read_text().strip())
+        descriptor = os.pidfd_open(pid)
+        try:
+            identity = process_identity(pid, owner)
+            if identity["executable"] != str(Path(executable).resolve()):
+                raise RuntimeError("Fixture daemon executable changed")
+            if process_identity(pid, owner) != identity:
+                raise RuntimeError("Fixture process changed during capture")
+            (owner / "daemon-identity.json").write_text(json.dumps(identity))
+        finally:
+            os.close(descriptor)
+    else:
+        identity = json.loads((owner / "daemon-identity.json").read_text())
+        descriptor = os.pidfd_open(identity["pid"])
+        try:
+            if process_identity(identity["pid"], owner) != identity:
+                raise RuntimeError("Fixture process identity changed; leaving cleanup to runner teardown")
+            signal.pidfd_send_signal(descriptor, signal.SIGTERM)
+        finally:
+            os.close(descriptor)
+
+
 def main():
-    if os.environ.get("GITHUB_ACTIONS") != "true" or os.environ.get("MOEKIT_DOCKER_FIXTURE") != "1":
+    if (os.environ.get("GITHUB_ACTIONS") != "true" or os.environ.get("MOEKIT_DOCKER_FIXTURE") != "1"
+            or os.environ.get("RUNNER_ENVIRONMENT") != "github-hosted"
+            or os.environ.get("RUNNER_OS") != "Linux" or platform.system() != "Linux"):
         raise SystemExit("Refusing: requires explicit hosted-runner fixture opt-in")
     sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     if sha != os.environ.get("SOURCE_SHA") or not re.fullmatch(r"[a-f0-9]{40}", sha):
@@ -61,6 +128,8 @@ def main():
             time.sleep(0.5)
         else:
             raise RuntimeError("Owned daemon did not become ready")
+        subprocess.run([tools["sudo"], "-n", sys.executable, str(Path(__file__).resolve()),
+                        "--capture-owned-daemon", str(owner), tools["dockerd"]], check=True, env=env)
         context = owner / "context"
         context.mkdir()
         (context / "payload").write_text("owned fixture payload\n")
@@ -106,11 +175,10 @@ def main():
         (evidence / "proof.json").write_text(json.dumps(proof, indent=2) + "\n")
         print(json.dumps(proof, indent=2))
     finally:
-        # Only the verified PID file in this unique fixture scope is signalled.
-        pidfile = owner / "daemon.pid"
-        if pidfile.is_file() and (owner / "MARKER").read_text().strip() == "MOEKIT_OWNED_DOCKER_FIXTURE_V1":
-            pid = int(pidfile.read_text().strip())
-            subprocess.run([tools["sudo"], "-n", "kill", "-TERM", str(pid)], check=False)
+        # Failure to re-establish exact process identity never falls back to a numeric PID.
+        if (owner / "daemon-identity.json").is_file():
+            subprocess.run([tools["sudo"], "-n", sys.executable, str(Path(__file__).resolve()),
+                            "--stop-owned-daemon", str(owner)], check=False, env=env, timeout=20)
         try:
             daemon.wait(timeout=30)
         except subprocess.TimeoutExpired:
@@ -120,4 +188,11 @@ def main():
         # GitHub-hosted runner teardown owns final disposable workspace removal.
 
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) == 4 and sys.argv[1] == "--capture-owned-daemon":
+        daemon_identity_action("capture", sys.argv[2], sys.argv[3])
+    elif len(sys.argv) == 3 and sys.argv[1] == "--stop-owned-daemon":
+        daemon_identity_action("stop", sys.argv[2])
+    elif len(sys.argv) == 1:
+        main()
+    else:
+        raise SystemExit("Unsupported fixture invocation")

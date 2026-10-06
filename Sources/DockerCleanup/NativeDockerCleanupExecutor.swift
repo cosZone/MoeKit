@@ -89,14 +89,15 @@ struct DockerEngineSession: Sendable {
     func inventory(_ endpoint: DockerEndpoint, _ cancellation: DockerCancellation) throws -> DockerInventory {
         try cancellation.check()
         let socket = try transport.identity(for: endpoint)
-        let version: Version = try read(endpoint, socket, "/version", cancellation)
+        let peer = try transport.peerIdentity(endpoint: endpoint, identity: socket, cancellation: cancellation)
+        let version: Version = try read(endpoint, socket, peer, "/version", cancellation)
         guard let maximum = apiMinor(version.ApiVersion), maximum >= 44,
               let minimum = apiMinor(version.MinAPIVersion ?? "1.24"), minimum <= 44 else { throw DockerCleanupError.unsupportedDaemon }
-        let info: Info = try read(endpoint, socket, "/v1.44/info", cancellation)
+        let info: Info = try read(endpoint, socket, peer, "/v1.44/info", cancellation)
         guard !info.ID.isEmpty, info.ID.utf8.count <= 256, info.OSType == "linux" else { throw DockerCleanupError.unsupportedDaemon }
-        let disk: DiskUsage = try read(endpoint, socket, "/v1.44/system/df", cancellation)
-        let containers: [DockerContainer] = try read(endpoint, socket, "/v1.44/containers/json?all=1", cancellation)
-        let after: Info = try read(endpoint, socket, "/v1.44/info", cancellation)
+        let disk: DiskUsage = try read(endpoint, socket, peer, "/v1.44/system/df", cancellation)
+        let containers: [DockerContainer] = try read(endpoint, socket, peer, "/v1.44/containers/json?all=1", cancellation)
+        let after: Info = try read(endpoint, socket, peer, "/v1.44/info", cancellation)
         guard info.ID == after.ID, info.Name == after.Name, info.ServerVersion == after.ServerVersion,
               try transport.identity(for: endpoint) == socket else { throw DockerCleanupError.changed }
         let images = disk.Images ?? [], volumes = disk.Volumes ?? [], cache = disk.BuildCache ?? []
@@ -108,7 +109,7 @@ struct DockerEngineSession: Sendable {
             throw DockerCleanupError.malformedResponse
         }
         return DockerInventory(id: UUID(), capturedAt: now(), daemon: DockerDaemonIdentity(
-            endpoint: endpoint, socket: socket, id: info.ID, name: info.Name, version: info.ServerVersion,
+            endpoint: endpoint, socket: socket, peer: peer, id: info.ID, name: info.Name, version: info.ServerVersion,
             operatingSystem: info.OperatingSystem, rootless: info.SecurityOptions?.contains(where: { $0 == "name=rootless" }) == true),
             images: images, containers: containers, volumes: volumes, buildCache: cache)
     }
@@ -140,6 +141,7 @@ struct DockerEngineSession: Sendable {
         guard now() < plan.expiresAt else { throw DockerCleanupError.expired }
         var items: [DockerCleanupResult.Item] = []
         var reclaimed: UInt64?
+        var acknowledged = Set<String>()
         let targets = plan.selection.containerIDs.sorted().map { (kind: "container", id: $0) } +
             plan.selection.imageIDs.sorted().map { (kind: "image", id: $0) } +
             (plan.selection.allUnusedBuildCache ? [(kind: "cache", id: "all-unused-build-cache")] : [])
@@ -161,13 +163,13 @@ struct DockerEngineSession: Sendable {
                 let response: DockerHTTPResponse
                 if target.kind == "cache" {
                     // This is intentionally a separately disclosed whole-unused-cache action.
-                    response = try transport.request(endpoint: fresh.daemon.endpoint, identity: fresh.daemon.socket,
+                    response = try transport.request(endpoint: fresh.daemon.endpoint, identity: fresh.daemon.socket, peer: fresh.daemon.peer,
                         method: "POST", path: "/v1.44/build/prune?all=true", cancellation: cancellation)
                 } else {
                     let path = target.kind == "image"
                         ? "/v1.44/images/\(target.id)?force=false&noprune=true"
                         : "/v1.44/containers/\(target.id)?force=false&v=false"
-                    response = try transport.request(endpoint: fresh.daemon.endpoint, identity: fresh.daemon.socket,
+                    response = try transport.request(endpoint: fresh.daemon.endpoint, identity: fresh.daemon.socket, peer: fresh.daemon.peer,
                         method: "DELETE", path: path, cancellation: cancellation)
                 }
                 guard (200...299).contains(response.status) else { throw DockerCleanupError.daemon(response.status) }
@@ -175,6 +177,7 @@ struct DockerEngineSession: Sendable {
                     let report = try JSONDecoder().decode(Prune.self, from: response.body)
                     reclaimed = report.SpaceReclaimed
                 }
+                acknowledged.insert(target.id)
                 // A successful HTTP status is not yet treated as verified removal.
                 items.append(.init(id: target.id, state: .uncertain, detail: "Docker accepted the operation; verification pending."))
             } catch {
@@ -207,17 +210,21 @@ struct DockerEngineSession: Sendable {
                                  detail: "Build-cache pruning finished. The refreshed inventory shows which records remain; shared or newly in-use cache may be retained.")
                 }
                 if item.state == .uncertain {
-                    return .init(id: item.id, state: .retained, detail: "Object is still present. No automatic retry was made.")
+                    if acknowledged.contains(item.id) {
+                        return .init(id: item.id, state: .retained, detail: "Object is still present. No automatic retry was made.")
+                    }
+                    return .init(id: item.id, state: .uncertain,
+                        detail: "Still present at the last refresh, but the request may finish later. Its outcome remains uncertain; no automatic retry was made.")
                 }
                 return item
             }
         }
-        return DockerCleanupResult(items: items, inventory: final, cancelled: cancellation.isCancelled, reclaimedCacheBytes: reclaimed)
+        return DockerCleanupResult(daemon: plan.inventory.daemon, items: items, inventory: final, cancelled: cancellation.isCancelled, reclaimedCacheBytes: reclaimed)
     }
 
-    private func read<T: Decodable>(_ endpoint: DockerEndpoint, _ socket: DockerSocketIdentity, _ path: String,
+    private func read<T: Decodable>(_ endpoint: DockerEndpoint, _ socket: DockerSocketIdentity, _ peer: DockerPeerIdentity, _ path: String,
                                     _ cancellation: DockerCancellation) throws -> T {
-        let response = try transport.request(endpoint: endpoint, identity: socket, method: "GET", path: path, cancellation: cancellation)
+        let response = try transport.request(endpoint: endpoint, identity: socket, peer: peer, method: "GET", path: path, cancellation: cancellation)
         guard response.status == 200 else { throw DockerCleanupError.daemon(response.status) }
         do { return try JSONDecoder().decode(T.self, from: response.body) }
         catch { throw DockerCleanupError.malformedResponse }

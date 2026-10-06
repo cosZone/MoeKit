@@ -19,9 +19,18 @@ struct DockerSocketIdentity: Equatable, Sendable {
     let owner: UInt32
 }
 
+struct DockerPeerIdentity: Equatable, Sendable {
+    let pid: Int32
+    let uid: UInt32
+    let gid: UInt32
+    /// macOS kernel audit token, or Linux kernel pidfd device/inode identity.
+    let processToken: [UInt64]
+}
+
 struct DockerDaemonIdentity: Equatable, Sendable {
     let endpoint: DockerEndpoint
     let socket: DockerSocketIdentity
+    let peer: DockerPeerIdentity
     let id: String
     let name: String
     let version: String
@@ -129,7 +138,9 @@ struct DockerCleanupPlan: Identifiable, Sendable {
     let expiresAt: Date
 }
 
-struct DockerCleanupResult: Sendable {
+struct DockerCleanupResult: Identifiable, Sendable {
+    let id = UUID()
+    let daemon: DockerDaemonIdentity
     enum State: String, Sendable { case removed, retained, failed, uncertain, skipped }
     struct Item: Identifiable, Sendable {
         let id: String

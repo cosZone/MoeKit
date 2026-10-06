@@ -750,6 +750,46 @@
           }
         }
       }
+    },
+    "Kernel peer": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内核对端"
+          }
+        }
+      }
+    },
+    "Operation daemon": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "操作对应的 daemon"
+          }
+        }
+      }
+    },
+    "Operation results": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "操作结果"
+          }
+        }
+      }
+    },
+    "Still present at the last refresh, but the request may finish later. Its outcome remains uncertain; no automatic retry was made.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上次刷新时仍然存在，但请求仍可能稍后完成。结果保持不确定，没有自动重试。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

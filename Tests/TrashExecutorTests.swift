@@ -57,7 +57,7 @@ struct TrashExecutorTests {
         #expect(report.items.count == 2 && report.items.allSatisfy(\.isEligible))
         #expect(report.items.allSatisfy { $0.modifiedAt != nil })
         #expect(report.items.first(where: { $0.url == file })?.logicalBytes == Int64(f.marker.count))
-        #expect(report.items.first(where: { $0.url == folder })?.manifest?.entries.count == 2)
+        #expect(report.items.first(where: { $0.url.path == folder.path })?.manifest?.entries.count == 2)
         _ = try await executor.prepare(inspectionID: report.id, selectedPaths: [file.path], action: .selectedItems, context: scope)
         #expect(!FileManager.default.fileExists(atPath: f.recovery.path))
         try f.verifySentinel()

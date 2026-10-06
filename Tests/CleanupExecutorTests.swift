@@ -251,7 +251,7 @@ struct CleanupExecutorTests {
         }
         let report = try await executor.inspect(root: f.caches, context: f.context)
         #expect(report.candidates.first?.isEligible == false)
-        #expect(report.candidates.first?.sizeEstimate?.logicalBytes == Int64(f.marker.count))
+        #expect(report.candidates.first?.sizeEstimate?.logicalBytes == Int64(f.marker.count + CleanupFiles.cacheSignature.count))
         #expect(try Data(contentsOf: a.appendingPathComponent("owned.bin")) == f.marker)
         #expect(!FileManager.default.fileExists(atPath: f.recovery.path))
     }

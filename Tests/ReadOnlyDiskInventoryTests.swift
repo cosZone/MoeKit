@@ -40,7 +40,7 @@ struct ReadOnlyDiskInventoryTests {
         let denied = try folder(tree, "denied")
         try Data(repeating: 1, count: 456).write(to: denied.appendingPathComponent("unseen"), options: .withoutOverwriting)
         let estimate = try ReadOnlyDiskInventory.estimate(parent: AnchoredDirectory.selected(root), name: "cache", budget: .init()) { url in
-            if url == denied { throw NSError(domain: NSPOSIXErrorDomain, code: Int(code)) }
+            if url.path == denied.path { throw NSError(domain: NSPOSIXErrorDomain, code: Int(code)) }
         }
         #expect(!estimate.isComplete && estimate.logicalBytes == 123)
         #expect(estimate.issues.contains { $0.contains(denied.path) })

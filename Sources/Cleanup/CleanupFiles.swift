@@ -142,6 +142,9 @@ enum CleanupFiles {
             let parent: InstallerDirectoryAnchor
             do { parent = try InstallerDirectoryAnchor.open(url.deletingLastPathComponent()) }
             catch { throw CleanupFailure.refused(inspectionMessage(error, stage: String(localized: "Protected location parent"), url: url.deletingLastPathComponent())) }
+            // Keep the descriptor owner alive through the final borrowed-fd
+            // snapshot as well, including optimized Release/ASan builds.
+            defer { withExtendedLifetime(parent) {} }
             let named = try InstallerFileAccess.snapshotAt(parent.fd, url.lastPathComponent)
             let protectedIdentity: InstallerFileSnapshot
             switch named.mode & UInt32(S_IFMT) {

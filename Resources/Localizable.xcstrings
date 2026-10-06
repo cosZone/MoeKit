@@ -11837,16 +11837,6 @@
         }
       }
     },
-    "Only the first %lld items are listed. Choose a smaller folder to inspect the rest.": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "仅列出前 %lld 个项目。可选择更小的文件夹以检查其余内容。"
-          }
-        }
-      }
-    },
     "Project catalog protection": {
       "localizations": {
         "zh-Hans": {
@@ -11983,6 +11973,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "macOS 拒绝读取 %@。已保留可读部分的大小；需要时可在访达中检查该位置。"
+          }
+        }
+      }
+    },
+    "Only the first %lld items are listed. Inspect the remaining items in Finder.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅列出前 %lld 个项目。其余项目可在访达中检查。"
           }
         }
       }

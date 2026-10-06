@@ -57,7 +57,7 @@ enum ReadOnlyDiskInventory {
             while let name = try entries.next() {
                 guard names.count < limit else {
                     return .init(names: names.sorted(), isComplete: false,
-                        issue: String(localized: "Only the first \(limit) items are listed. Choose a smaller folder to inspect the rest."))
+                        issue: String(localized: "Only the first \(limit) items are listed. Inspect the remaining items in Finder."))
                 }
                 names.append(name)
             }

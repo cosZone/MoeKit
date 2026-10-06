@@ -2,10 +2,7 @@
 title: "0.1.0-preview.12"
 version: "0.1.0-preview.12"
 description: "Mole 更易上手，新增 AI worktree 收尾，界面和菜单栏更简洁。"
-status: prerelease
-date: "2026-10-06"
-sourceCommit: fa630c57dd87862597874d5ba459453beac95e60
-releaseUrl: "https://github.com/cosZone/MoeKit/releases/tag/v0.1.0-preview.12"
+status: unreleased
 ---
 
 ## 更新

@@ -645,6 +645,39 @@ class TagSafety(unittest.TestCase):
             release.NoRedirect().redirect_request(None, None, 302, "", {}, "https://attacker.test/")
 
 
+class ReleaseBody(unittest.TestCase):
+    def render(self, notes):
+        context = release.validate_inputs(valid_environment())
+        info = {"source_url": "https://github.com/cosZone/MoeKit/commit/" + "a" * 40,
+                "run_url": "https://github.com/cosZone/MoeKit/actions/runs/101"}
+        return release.release_body(context, info, notes, *release.package_names(context))
+
+    def test_complete_notes_appear_once_without_repeated_boilerplate(self):
+        notes = "## 更新\n\n- One feature\n\nmacOS 15+，Apple Silicon / Intel。Apple Development 签名、未公证。"
+        body = self.render(notes)
+        self.assertEqual(body.count(notes), 1)
+        self.assertEqual(body.count("macOS 15+"), 1)
+        self.assertEqual(body.count("Apple Development"), 1)
+        self.assertNotIn("Release 配置单元测试", body)
+        self.assertIn("[构建信息]", body)
+        self.assertIn("[校验和]", body)
+
+    def test_missing_limits_get_a_short_fallback(self):
+        body = self.render("- One feature")
+        self.assertEqual(body.count("macOS 15+"), 1)
+        self.assertEqual(body.count("Apple Development"), 1)
+        self.assertIn("未经过 Apple 公证", body)
+
+    def test_partial_limits_do_not_suppress_the_missing_warning(self):
+        for notes in ("macOS 15+", "Apple Development", "未公证"):
+            with self.subTest(notes=notes):
+                body = self.render(notes)
+                self.assertIn("macOS 15+", body)
+                self.assertIn("Apple Development 开发签名，未经过 Apple 公证", body)
+        legacy = self.render("macOS 15+ · Apple Development 开发签名，未经过 Apple 公证")
+        self.assertEqual(legacy.count("Apple Development"), 1)
+
+
 class Publication(unittest.TestCase):
     def setUp(self):
         self.feed_verify = patch.object(release.appcast_module(), "verify_release").start()

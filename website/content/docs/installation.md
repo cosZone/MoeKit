@@ -11,9 +11,9 @@ description: 先核对来源和版本，再了解 macOS 的安全提示。
 
 ## 获取可用产物
 
-当前版本：[preview.11](https://github.com/cosZone/MoeKit/releases/tag/v0.1.0-preview.11) · [下载 DMG](https://github.com/cosZone/MoeKit/releases/download/v0.1.0-preview.11/MoeKit-v0.1.0-preview.11-macOS.dmg) · [ZIP](https://github.com/cosZone/MoeKit/releases/download/v0.1.0-preview.11/MoeKit-v0.1.0-preview.11-macOS.zip)。新增个人废纸篓与 Docker 清理，兼容 Apple Silicon / Intel。使用 Apple Development 签名、未公证，macOS 可能阻止运行。完整改动见 [更新记录](/changelog/0.1.0-preview.11)。
+当前版本：[preview.12](https://github.com/cosZone/MoeKit/releases/tag/v0.1.0-preview.12) · [下载 DMG](https://github.com/cosZone/MoeKit/releases/download/v0.1.0-preview.12/MoeKit-v0.1.0-preview.12-macOS.dmg) · [ZIP](https://github.com/cosZone/MoeKit/releases/download/v0.1.0-preview.12/MoeKit-v0.1.0-preview.12-macOS.zip)。新增 Mole 自动检测与安装指引、AI worktree 收尾及更简洁的界面／菜单栏，兼容 Apple Silicon / Intel。使用 Apple Development 签名、未公证，macOS 可能阻止运行。完整改动见 [更新记录](/changelog/0.1.0-preview.12)。
 
-Mole 新手准备与 AI worktree 收尾等后续功能见 [尚未发布](/changelog/unreleased)，不包含在本版中。
+本版完整 preview 版本会显示在 About 中；后续源码改动见 [尚未发布](/changelog/unreleased)。
 
 **preview.9 及更早版本仍需手动下载并安装本版一次。** 旧版没有自动安装器，不能自行安装 Sparkle；请先完成当前操作并退出旧应用，再按下述正常安装步骤替换应用。
 
@@ -28,7 +28,7 @@ Mole 新手准备与 AI worktree 收尾等后续功能见 [尚未发布](/change
 只下载 DMG 时，在文件所在目录执行，并将结果与 `SHA256SUMS.txt` 中的同名条目对照：
 
 ```sh
-shasum -a 256 MoeKit-v0.1.0-preview.11-macOS.dmg
+shasum -a 256 MoeKit-v0.1.0-preview.12-macOS.dmg
 ```
 
 如果 DMG、ZIP、`BUILD_INFO.json`、`appcast.xml` 和校验和五个文件全部已下载到同一目录，可一次检查全部：

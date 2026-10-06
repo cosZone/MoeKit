@@ -12,6 +12,7 @@
 #import <string.h>
 #import <stdlib.h>
 #import <limits.h>
+#import <time.h>
 #import "probe_policy.h"
 #import "fixture_json.h"
 
@@ -59,32 +60,55 @@ static NSDictionary *knownEntry(NSDictionary *known, struct FixtureProcess first
     NSDictionary *entry = firstLookup == FixtureLookupPresent ? known[identityKey(first)] : nil;
     return entry ?: (secondLookup == FixtureLookupPresent ? known[identityKey(second)] : nil);
 }
+enum FixturePathStage { FixturePathNotRead, FixturePathKernel, FixturePathEncoding,
+    FixturePathPhysical, FixturePathParent, FixturePathLeaf };
+static BOOL monotonicNanos(uint64_t *value) {
+    struct timespec now;
+    if (clock_gettime(CLOCK_MONOTONIC, &now) || now.tv_sec < 0 || now.tv_nsec < 0 || now.tv_nsec >= 1000000000L ||
+        (uint64_t)now.tv_sec > (UINT64_MAX - (uint64_t)now.tv_nsec) / 1000000000ULL) return NO;
+    *value = (uint64_t)now.tv_sec * 1000000000ULL + (uint64_t)now.tv_nsec;
+    return YES;
+}
 static enum FixtureScope executableScope(pid_t pid, NSString *root, NSString *cache,
-                                         NSString **physical, int *error) {
+                                         NSString **physical, int *error, enum FixturePathStage *stage) {
     char path[PROC_PIDPATHINFO_MAXSIZE] = {0}; errno = 0;
+    *stage = FixturePathKernel;
     int length = proc_pidpath(pid, path, sizeof(path));
     *error = errno;
-    if (length <= 0 || length >= (int)sizeof(path)) return FixtureScopeUnknown;
+    if (length <= 0) return FixtureScopeUnknown;
+    *stage = FixturePathEncoding;
+    if (length >= (int)sizeof(path)) { *error = EOVERFLOW; return FixtureScopeUnknown; }
     NSString *executable = [NSString stringWithUTF8String:path];
+    if (!executable) { *error = EILSEQ; return FixtureScopeUnknown; }
+    *stage = FixturePathPhysical;
     errno = 0;
     *physical = physicalPath(executable);
     int resolutionError = errno;
-    if (*physical) return FixturePathScope((*physical).fileSystemRepresentation, root.fileSystemRepresentation, cache.fileSystemRepresentation);
+    if (*physical) {
+        *error = 0;
+        return FixturePathScope((*physical).fileSystemRepresentation, root.fileSystemRepresentation, cache.fileSystemRepresentation);
+    }
     *error = resolutionError;
-    // An unrelated executable can disappear between the kernel's vnode path
-    // read and realpath. Resolve its immediate parent and require the leaf to
-    // be absent. This is outside-scope evidence only, never a way to admit an
-    // unresolved owned helper or to turn an unreadable path into absence.
-    enum FixtureScope namedScope = executable ? FixturePathScope(executable.fileSystemRepresentation,
-        root.fileSystemRepresentation, cache.fileSystemRepresentation) : FixtureScopeUnknown;
+    // Only a physically resolved outside parent plus an affirmatively missing
+    // leaf can exclude a disappeared outside executable. A raw root/cache or
+    // /var alias candidate, an unreadable parent or an ambiguous path stays unknown.
+    enum FixtureScope namedScope = FixturePathScope(executable.fileSystemRepresentation,
+        root.fileSystemRepresentation, cache.fileSystemRepresentation);
     NSString *systemAlias = [executable hasPrefix:@"/var/"] ? [@"/private" stringByAppendingString:executable] : executable;
-    enum FixtureScope aliasScope = systemAlias ? FixturePathScope(systemAlias.fileSystemRepresentation,
-        root.fileSystemRepresentation, cache.fileSystemRepresentation) : FixtureScopeUnknown;
+    enum FixtureScope aliasScope = FixturePathScope(systemAlias.fileSystemRepresentation,
+        root.fileSystemRepresentation, cache.fileSystemRepresentation);
     if (resolutionError == ENOENT && namedScope == FixtureScopeOutside && aliasScope == FixtureScopeOutside) {
+        *stage = FixturePathParent;
+        errno = 0;
         NSString *parent = physicalPath(executable.stringByDeletingLastPathComponent);
-        NSString *candidate = parent ? [parent stringByAppendingPathComponent:executable.lastPathComponent] : nil;
+        *error = errno;
+        if (!parent) return FixtureScopeUnknown;
+        NSString *candidate = [parent stringByAppendingPathComponent:executable.lastPathComponent];
         struct stat info; errno = 0;
-        if (candidate && lstat(executable.fileSystemRepresentation, &info) == -1 && errno == ENOENT &&
+        *stage = FixturePathLeaf;
+        int result = lstat(executable.fileSystemRepresentation, &info);
+        *error = errno;
+        if (result == -1 && *error == ENOENT &&
             FixturePathScope(candidate.fileSystemRepresentation, root.fileSystemRepresentation, cache.fileSystemRepresentation) == FixtureScopeOutside)
             return FixtureScopeOutside;
     }
@@ -94,44 +118,76 @@ static void processDiagnostic(const char *phase, enum FixtureDecision decision,
                               struct FixtureProcess first, struct FixtureProcess second,
                               enum FixtureLookup firstLookup, enum FixtureLookup secondLookup,
                               enum FixtureScope firstScope, enum FixtureScope secondScope,
-                              BOOL known, int firstError, int secondError, int firstPathError, int secondPathError) {
+                              BOOL known, int firstError, int secondError, int firstPathError, int secondPathError,
+                              enum FixturePathStage firstStage, enum FixturePathStage secondStage) {
     // Fixed categories and booleans only: no ambient PID, executable, arguments
     // or environment values are printed.
-    fprintf(stderr, "Fixture process observation: phase=%s decision=%d lookup=%d,%d scope=%d,%d known=%d identity_equal=%d uid_equal=%d,%d errno=%d,%d path_errno=%d,%d\n",
+    fprintf(stderr, "Fixture process observation: phase=%s decision=%d lookup=%d,%d scope=%d,%d known=%d identity_equal=%d uid_equal=%d,%d errno=%d,%d path_errno=%d,%d path_stage=%d,%d zombie=%d,%d\n",
         phase, decision, firstLookup, secondLookup, firstScope, secondScope, known,
         FixtureSameIdentity(first, second), first.euid == geteuid() && first.ruid == getuid(),
-        second.euid == geteuid() && second.ruid == getuid(), firstError, secondError, firstPathError, secondPathError);
+        second.euid == geteuid() && second.ruid == getuid(), firstError, secondError, firstPathError, secondPathError,
+        firstStage, secondStage, first.zombie, second.zombie);
 }
 static enum FixtureDecision observeProcess(pid_t pid, NSDictionary *known, NSString *root, NSString *cache,
-                                           NSDictionary **entry, struct FixtureProcess *classified) {
-    struct FixtureProcess first = {0}, second = {0};
-    int firstError = 0, secondError = 0, firstPathError = 0, secondPathError = 0;
-    enum FixtureLookup firstLookup = lookupProcess(pid, &first, &firstError);
-    NSString *firstPath = nil, *secondPath = nil;
-    enum FixtureScope firstScope = FixtureScopeUnknown, secondScope = FixtureScopeUnknown;
-    if (firstLookup == FixtureLookupPresent && !first.zombie) {
-        firstScope = executableScope(pid, root, cache, &firstPath, &firstPathError);
-        secondScope = executableScope(pid, root, cache, &secondPath, &secondPathError);
+                                           NSDictionary **entry, struct FixtureProcess *classified,
+                                           struct FixturePathRetryBudget *budget) {
+    struct FixturePathRetryState retry = {0};
+    for (;;) {
+        struct FixtureProcess first = {0}, second = {0};
+        int firstError = 0, secondError = 0, firstPathError = 0, secondPathError = 0;
+        enum FixturePathStage firstStage = FixturePathNotRead, secondStage = FixturePathNotRead;
+        enum FixtureLookup firstLookup = lookupProcess(pid, &first, &firstError);
+        NSString *firstPath = nil, *secondPath = nil;
+        enum FixtureScope firstScope = FixtureScopeUnknown, secondScope = FixtureScopeUnknown;
+        if (firstLookup == FixtureLookupPresent && !first.zombie) {
+            firstScope = executableScope(pid, root, cache, &firstPath, &firstPathError, &firstStage);
+            secondScope = executableScope(pid, root, cache, &secondPath, &secondPathError, &secondStage);
+        }
+        enum FixtureLookup secondLookup = lookupProcess(pid, &second, &secondError);
+        *classified = second;
+        NSDictionary *previous = knownEntry(known, first, second, firstLookup, secondLookup);
+        struct FixtureProcess expected = previous ? entryValue(previous) : (struct FixtureProcess){0};
+        enum FixtureDecision decision = FixtureClassify(first, second, firstLookup, secondLookup, firstScope, secondScope,
+                                                         geteuid(), previous ? &expected : NULL);
+        uint64_t now = 0;
+        if (!monotonicNanos(&now)) return FixtureDecisionUnknown;
+        enum FixturePathRetryAction action = FixturePathRetryObserve(&retry, budget, first, second, firstLookup, secondLookup,
+            firstScope, secondScope, previous ? &expected : NULL, decision,
+            firstStage == FixturePathKernel && firstPathError == ESRCH,
+            secondStage == FixturePathKernel && secondPathError == ESRCH, geteuid(), now);
+        if (action == FixturePathRetryAgain) {
+            processDiagnostic("path-resample", decision, first, second, firstLookup, secondLookup, firstScope, secondScope,
+                previous != nil, firstError, secondError, firstPathError, secondPathError, firstStage, secondStage);
+            // The unresolved anchor remains local to this invocation. It never
+            // enters the trusted-owned map and cannot grant idle or install-ack.
+            struct timespec delay = { .tv_sec = 0, .tv_nsec = (long)FIXTURE_PATH_RETRY_DELAY_NS };
+            if (nanosleep(&delay, NULL)) {
+                fprintf(stderr, "Fixture path resample sleep interrupted\n"); return FixtureDecisionUnknown;
+            }
+            if (!monotonicNanos(&now) || !FixturePathRetryWithinBudget(budget, now)) {
+                fprintf(stderr, "Fixture path resample invocation deadline invalid or exhausted\n"); return FixtureDecisionUnknown;
+            }
+            budget->last_ns = now;
+            continue;
+        }
+        if (action == FixturePathRetryRefuse) {
+            decision = FixtureDecisionUnknown;
+            if (retry.pending) fprintf(stderr, "Fixture unresolved path resample refused; remaining_delays=%u\n", budget->remaining);
+        }
+        if (decision == FixtureDecisionOwned) {
+            NSString *path = secondPath ?: firstPath;
+            NSString *role = previous ? previous[@"role"] :
+                [path hasSuffix:@"/Sparkle.framework/Versions/B/Autoupdate"] ? @"installer" :
+                [path hasSuffix:@"/Updater.app/Contents/MacOS/Updater"] ? @"progress-agent" : @"fixture-process";
+            *entry = @{@"pid": @(second.pid), @"uid": @(second.euid), @"start_seconds": @(second.seconds),
+                @"start_microseconds": @(second.microseconds), @"role": role,
+                @"scope": previous ? @"tracked-identity" : [path hasPrefix:[root stringByAppendingString:@"/"]] ? @"owned-root" : @"exact-fixture-cache"};
+        } else if (decision == FixtureDecisionUnknown || decision == FixtureDecisionChanged) {
+            processDiagnostic(retry.pending ? "unresolved-path" : "scan", decision, first, second, firstLookup, secondLookup, firstScope, secondScope,
+                previous != nil, firstError, secondError, firstPathError, secondPathError, firstStage, secondStage);
+        }
+        return decision;
     }
-    enum FixtureLookup secondLookup = lookupProcess(pid, &second, &secondError);
-    *classified = second;
-    NSDictionary *previous = knownEntry(known, first, second, firstLookup, secondLookup);
-    struct FixtureProcess expected = previous ? entryValue(previous) : (struct FixtureProcess){0};
-    enum FixtureDecision decision = FixtureClassify(first, second, firstLookup, secondLookup, firstScope, secondScope,
-                                                     geteuid(), previous ? &expected : NULL);
-    if (decision == FixtureDecisionOwned) {
-        NSString *path = secondPath ?: firstPath;
-        NSString *role = previous ? previous[@"role"] :
-            [path hasSuffix:@"/Sparkle.framework/Versions/B/Autoupdate"] ? @"installer" :
-            [path hasSuffix:@"/Updater.app/Contents/MacOS/Updater"] ? @"progress-agent" : @"fixture-process";
-        *entry = @{@"pid": @(second.pid), @"uid": @(second.euid), @"start_seconds": @(second.seconds),
-            @"start_microseconds": @(second.microseconds), @"role": role,
-            @"scope": previous ? @"tracked-identity" : [path hasPrefix:[root stringByAppendingString:@"/"]] ? @"owned-root" : @"exact-fixture-cache"};
-    } else if (decision == FixtureDecisionUnknown || decision == FixtureDecisionChanged) {
-        processDiagnostic("scan", decision, first, second, firstLookup, secondLookup, firstScope, secondScope,
-                          previous != nil, firstError, secondError, firstPathError, secondPathError);
-    }
-    return decision;
 }
 static int fail(NSString *reason) {
     fprintf(stderr, "Fixture lifetime probe unknown: %s\n", reason.UTF8String);
@@ -141,6 +197,9 @@ int main(int argc, const char *argv[]) {
     @autoreleasepool {
         if (argc != 7 || !FixtureNormalUser(getuid(), geteuid()) || ![NSProcessInfo.processInfo.environment[@"GITHUB_ACTIONS"] isEqualToString:@"true"] ||
             ![NSProcessInfo.processInfo.environment[@"RUNNER_ENVIRONMENT"] isEqualToString:@"github-hosted"]) return fail(@"CI gate");
+        uint64_t invocationStart = 0;
+        if (!monotonicNanos(&invocationStart)) return fail(@"monotonic clock");
+        struct FixturePathRetryBudget pathRetryBudget = FixtureMakePathRetryBudget(invocationStart);
         NSString *namedRoot = [NSString stringWithUTF8String:argv[1]], *identifier = [NSString stringWithUTF8String:argv[2]];
         NSString *marker = [NSString stringWithUTF8String:argv[3]];
         NSRegularExpression *markerPattern = [NSRegularExpression regularExpressionWithPattern:@"^[a-f0-9]{32}$" options:0 error:NULL];
@@ -203,7 +262,7 @@ int main(int argc, const char *argv[]) {
                 if (pids[i] <= 0 || pids[i] == getpid()) continue;
                 NSDictionary *entry = nil;
                 struct FixtureProcess classified = {0};
-                enum FixtureDecision decision = observeProcess(pids[i], observed, root, cache, &entry, &classified);
+                enum FixtureDecision decision = observeProcess(pids[i], observed, root, cache, &entry, &classified, &pathRetryBudget);
                 if (decision == FixtureDecisionUnknown) return fail(@"process ownership or identity unknown");
                 if (decision == FixtureDecisionChanged) return 3;
                 if (classified.pid > 0) finalInventory[@(classified.pid)] = [NSValue valueWithBytes:&classified objCType:@encode(struct FixtureProcess)];
@@ -233,7 +292,7 @@ int main(int argc, const char *argv[]) {
                 geteuid(), finalValue ? &classified : NULL);
             if (decision == FixtureDecisionUnknown || decision == FixtureDecisionChanged) {
                 processDiagnostic("final-owned", decision, first, second, firstLookup, secondLookup,
-                    FixtureScopeOwned, FixtureScopeOwned, YES, firstError, secondError, 0, 0);
+                    FixtureScopeOwned, FixtureScopeOwned, YES, firstError, secondError, 0, 0, FixturePathNotRead, FixturePathNotRead);
                 if (decision == FixtureDecisionChanged) return 3;
                 return fail(@"tracked process inventory changed");
             }

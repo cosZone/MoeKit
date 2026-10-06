@@ -259,6 +259,29 @@ class HarnessBoundaryTests(unittest.TestCase):
         self.assertNotIn("NSHomeDirectory()", source)
         self.assertIn("namedScope == FixtureScopeOutside && aliasScope == FixtureScopeOutside", source)
 
+    def test_path_resample_keeps_one_internal_invocation_budget(self):
+        source = (Path(__file__).parent / "probe.m").read_text()
+        self.assertEqual(source.count("FixtureMakePathRetryBudget(invocationStart)"), 1)
+        self.assertIn("&pathRetryBudget)", source)
+        self.assertIn("struct FixturePathRetryState retry = {0}", source)
+        self.assertIn("FixturePathRetryObserve(&retry, budget", source)
+        self.assertIn("firstStage == FixturePathKernel && firstPathError == ESRCH", source)
+        self.assertIn("secondStage == FixturePathKernel && secondPathError == ESRCH", source)
+        self.assertIn("FixturePathRetryWithinBudget(budget, now)", source)
+        self.assertIn("clock_gettime(CLOCK_MONOTONIC", source)
+        self.assertIn(".tv_nsec = (long)FIXTURE_PATH_RETRY_DELAY_NS", source)
+        self.assertIn("if (action == FixturePathRetryRefuse) {\n            decision = FixtureDecisionUnknown;", source)
+        self.assertIn("path_stage=%d,%d zombie=%d,%d", source)
+        # Internal resampling must not turn an unresolved anchor into a trusted
+        # owned process or pass it as known to FixtureClassify.
+        self.assertNotIn("&retry.anchor", source)
+        self.assertNotIn("observed[identityKey(retry.anchor)]", source)
+        self.assertIn("previous ? &expected : NULL", source)
+        runner = SCRIPT.read_text()
+        self.assertIn("timeout=5, transient_exit=3, separate_stderr=True", runner)
+        self.assertIn("time.monotonic() + 25", runner)
+        self.assertIn("time.monotonic() - empty_since >= 1.0", runner)
+
     def test_shared_native_process_policy_compiles_and_runs_injected_cases(self):
         compiler = shutil.which("cc")
         self.assertIsNotNone(compiler, "Portable native policy tests require the platform C compiler")

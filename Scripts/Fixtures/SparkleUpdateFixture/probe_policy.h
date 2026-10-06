@@ -142,4 +142,127 @@ static inline enum FixtureDecision FixtureRecheck(
     return FixtureDecisionOwned;
 }
 
+// These limits are shared by all process observations in one native probe
+// invocation. A retry is another complete metadata/path/path/metadata sample,
+// never a replacement for FixtureClassify or evidence of idle/acknowledgement.
+#define FIXTURE_PATH_RETRY_WINDOW_NS UINT64_C(1000000000)
+#define FIXTURE_PATH_RETRY_DELAY_NS UINT64_C(20000000)
+#define FIXTURE_PATH_RETRY_LIMIT 6u
+
+enum FixturePathRetryAction {
+    FixturePathRetryAccept,
+    FixturePathRetryAgain,
+    FixturePathRetryRefuse
+};
+
+struct FixturePathRetryBudget {
+    // The invocation start/deadline never move. The last accepted clock
+    // reading detects backwards time between observations.
+    uint64_t start_ns, deadline_ns, last_ns;
+    unsigned remaining;
+};
+
+struct FixturePathRetryState {
+    bool pending;
+    // This unresolved identity is only an anchor, never a known/owned role.
+    struct FixtureProcess anchor;
+};
+
+static inline struct FixturePathRetryBudget FixtureMakePathRetryBudget(uint64_t now) {
+    struct FixturePathRetryBudget budget = {now, 0, now, 0};
+    if (now <= UINT64_MAX - FIXTURE_PATH_RETRY_WINDOW_NS) {
+        budget.deadline_ns = now + FIXTURE_PATH_RETRY_WINDOW_NS;
+        budget.remaining = FIXTURE_PATH_RETRY_LIMIT;
+    }
+    return budget;
+}
+
+// Reserved retries may still complete when remaining is zero. This check is
+// also used after sleeping and before the native caller reads fresh metadata.
+static inline bool FixturePathRetryWithinBudget(const struct FixturePathRetryBudget *budget,
+                                                uint64_t now) {
+    return budget && budget->start_ns < budget->deadline_ns &&
+        budget->last_ns >= budget->start_ns && budget->last_ns < budget->deadline_ns &&
+        now >= budget->last_ns && now < budget->deadline_ns;
+}
+
+static inline enum FixturePathRetryAction FixturePathRetryObserve(
+    struct FixturePathRetryState *state, struct FixturePathRetryBudget *budget,
+    struct FixtureProcess first, struct FixtureProcess second,
+    enum FixtureLookup firstLookup, enum FixtureLookup secondLookup,
+    enum FixtureScope firstScope, enum FixtureScope secondScope,
+    const struct FixtureProcess *known, enum FixtureDecision decision,
+    bool firstKernelESRCH, bool secondKernelESRCH, uint32_t expectedUID, uint64_t now) {
+    if (!state || !budget) return FixturePathRetryRefuse;
+    // The controller never synthesizes a classification or changes its meaning.
+    if (decision != FixtureClassify(first, second, firstLookup, secondLookup,
+                                   firstScope, secondScope, expectedUID, known))
+        return FixturePathRetryRefuse;
+    if (!state->pending && decision != FixtureDecisionUnknown)
+        return FixturePathRetryAccept;
+    if (!FixturePathRetryWithinBudget(budget, now)) return FixturePathRetryRefuse;
+    budget->last_ns = now;
+
+    bool bothPresent = firstLookup == FixtureLookupPresent && secondLookup == FixtureLookupPresent;
+    bool bothKernelMissing = firstScope == FixtureScopeUnknown && secondScope == FixtureScopeUnknown &&
+        firstKernelESRCH && secondKernelESRCH;
+    bool bothPathsResolved =
+        (firstScope == FixtureScopeOutside || firstScope == FixtureScopeOwned) &&
+        (secondScope == FixtureScopeOutside || secondScope == FixtureScopeOwned) &&
+        !firstKernelESRCH && !secondKernelESRCH;
+
+    if (state->pending) {
+        // A new known pointer must not turn the unowned anchor into ownership.
+        // Access/partial metadata errors never establish disappearance.
+        if (known || !FixtureExpectedUser(state->anchor, expectedUID) ||
+            (firstLookup != FixtureLookupPresent && firstLookup != FixtureLookupGone) ||
+            (secondLookup != FixtureLookupPresent && secondLookup != FixtureLookupGone) ||
+            (firstLookup == FixtureLookupGone && secondLookup == FixtureLookupPresent))
+            return FixturePathRetryRefuse;
+        if ((firstLookup == FixtureLookupPresent &&
+             (!FixtureSameIdentity(state->anchor, first) || !FixtureExpectedUser(first, expectedUID))) ||
+            (secondLookup == FixtureLookupPresent &&
+             (!FixtureSameIdentity(state->anchor, second) || !FixtureExpectedUser(second, expectedUID))))
+            return FixturePathRetryRefuse;
+        // If paths were attempted, a new error stage must not be erased by
+        // later disappearance. Valid resolved scope or exact kernel ESRCH is
+        // acceptable provenance; skipped path reads do not create an error.
+        if (firstLookup == FixtureLookupPresent && !first.zombie &&
+            !(((firstScope == FixtureScopeOutside || firstScope == FixtureScopeOwned) && !firstKernelESRCH) ||
+              (firstScope == FixtureScopeUnknown && firstKernelESRCH)))
+            return FixturePathRetryRefuse;
+        if (firstLookup == FixtureLookupPresent && !first.zombie &&
+            !(((secondScope == FixtureScopeOutside || secondScope == FixtureScopeOwned) && !secondKernelESRCH) ||
+              (secondScope == FixtureScopeUnknown && secondKernelESRCH)))
+            return FixturePathRetryRefuse;
+        if (decision == FixtureDecisionGone) {
+            state->pending = false;
+            return FixturePathRetryAccept;
+        }
+        if (bothPresent && !first.zombie && !second.zombie && bothPathsResolved &&
+            (decision == FixtureDecisionOutside || decision == FixtureDecisionOwned)) {
+            state->pending = false;
+            return FixturePathRetryAccept;
+        }
+    }
+
+    // Only proc_pidpath itself returning ESRCH twice is retryable. The caller
+    // must not set these booleans for realpath failures, permissions or partial
+    // path reads. Unknown scope alone is deliberately insufficient.
+    if (known || decision != FixtureDecisionUnknown || !bothPresent || !first.pid || !second.pid ||
+        !FixtureSameIdentity(first, second) || !FixtureExpectedUser(first, expectedUID) ||
+        !FixtureExpectedUser(second, expectedUID) || first.zombie || second.zombie || !bothKernelMissing)
+        return FixturePathRetryRefuse;
+    // A whole delay and time for a subsequent sample must remain. Subtraction
+    // is safe because the deadline and current clock were checked above.
+    if (!budget->remaining || budget->deadline_ns - now <= FIXTURE_PATH_RETRY_DELAY_NS)
+        return FixturePathRetryRefuse;
+    if (!state->pending) {
+        state->anchor = first;
+        state->pending = true;
+    }
+    budget->remaining--;
+    return FixturePathRetryAgain;
+}
+
 #endif

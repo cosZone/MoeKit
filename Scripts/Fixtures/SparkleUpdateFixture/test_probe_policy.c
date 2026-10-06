@@ -314,12 +314,390 @@ static void testRecheck(void) {
         "replacement owned executable stays active after stale-role removal");
 }
 
+// Each observation injects the entire native BSD/path/path/BSD sequence into
+// the same controller the probe uses. No real processes or credentials change.
+struct RetryObservation {
+    struct FixtureProcess first, second;
+    enum FixtureLookup firstLookup, secondLookup;
+    enum FixtureScope firstScope, secondScope;
+    const struct FixtureProcess *known;
+    bool firstKernelESRCH, secondKernelESRCH;
+    uint32_t expectedUID;
+};
+
+static struct RetryObservation missingPaths(struct FixtureProcess process) {
+    return (struct RetryObservation){process, process, FixtureLookupPresent, FixtureLookupPresent,
+        FixtureScopeUnknown, FixtureScopeUnknown, NULL, true, true, 501};
+}
+
+static enum FixturePathRetryAction observeRetry(struct FixturePathRetryState *state,
+                                                struct FixturePathRetryBudget *budget,
+                                                struct RetryObservation sample, uint64_t now,
+                                                enum FixtureDecision expectedDecision, const char *name) {
+    enum FixtureDecision decision = FixtureClassify(sample.first, sample.second,
+        sample.firstLookup, sample.secondLookup, sample.firstScope, sample.secondScope,
+        sample.expectedUID, sample.known);
+    checkDecision(decision, expectedDecision, name);
+    return FixturePathRetryObserve(state, budget, sample.first, sample.second,
+        sample.firstLookup, sample.secondLookup, sample.firstScope, sample.secondScope,
+        sample.known, decision, sample.firstKernelESRCH, sample.secondKernelESRCH,
+        sample.expectedUID, now);
+}
+
+static void checkRetry(enum FixturePathRetryAction actual, enum FixturePathRetryAction expected,
+                       const char *name) {
+    if (actual != expected)
+        fprintf(stderr, "Retry action for %s: expected %d, got %d\n", name, (int)expected, (int)actual);
+    check(actual == expected, name);
+}
+
+static void enterPathRetry(struct FixturePathRetryState *state, struct FixturePathRetryBudget *budget,
+                           struct FixtureProcess process, uint64_t now) {
+    unsigned before = budget->remaining;
+    checkRetry(observeRetry(state, budget, missingPaths(process), now, FixtureDecisionUnknown,
+                            "narrow kernel-path race remains unknown"),
+               FixturePathRetryAgain, "narrow race reserves full re-observation");
+    check(state->pending && FixtureSameIdentity(state->anchor, process), "unresolved identity anchor pinned");
+    check(budget->remaining == before - 1, "one delayed retry reserved from invocation budget");
+}
+
+static void testPathRetryBudget(void) {
+    check(FIXTURE_PATH_RETRY_WINDOW_NS == UINT64_C(1000000000), "one-second invocation retry window");
+    check(FIXTURE_PATH_RETRY_DELAY_NS == UINT64_C(20000000), "twenty-millisecond retry delay");
+    check(FIXTURE_PATH_RETRY_LIMIT == 6, "six delayed retries for entire invocation");
+    struct FixturePathRetryBudget budget = FixtureMakePathRetryBudget(100);
+    check(budget.start_ns == 100 && budget.last_ns == 100 &&
+          budget.deadline_ns == 100 + FIXTURE_PATH_RETRY_WINDOW_NS &&
+          budget.remaining == FIXTURE_PATH_RETRY_LIMIT, "budget starts without arithmetic drift");
+    check(FixturePathRetryWithinBudget(&budget, 100), "initial instant inside budget");
+    check(!FixturePathRetryWithinBudget(&budget, 99), "clock before invocation start refuses");
+    check(FixturePathRetryWithinBudget(&budget, budget.deadline_ns - 1), "final nanosecond inside budget");
+    check(!FixturePathRetryWithinBudget(&budget, budget.deadline_ns), "exact deadline expired");
+    check(!FixturePathRetryWithinBudget(&budget, budget.deadline_ns + 1), "after deadline expired");
+    budget.remaining = 0;
+    check(FixturePathRetryWithinBudget(&budget, 100), "last reserved sample may use final token");
+    budget.last_ns = 150;
+    check(!FixturePathRetryWithinBudget(&budget, 149), "backwards time within global window refuses");
+    check(FixturePathRetryWithinBudget(&budget, 150), "equal consecutive clock readings permitted");
+    budget.last_ns = budget.start_ns - 1;
+    check(!FixturePathRetryWithinBudget(&budget, 150), "invalid earlier clock floor refuses");
+    budget.last_ns = budget.deadline_ns;
+    check(!FixturePathRetryWithinBudget(&budget, budget.deadline_ns), "invalid expired clock floor refuses");
+    check(!FixturePathRetryWithinBudget(NULL, 100), "missing budget refuses");
+    budget = FixtureMakePathRetryBudget(UINT64_MAX - FIXTURE_PATH_RETRY_WINDOW_NS);
+    check(budget.deadline_ns == UINT64_MAX && FixturePathRetryWithinBudget(&budget, budget.start_ns),
+          "largest non-overflowing deadline remains valid");
+    budget = FixtureMakePathRetryBudget(UINT64_MAX - FIXTURE_PATH_RETRY_WINDOW_NS + 1);
+    check(budget.remaining == 0 && !FixturePathRetryWithinBudget(&budget, budget.start_ns),
+          "deadline addition overflow refuses");
+    budget = FixtureMakePathRetryBudget(UINT64_MAX);
+    check(!FixturePathRetryWithinBudget(&budget, UINT64_MAX), "maximum clock cannot wrap deadline");
+}
+
+static void testPathRetryInitialEligibility(void) {
+    const struct FixtureProcess live = {77, 501, 501, 100, 12, false};
+    struct FixtureProcess other = live; other.pid++;
+    struct FixturePathRetryState state = {0};
+    struct FixturePathRetryBudget budget = FixtureMakePathRetryBudget(100);
+    enterPathRetry(&state, &budget, live, 100);
+    checkDecision(FixtureClassify(live, live, FixtureLookupPresent, FixtureLookupPresent,
+        FixtureScopeUnknown, FixtureScopeUnknown, 501, NULL), FixtureDecisionUnknown,
+        "pinned retry anchor grants no owned classification");
+
+#define INITIAL_CASE(NAME, MUTATION, ACTION, DECISION) do { \
+    struct RetryObservation sample = missingPaths(live); \
+    MUTATION; \
+    state = (struct FixturePathRetryState){0}; \
+    budget = FixtureMakePathRetryBudget(100); \
+    checkRetry(observeRetry(&state, &budget, sample, 100, DECISION, NAME), ACTION, NAME); \
+    check(!state.pending && budget.remaining == FIXTURE_PATH_RETRY_LIMIT, \
+          "ineligible first sample neither pins nor spends retry"); \
+} while (0)
+    INITIAL_CASE("known live identity needs no retry", sample.known = &live,
+                 FixturePathRetryAccept, FixtureDecisionOwned);
+    INITIAL_CASE("unrelated known pointer cannot request retry", sample.known = &other,
+                 FixturePathRetryRefuse, FixtureDecisionUnknown);
+    INITIAL_CASE("known UID mismatch cannot retry", sample.known = &live; sample.second.euid++,
+                 FixturePathRetryRefuse, FixtureDecisionUnknown);
+    INITIAL_CASE("realpath ESRCH is not kernel-path ESRCH", sample.firstKernelESRCH = false; sample.secondKernelESRCH = false,
+                 FixturePathRetryRefuse, FixtureDecisionUnknown);
+    INITIAL_CASE("first path permission error cannot retry", sample.firstKernelESRCH = false,
+                 FixturePathRetryRefuse, FixtureDecisionUnknown);
+    INITIAL_CASE("second path permission error cannot retry", sample.secondKernelESRCH = false,
+                 FixturePathRetryRefuse, FixtureDecisionUnknown);
+    INITIAL_CASE("first path classified cannot enter narrow retry", sample.firstScope = FixtureScopeOutside; sample.firstKernelESRCH = false,
+                 FixturePathRetryRefuse, FixtureDecisionUnknown);
+    INITIAL_CASE("second path classified cannot enter narrow retry", sample.secondScope = FixtureScopeOutside; sample.secondKernelESRCH = false,
+                 FixturePathRetryRefuse, FixtureDecisionUnknown);
+    INITIAL_CASE("unresolved owned-looking first path cannot retry", sample.firstScope = FixtureScopeOwned; sample.firstKernelESRCH = false,
+                 FixturePathRetryRefuse, FixtureDecisionUnknown);
+    INITIAL_CASE("invalid scope cannot retry", sample.firstScope = (enum FixtureScope)99,
+                 FixturePathRetryRefuse, FixtureDecisionUnknown);
+    INITIAL_CASE("metadata permission error cannot retry", sample.firstLookup = FixtureLookupUnknown,
+                 FixturePathRetryRefuse, FixtureDecisionUnknown);
+    INITIAL_CASE("metadata partial read cannot retry", sample.secondLookup = FixtureLookupUnknown,
+                 FixturePathRetryRefuse, FixtureDecisionUnknown);
+    INITIAL_CASE("invalid metadata category cannot retry", sample.secondLookup = (enum FixtureLookup)99,
+                 FixturePathRetryRefuse, FixtureDecisionUnknown);
+    INITIAL_CASE("initial real UID mismatch cannot retry", sample.first.ruid = 0,
+                 FixturePathRetryRefuse, FixtureDecisionUnknown);
+    INITIAL_CASE("final real UID mismatch cannot retry", sample.second.ruid++,
+                 FixturePathRetryRefuse, FixtureDecisionUnknown);
+    INITIAL_CASE("initial effective UID mismatch cannot retry", sample.first.euid++,
+                 FixturePathRetryRefuse, FixtureDecisionUnknown);
+    INITIAL_CASE("final effective UID mismatch cannot retry", sample.second.euid = 0,
+                 FixturePathRetryRefuse, FixtureDecisionUnknown);
+    INITIAL_CASE("zero PID cannot enter retry", sample.first.pid = 0; sample.second.pid = 0,
+                 FixturePathRetryRefuse, FixtureDecisionUnknown);
+    INITIAL_CASE("zero expected UID cannot retry", sample.expectedUID = 0,
+                 FixturePathRetryRefuse, FixtureDecisionUnknown);
+    INITIAL_CASE("wrong expected UID cannot retry", sample.expectedUID++,
+                 FixturePathRetryRefuse, FixtureDecisionUnknown);
+    INITIAL_CASE("initial zombie becoming live cannot retry", sample.first.zombie = true,
+                 FixturePathRetryRefuse, FixtureDecisionUnknown);
+    INITIAL_CASE("initial changed PID passes existing refusal through", sample.second.pid++,
+                 FixturePathRetryAccept, FixtureDecisionChanged);
+    INITIAL_CASE("initial changed start passes existing refusal through", sample.second.seconds++,
+                 FixturePathRetryAccept, FixtureDecisionChanged);
+    INITIAL_CASE("initial BSD disappearance needs no retry", sample.secondLookup = FixtureLookupGone,
+                 FixturePathRetryAccept, FixtureDecisionGone);
+    INITIAL_CASE("initial final zombie needs no retry", sample.second.zombie = true,
+                 FixturePathRetryAccept, FixtureDecisionGone);
+#undef INITIAL_CASE
+    state = (struct FixturePathRetryState){0};
+    budget = FixtureMakePathRetryBudget(100);
+    checkRetry(FixturePathRetryObserve(&state, &budget, live, live,
+        FixtureLookupPresent, FixtureLookupPresent, FixtureScopeUnknown, FixtureScopeUnknown,
+        NULL, FixtureDecisionOwned, true, true, 501, 100), FixturePathRetryRefuse,
+        "caller cannot fabricate owned decision from unresolved paths");
+    checkRetry(FixturePathRetryObserve(NULL, &budget, live, live,
+        FixtureLookupPresent, FixtureLookupPresent, FixtureScopeUnknown, FixtureScopeUnknown,
+        NULL, FixtureDecisionUnknown, true, true, 501, 100), FixturePathRetryRefuse,
+        "missing retry state refuses");
+    checkRetry(FixturePathRetryObserve(&state, NULL, live, live,
+        FixtureLookupPresent, FixtureLookupPresent, FixtureScopeUnknown, FixtureScopeUnknown,
+        NULL, FixtureDecisionUnknown, true, true, 501, 100), FixturePathRetryRefuse,
+        "missing invocation budget refuses");
+}
+
+static void testPathRetryResolution(void) {
+    const struct FixtureProcess live = {77, 501, 501, 100, 12, false};
+#define RESOLUTION_CASE(NAME, MUTATION, DECISION) do { \
+    struct FixturePathRetryState state = {0}; \
+    struct FixturePathRetryBudget budget = FixtureMakePathRetryBudget(100); \
+    enterPathRetry(&state, &budget, live, 100); \
+    struct RetryObservation sample = missingPaths(live); \
+    MUTATION; \
+    checkRetry(observeRetry(&state, &budget, sample, 100 + FIXTURE_PATH_RETRY_DELAY_NS, DECISION, NAME), \
+               FixturePathRetryAccept, NAME); \
+    check(!state.pending && budget.remaining == FIXTURE_PATH_RETRY_LIMIT - 1, \
+          "affirmative resolution clears only pending state without spending another retry"); \
+    check(budget.start_ns == 100 && budget.deadline_ns == 100 + FIXTURE_PATH_RETRY_WINDOW_NS, \
+          "resolution never extends shared invocation deadline"); \
+} while (0)
+    RESOLUTION_CASE("pending race resolves by final BSD absence", sample.secondLookup = FixtureLookupGone,
+                    FixtureDecisionGone);
+    RESOLUTION_CASE("pending race resolves by two BSD absences with no path attempt",
+                    sample.firstLookup = FixtureLookupGone; sample.secondLookup = FixtureLookupGone;
+                    sample.firstKernelESRCH = false; sample.secondKernelESRCH = false,
+                    FixtureDecisionGone);
+    RESOLUTION_CASE("pending race resolves by live-to-zombie identity", sample.second.zombie = true,
+                    FixtureDecisionGone);
+    RESOLUTION_CASE("pending race resolves by stable zombie with no path attempt",
+                    sample.first.zombie = true; sample.second.zombie = true;
+                    sample.firstKernelESRCH = false; sample.secondKernelESRCH = false,
+                    FixtureDecisionGone);
+    RESOLUTION_CASE("pending race resolves zombie then BSD absence with no path attempt",
+                    sample.first.zombie = true; sample.secondLookup = FixtureLookupGone;
+                    sample.firstKernelESRCH = false; sample.secondKernelESRCH = false,
+                    FixtureDecisionGone);
+    RESOLUTION_CASE("pending race resolves with two fresh outside paths",
+                    sample.firstScope = FixtureScopeOutside; sample.secondScope = FixtureScopeOutside;
+                    sample.firstKernelESRCH = false; sample.secondKernelESRCH = false,
+                    FixtureDecisionOutside);
+    RESOLUTION_CASE("pending race resolves with two fresh owned paths",
+                    sample.firstScope = FixtureScopeOwned; sample.secondScope = FixtureScopeOwned;
+                    sample.firstKernelESRCH = false; sample.secondKernelESRCH = false,
+                    FixtureDecisionOwned);
+    RESOLUTION_CASE("pending recovery entering owned scope preserves classifier result",
+                    sample.firstScope = FixtureScopeOutside; sample.secondScope = FixtureScopeOwned;
+                    sample.firstKernelESRCH = false; sample.secondKernelESRCH = false,
+                    FixtureDecisionOwned);
+    RESOLUTION_CASE("BSD absence accepts one recovered path and one kernel ESRCH",
+                    sample.firstScope = FixtureScopeOutside; sample.firstKernelESRCH = false;
+                    sample.secondLookup = FixtureLookupGone,
+                    FixtureDecisionGone);
+#undef RESOLUTION_CASE
+}
+
+static void testPathRetryPendingRefusals(void) {
+    const struct FixtureProcess live = {77, 501, 501, 100, 12, false};
+#define PENDING_REFUSAL(NAME, MUTATION, DECISION) do { \
+    struct FixturePathRetryState state = {0}; \
+    struct FixturePathRetryBudget budget = FixtureMakePathRetryBudget(100); \
+    enterPathRetry(&state, &budget, live, 100); \
+    struct RetryObservation sample = missingPaths(live); \
+    MUTATION; \
+    checkRetry(observeRetry(&state, &budget, sample, 100 + FIXTURE_PATH_RETRY_DELAY_NS, DECISION, NAME), \
+               FixturePathRetryRefuse, NAME); \
+    check(state.pending && FixtureSameIdentity(state.anchor, live) && \
+          budget.remaining == FIXTURE_PATH_RETRY_LIMIT - 1, \
+          "refusal retains unresolved original anchor and spends no retry"); \
+} while (0)
+    PENDING_REFUSAL("stable replacement PID cannot erase anchor", sample.first.pid++; sample.second.pid++, FixtureDecisionUnknown);
+    PENDING_REFUSAL("stable second-level PID reuse cannot erase anchor", sample.first.seconds++; sample.second.seconds++, FixtureDecisionUnknown);
+    PENDING_REFUSAL("stable microsecond PID reuse cannot erase anchor", sample.first.microseconds++; sample.second.microseconds++, FixtureDecisionUnknown);
+    PENDING_REFUSAL("replacement with real outside paths cannot erase anchor",
+                    sample.first.seconds++; sample.second.seconds++;
+                    sample.firstScope = FixtureScopeOutside; sample.secondScope = FixtureScopeOutside;
+                    sample.firstKernelESRCH = false; sample.secondKernelESRCH = false, FixtureDecisionOutside);
+    PENDING_REFUSAL("replacement with owned paths cannot inherit role",
+                    sample.first.seconds++; sample.second.seconds++;
+                    sample.firstScope = FixtureScopeOwned; sample.secondScope = FixtureScopeOwned;
+                    sample.firstKernelESRCH = false; sample.secondKernelESRCH = false, FixtureDecisionOwned);
+    PENDING_REFUSAL("first identity changes before final absence", sample.first.seconds++; sample.secondLookup = FixtureLookupGone, FixtureDecisionGone);
+    PENDING_REFUSAL("first metadata unknown before final absence", sample.firstLookup = FixtureLookupUnknown; sample.secondLookup = FixtureLookupGone, FixtureDecisionUnknown);
+    PENDING_REFUSAL("final metadata unknown after first absence", sample.firstLookup = FixtureLookupGone; sample.secondLookup = FixtureLookupUnknown, FixtureDecisionUnknown);
+    PENDING_REFUSAL("first metadata permission failure", sample.firstLookup = FixtureLookupUnknown, FixtureDecisionUnknown);
+    PENDING_REFUSAL("final metadata partial read", sample.secondLookup = FixtureLookupUnknown, FixtureDecisionUnknown);
+    PENDING_REFUSAL("invalid first metadata enum", sample.firstLookup = (enum FixtureLookup)99, FixtureDecisionUnknown);
+    PENDING_REFUSAL("first absence then same present identity refuses", sample.firstLookup = FixtureLookupGone, FixtureDecisionChanged);
+    PENDING_REFUSAL("first absence then replacement identity refuses", sample.firstLookup = FixtureLookupGone; sample.second.seconds++, FixtureDecisionChanged);
+    PENDING_REFUSAL("first real UID drift", sample.first.ruid++, FixtureDecisionUnknown);
+    PENDING_REFUSAL("second real UID drift", sample.second.ruid = 0, FixtureDecisionUnknown);
+    PENDING_REFUSAL("first effective UID drift", sample.first.euid = 0, FixtureDecisionUnknown);
+    PENDING_REFUSAL("second effective UID drift", sample.second.euid++, FixtureDecisionUnknown);
+    PENDING_REFUSAL("UID drift cannot be hidden by final absence", sample.first.ruid++; sample.secondLookup = FixtureLookupGone, FixtureDecisionGone);
+    PENDING_REFUSAL("UID drift cannot be hidden by final zombie", sample.second.ruid++; sample.second.zombie = true, FixtureDecisionGone);
+    PENDING_REFUSAL("outside recovery still rejects pinned UID drift",
+                    sample.first.ruid++; sample.second.ruid++;
+                    sample.firstScope = FixtureScopeOutside; sample.secondScope = FixtureScopeOutside;
+                    sample.firstKernelESRCH = false; sample.secondKernelESRCH = false, FixtureDecisionOutside);
+    PENDING_REFUSAL("first path permission failure after pending", sample.firstKernelESRCH = false, FixtureDecisionUnknown);
+    PENDING_REFUSAL("second path realpath ESRCH after pending", sample.secondKernelESRCH = false, FixtureDecisionUnknown);
+    PENDING_REFUSAL("different path error cannot hide behind final BSD absence",
+                    sample.firstKernelESRCH = false; sample.secondLookup = FixtureLookupGone, FixtureDecisionGone);
+    PENDING_REFUSAL("different path error cannot hide behind final zombie",
+                    sample.secondKernelESRCH = false; sample.second.zombie = true, FixtureDecisionGone);
+    PENDING_REFUSAL("one recovered path is not a full new classification", sample.firstScope = FixtureScopeOutside; sample.firstKernelESRCH = false, FixtureDecisionUnknown);
+    PENDING_REFUSAL("invalid fresh path scope", sample.secondScope = (enum FixtureScope)99, FixtureDecisionUnknown);
+    PENDING_REFUSAL("owned path moving outside keeps original refusal",
+                    sample.firstScope = FixtureScopeOwned; sample.secondScope = FixtureScopeOutside;
+                    sample.firstKernelESRCH = false; sample.secondKernelESRCH = false, FixtureDecisionChanged);
+    PENDING_REFUSAL("resolved scope with contradictory kernel error refuses",
+                    sample.firstScope = FixtureScopeOutside; sample.secondScope = FixtureScopeOutside, FixtureDecisionOutside);
+    PENDING_REFUSAL("new known pointer cannot promote anchor", sample.known = &live, FixtureDecisionOwned);
+    PENDING_REFUSAL("initial zombie becoming live does not resolve pending anchor", sample.first.zombie = true, FixtureDecisionUnknown);
+    PENDING_REFUSAL("changed expected UID cannot bless credential drift",
+                    sample.expectedUID++; sample.first.euid++; sample.first.ruid++;
+                    sample.second.euid++; sample.second.ruid++;
+                    sample.firstScope = FixtureScopeOwned; sample.secondScope = FixtureScopeOwned;
+                    sample.firstKernelESRCH = false; sample.secondKernelESRCH = false, FixtureDecisionOwned);
+    PENDING_REFUSAL("root expected UID cannot resolve pending disappearance", sample.expectedUID = 0; sample.secondLookup = FixtureLookupGone, FixtureDecisionGone);
+#undef PENDING_REFUSAL
+}
+
+static void testPathRetryGlobalLimits(void) {
+    const struct FixtureProcess live = {77, 501, 501, 100, 12, false};
+    struct FixturePathRetryState state = {0};
+    struct FixturePathRetryBudget budget = FixtureMakePathRetryBudget(100);
+    for (unsigned i = 0; i < FIXTURE_PATH_RETRY_LIMIT; i++)
+        enterPathRetry(&state, &budget, live, 100 + i * FIXTURE_PATH_RETRY_DELAY_NS);
+    check(budget.remaining == 0, "six retries consume shared count exactly");
+    checkRetry(observeRetry(&state, &budget, missingPaths(live),
+        100 + FIXTURE_PATH_RETRY_LIMIT * FIXTURE_PATH_RETRY_DELAY_NS, FixtureDecisionUnknown,
+        "last reserved observation remains unresolved"), FixturePathRetryRefuse, "seventh delay is never permitted");
+    check(state.pending, "exhausted unknown still blocks snapshot completion");
+
+    // The final already-reserved observation is allowed to resolve affirmatively.
+    state = (struct FixturePathRetryState){0};
+    budget = FixtureMakePathRetryBudget(100);
+    for (unsigned i = 0; i < FIXTURE_PATH_RETRY_LIMIT; i++)
+        enterPathRetry(&state, &budget, live, 100 + i * FIXTURE_PATH_RETRY_DELAY_NS);
+    struct RetryObservation recovered = missingPaths(live);
+    recovered.firstScope = FixtureScopeOutside; recovered.secondScope = FixtureScopeOutside;
+    recovered.firstKernelESRCH = false; recovered.secondKernelESRCH = false;
+    checkRetry(observeRetry(&state, &budget, recovered,
+        100 + FIXTURE_PATH_RETRY_LIMIT * FIXTURE_PATH_RETRY_DELAY_NS, FixtureDecisionOutside,
+        "sixth fresh observation can resolve"), FixturePathRetryAccept, "reserved final sample accepted without another delay");
+
+    // New process states do not create fresh time or delay budgets.
+    budget = FixtureMakePathRetryBudget(100);
+    for (unsigned i = 0; i < FIXTURE_PATH_RETRY_LIMIT; i++) {
+        struct FixtureProcess process = live; process.pid += i;
+        state = (struct FixturePathRetryState){0};
+        uint64_t now = 100 + i * FIXTURE_PATH_RETRY_DELAY_NS;
+        enterPathRetry(&state, &budget, process, now);
+        struct RetryObservation gone = missingPaths(process); gone.secondLookup = FixtureLookupGone;
+        checkRetry(observeRetry(&state, &budget, gone, now + FIXTURE_PATH_RETRY_DELAY_NS,
+            FixtureDecisionGone, "different process resolves within shared invocation"),
+            FixturePathRetryAccept, "process resolution does not replenish budget");
+    }
+    state = (struct FixturePathRetryState){0};
+    checkRetry(observeRetry(&state, &budget, missingPaths(live), budget.last_ns,
+        FixtureDecisionUnknown, "seventh process has no new budget"), FixturePathRetryRefuse,
+        "six global delays cannot become six per process");
+    check(!state.pending && budget.start_ns == 100 && budget.deadline_ns == 100 + FIXTURE_PATH_RETRY_WINDOW_NS,
+          "new process does not pin anchor without delay or extend fixed deadline");
+
+    state = (struct FixturePathRetryState){0}; budget = FixtureMakePathRetryBudget(100);
+    enterPathRetry(&state, &budget, live, 100);
+    checkRetry(observeRetry(&state, &budget, recovered, 100 + FIXTURE_PATH_RETRY_DELAY_NS,
+        FixtureDecisionOutside, "first process resolves while global time runs"),
+        FixturePathRetryAccept, "first process does not reset time");
+    state = (struct FixturePathRetryState){0};
+    checkRetry(observeRetry(&state, &budget, missingPaths(live), budget.deadline_ns - FIXTURE_PATH_RETRY_DELAY_NS,
+        FixtureDecisionUnknown, "next process arrives too late in same invocation"),
+        FixturePathRetryRefuse, "new process cannot obtain a new one-second window");
+    check(budget.remaining == FIXTURE_PATH_RETRY_LIMIT - 1,
+          "global time budget expires even while delay tokens remain");
+
+    const uint64_t badTimes[] = {99, 100 + FIXTURE_PATH_RETRY_WINDOW_NS,
+                                 100 + FIXTURE_PATH_RETRY_WINDOW_NS + 1};
+    for (size_t i = 0; i < sizeof(badTimes) / sizeof(badTimes[0]); i++) {
+        state = (struct FixturePathRetryState){0}; budget = FixtureMakePathRetryBudget(100);
+        enterPathRetry(&state, &budget, live, 100);
+        checkRetry(observeRetry(&state, &budget, recovered, badTimes[i], FixtureDecisionOutside,
+            "outside recovery has invalid observation time"), FixturePathRetryRefuse,
+            "recovery cannot bypass backwards or expired clock");
+        check(state.pending, "time refusal retains unresolved anchor");
+    }
+    state = (struct FixturePathRetryState){0}; budget = FixtureMakePathRetryBudget(100);
+    enterPathRetry(&state, &budget, live, 100);
+    enterPathRetry(&state, &budget, live, 100 + FIXTURE_PATH_RETRY_DELAY_NS);
+    checkRetry(observeRetry(&state, &budget, recovered, 99 + FIXTURE_PATH_RETRY_DELAY_NS,
+        FixtureDecisionOutside, "clock moves backwards but stays above initial start"),
+        FixturePathRetryRefuse, "latest observation floor detects intra-window backwards clock");
+
+    state = (struct FixturePathRetryState){0}; budget = FixtureMakePathRetryBudget(100);
+    uint64_t latestDelay = budget.deadline_ns - FIXTURE_PATH_RETRY_DELAY_NS;
+    checkRetry(observeRetry(&state, &budget, missingPaths(live), latestDelay, FixtureDecisionUnknown,
+        "only exact delay remains"), FixturePathRetryRefuse, "delay must leave time for fresh sample");
+    check(!state.pending && budget.remaining == FIXTURE_PATH_RETRY_LIMIT,
+          "insufficient remaining time spends no delayed retry");
+    state = (struct FixturePathRetryState){0}; budget = FixtureMakePathRetryBudget(100);
+    enterPathRetry(&state, &budget, live, latestDelay - 1);
+    check(FixturePathRetryWithinBudget(&budget, budget.deadline_ns - 1), "delayed check still inside exclusive deadline");
+    check(!FixturePathRetryWithinBudget(&budget, budget.deadline_ns), "delayed oversleep refused before fresh native sample");
+    checkRetry(observeRetry(&state, &budget, recovered, budget.deadline_ns, FixtureDecisionOutside,
+        "sample itself consumed remaining time"), FixturePathRetryRefuse, "late sampled result never accepted");
+
+    state = (struct FixturePathRetryState){0}; budget = FixtureMakePathRetryBudget(UINT64_MAX);
+    checkRetry(observeRetry(&state, &budget, missingPaths(live), UINT64_MAX, FixtureDecisionUnknown,
+        "overflowed initial budget stays unknown"), FixturePathRetryRefuse, "overflow cannot enter retry controller");
+}
+
 int main(void) {
     testNormalUser();
     testIdentity();
     testPaths();
     testClassify();
     testRecheck();
+    testPathRetryBudget();
+    testPathRetryInitialEligibility();
+    testPathRetryResolution();
+    testPathRetryPendingRefusals();
+    testPathRetryGlobalLimits();
     printf("probe policy: %zu cases passed\n", casesRun);
     return 0;
 }

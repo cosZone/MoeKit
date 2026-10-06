@@ -282,6 +282,11 @@ struct DockerSocketAdapterTests {
         try #require(fd >= 0, "Owned socket creation failed, errno \(errno)")
         defer { _ = close(fd) }
         try #require(fcntl(fd, F_SETFD, FD_CLOEXEC) == 0, "Listener close-on-exec failed, errno \(errno)")
+        // Darwin rejects socket options after full shutdown. Configure the
+        // listener before connect; accepted sockets inherit SOF_NOSIGPIPE.
+        var noSignal: Int32 = 1
+        try #require(setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &noSignal, socklen_t(MemoryLayout<Int32>.size)) == 0,
+                     "Listener SO_NOSIGPIPE failed, errno \(errno)")
         var address = sockaddr_un()
         address.sun_family = sa_family_t(AF_UNIX)
         address.sun_len = UInt8(MemoryLayout<sockaddr_un>.size)
@@ -359,9 +364,13 @@ private final class DockerNativeSocketFixture: @unchecked Sendable {
     init(listener: Int32, expectedRequest: Data) throws {
         let owned = dup(listener)
         guard owned >= 0 else { throw DockerSocketFixtureFailure(stage: "dup listener", code: errno) }
-        guard fcntl(owned, F_SETFL, O_NONBLOCK) == 0, fcntl(owned, F_SETFD, FD_CLOEXEC) == 0 else {
+        guard fcntl(owned, F_SETFL, O_NONBLOCK) == 0 else {
             let code = errno; _ = close(owned)
-            throw DockerSocketFixtureFailure(stage: "nonblocking listener", code: code)
+            throw DockerSocketFixtureFailure(stage: "listener F_SETFL", code: code)
+        }
+        guard fcntl(owned, F_SETFD, FD_CLOEXEC) == 0 else {
+            let code = errno; _ = close(owned)
+            throw DockerSocketFixtureFailure(stage: "listener F_SETFD", code: code)
         }
         self.listener = owned; self.expectedRequest = expectedRequest
     }
@@ -447,10 +456,11 @@ private final class DockerNativeSocketFixture: @unchecked Sendable {
         }
         defer { _ = close(connection) }
         record("accepted connection \(index)")
-        var noSignal: Int32 = 1
-        guard fcntl(connection, F_SETFL, O_NONBLOCK) == 0, fcntl(connection, F_SETFD, FD_CLOEXEC) == 0,
-              setsockopt(connection, SOL_SOCKET, SO_NOSIGPIPE, &noSignal, socklen_t(MemoryLayout<Int32>.size)) == 0 else {
-            throw DockerSocketFixtureFailure(stage: "configure connection \(index)", code: errno)
+        guard fcntl(connection, F_SETFL, O_NONBLOCK) == 0 else {
+            throw DockerSocketFixtureFailure(stage: "connection \(index) F_SETFL", code: errno)
+        }
+        guard fcntl(connection, F_SETFD, FD_CLOEXEC) == 0 else {
+            throw DockerSocketFixtureFailure(stage: "connection \(index) F_SETFD", code: errno)
         }
         var received = Data()
         var buffer = [UInt8](repeating: 0, count: 1024)

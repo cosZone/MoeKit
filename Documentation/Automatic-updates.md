@@ -35,7 +35,7 @@ Examples: preview.9 → `2.0.9`, preview.10 → `2.0.10`, stable 0.1.0 → `2.0.
 
 ## Production setup and test status
 
-The committed public-key field remains blank until the maintainer provides the dedicated MoeKit public key. Production signing configuration is a separate human-controlled step; no private key belongs in source, chat, PR output or diagnostics. The release workflow must fail if production signing prerequisites are missing. See the signed preview release instructions for signing and publication.
+The dedicated MoeKit public key supplied by the maintainer is pinned in `Configurations/Sparkle.json`. Production signing configuration remains a separate human-controlled step; no private key belongs in source, chat, PR output or diagnostics. The release workflow must compare its public-key input with this reviewed pin and verify signatures against it; missing or mismatched signing prerequisites must fail closed. Pinning the public key does not publish an updater-enabled build or an appcast. See the signed preview release instructions for signing and publication.
 
 Source checks and mocks are not proof of a real installation. Before activation, exact-head macOS CI must compile/link the app, verify the universal nested-code layout, exercise signed synthetic feed/archive validation and demonstrate a fixture-only update and relaunch, including tampering/cancellation/failure refusals. Developer ID/notarization-specific behavior still needs a corresponding release path and cannot be proved by ad-hoc fixtures.
 

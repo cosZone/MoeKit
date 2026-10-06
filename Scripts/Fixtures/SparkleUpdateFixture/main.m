@@ -9,6 +9,7 @@
 #import <limits.h>
 #import <libproc.h>
 #import <errno.h>
+#import "fixture_json.h"
 
 static NSDictionary *configuration;
 static int rootFD = -1;
@@ -91,12 +92,12 @@ static void finish(NSString *name, NSDictionary *extra) {
         BOOL preserved = [[preferences stringForKey:@"FixturePreference"] isEqualToString:configuration[@"FixtureMarker"]] &&
             [preferences objectForKey:@"SUEnableAutomaticChecks"] != nil && ![preferences boolForKey:@"SUEnableAutomaticChecks"] &&
             [preferences objectForKey:@"SUAutomaticallyUpdate"] != nil && ![preferences boolForKey:@"SUAutomaticallyUpdate"];
-        finish(@"relaunched", @{@"preferences_preserved": @(preserved),
-            @"preference_marker_preserved": @([[preferences stringForKey:@"FixturePreference"] isEqualToString:configuration[@"FixtureMarker"]]),
-            @"automatic_checks_stored": @([preferences objectForKey:@"SUEnableAutomaticChecks"] != nil),
-            @"automatic_downloads_stored": @([preferences objectForKey:@"SUAutomaticallyUpdate"] != nil),
-            @"automatic_checks": @([preferences boolForKey:@"SUEnableAutomaticChecks"]),
-            @"automatic_downloads": @([preferences boolForKey:@"SUAutomaticallyUpdate"])});
+        finish(@"relaunched", @{@"preferences_preserved": FixtureJSONBoolean(preserved),
+            @"preference_marker_preserved": FixtureJSONBoolean([[preferences stringForKey:@"FixturePreference"] isEqualToString:configuration[@"FixtureMarker"]]),
+            @"automatic_checks_stored": FixtureJSONBoolean([preferences objectForKey:@"SUEnableAutomaticChecks"] != nil),
+            @"automatic_downloads_stored": FixtureJSONBoolean([preferences objectForKey:@"SUAutomaticallyUpdate"] != nil),
+            @"automatic_checks": FixtureJSONBoolean([preferences boolForKey:@"SUEnableAutomaticChecks"]),
+            @"automatic_downloads": FixtureJSONBoolean([preferences boolForKey:@"SUAutomaticallyUpdate"])});
         return;
     }
     [preferences setObject:configuration[@"FixtureMarker"] forKey:@"FixturePreference"];
@@ -115,8 +116,8 @@ static void finish(NSString *name, NSDictionary *extra) {
     BOOL explicitPreferences = [preferences objectForKey:@"SUEnableAutomaticChecks"] != nil &&
         [preferences objectForKey:@"SUAutomaticallyUpdate"] != nil &&
         ![preferences boolForKey:@"SUEnableAutomaticChecks"] && ![preferences boolForKey:@"SUAutomaticallyUpdate"];
-    event(@"preferences_set", @{@"explicit_values_stored": @(explicitPreferences),
-        @"automatic_checks": @(self.updater.automaticallyChecksForUpdates), @"automatic_downloads": @(self.updater.automaticallyDownloadsUpdates)});
+    event(@"preferences_set", @{@"explicit_values_stored": FixtureJSONBoolean(explicitPreferences),
+        @"automatic_checks": FixtureJSONBoolean(self.updater.automaticallyChecksForUpdates), @"automatic_downloads": FixtureJSONBoolean(self.updater.automaticallyDownloadsUpdates)});
     if (!explicitPreferences) { finish(@"preference_setup_error", @{}); return; }
     [self.updater checkForUpdates];
 }
@@ -133,7 +134,7 @@ static void finish(NSString *name, NSDictionary *extra) {
     (void)updater;
     BOOL verified = appcast.items.count > 0;
     for (SUAppcastItem *item in appcast.items) verified = verified && item.signingValidationStatus == SPUAppcastSigningValidationStatusSucceeded;
-    event(@"feed_loaded", @{@"signature_verified": @(verified)});
+    event(@"feed_loaded", @{@"signature_verified": FixtureJSONBoolean(verified)});
 }
 - (void)updater:(SPUUpdater *)updater didExtractUpdate:(SUAppcastItem *)item {
     (void)updater; (void)item; // In Sparkle 2.10.0 this callback means installer startup completed,
@@ -152,7 +153,7 @@ static void finish(NSString *name, NSDictionary *extra) {
 - (void)showUserInitiatedUpdateCheckWithCancellation:(void (^)(void))cancellation { (void)cancellation; event(@"checking", @{}); }
 - (void)showUpdateFoundWithAppcastItem:(SUAppcastItem *)item state:(SPUUserUpdateState *)state reply:(void (^)(SPUUserUpdateChoice))reply {
     (void)state;
-    event(@"found", @{@"offered_version": item.versionString, @"signature_verified": @(item.signingValidationStatus == SPUAppcastSigningValidationStatusSucceeded)});
+    event(@"found", @{@"offered_version": item.versionString, @"signature_verified": FixtureJSONBoolean(item.signingValidationStatus == SPUAppcastSigningValidationStatusSucceeded)});
     if (!intact()) _exit(93);
     reply(SPUUserUpdateChoiceInstall);
 }
@@ -184,7 +185,7 @@ static void finish(NSString *name, NSDictionary *extra) {
 - (void)userDidCancelDownload:(SPUUpdater *)updater {
     (void)updater;
     finish(@"cancelled", @{@"download_bytes": @(self.downloadedBytes), @"expected_bytes": @(self.expectedBytes),
-        @"cancellation_requested": @(self.cancellationRequested)});
+        @"cancellation_requested": FixtureJSONBoolean(self.cancellationRequested)});
 }
 - (void)showDownloadDidStartExtractingUpdate { event(@"extraction_ui_started", @{@"download_bytes": @(self.downloadedBytes)}); }
 - (void)showExtractionReceivedProgress:(double)progress { (void)progress; }

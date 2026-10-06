@@ -292,7 +292,42 @@ class Lifetime:
         return snapshot
 
 
-def preflight_probe(owned, probe):
+JSON_BOOLEAN_FIELDS = frozenset(("idle", "preferences_preserved", "preference_marker_preserved",
+    "automatic_checks_stored", "automatic_downloads_stored", "automatic_checks", "automatic_downloads",
+    "explicit_values_stored", "signature_verified", "cancellation_requested"))
+
+
+def validate_json_contract(raw):
+    require(len(raw.encode()) <= 16_384, "Native JSON contract output exceeded budget")
+    value = json.loads(raw)
+    require(type(value) is dict and set(value) == {"cases", "numeric_controls"}, "Native JSON contract shape invalid")
+    cases = value["cases"]
+    require(type(cases) is list and len(cases) == 2, "Native JSON contract case count invalid")
+    for case, expected in zip(cases, (False, True)):
+        require(type(case) is dict and set(case) == JSON_BOOLEAN_FIELDS, "Native JSON boolean fields differ")
+        require(all(type(flag) is bool and flag is expected for flag in case.values()),
+                "Native JSON boolean fields must preserve actual false/true types")
+    controls = value["numeric_controls"]
+    require(type(controls) is dict and set(controls) == {"zero", "one"} and
+            all(type(controls[key]) is int and controls[key] == number for key, number in (("zero", 0), ("one", 1))),
+            "Native JSON numeric controls must remain integers")
+    return {"passed": True, "boolean_fields": len(JSON_BOOLEAN_FIELDS), "truth_values": 2, "numeric_controls": 2}
+
+
+def native_json_contract(owned, output):
+    owned.verify()
+    binary = owned.path / "FixtureJSONContract"
+    run(["/usr/bin/xcrun", "clang", "-fobjc-arc", "-fmodules", "-Wall", "-Wextra", "-Werror",
+         "-mmacosx-version-min=15.0", "-framework", "Foundation", "-framework", "CoreFoundation",
+         ROOT / "Scripts/Fixtures/SparkleUpdateFixture/test_json_contract.m", "-o", binary])
+    raw = run([binary], timeout=5, separate_stderr=True)
+    owned.verify()
+    require(len(raw.encode()) <= 16_384, "Native JSON contract output exceeded budget")
+    write_new(output / "native-json-contract.json", raw.encode())
+    return validate_json_contract(raw)
+
+
+def preflight_probe(owned, probe, output=None):
     """Exercise physical/system-alias identity before launching any updater."""
     identifier = f"org.moekit.CIFixture.r{owned.marker}.valid"
     arguments = [identifier, owned.marker, str(owned.identity.st_dev), str(owned.identity.st_ino), "[]"]
@@ -303,7 +338,7 @@ def preflight_probe(owned, probe):
         require(alias.is_dir() and os.path.samefile(alias, owned.path), "System alias did not resolve to owned root")
         paths.append(alias)
     require(len(paths) == 2, "Native alias preflight requires an owned temporary root under /private/var with a /var alias")
-    for path in paths:
+    for index, path in enumerate(paths):
         owned.verify()
         deadline = time.monotonic() + 5
         while time.monotonic() < deadline:
@@ -311,7 +346,13 @@ def preflight_probe(owned, probe):
             owned.verify()
             if result is not None: break
         else: raise RuntimeError("Native alias preflight inventory did not settle")
+        require(len(result.encode()) <= 16_384, "Native preflight snapshot exceeded budget")
+        if output is not None:
+            phase = ("physical", "system-alias")[index]
+            write_new(output / f"probe-preflight-{phase}.json", result.encode())
         snapshot = json.loads(result)
+        require(type(snapshot) is dict and type(snapshot.get("idle")) is bool,
+                "Native preflight idle must be a JSON boolean; snapshot retained when output is enabled")
         require(snapshot.get("idle") is True and snapshot.get("bundle_id") == identifier,
                 "Native alias preflight did not establish empty owned fixture")
     # A matching path spelling cannot substitute for the pinned directory inode.
@@ -319,6 +360,10 @@ def preflight_probe(owned, probe):
                                str(owned.identity.st_dev), str(owned.identity.st_ino + 1), "[]"],
                               stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=5)
     owned.verify()
+    require(len(rejected.stdout) + len(rejected.stderr) <= 16_384, "Native preflight refusal diagnostics exceeded budget")
+    if output is not None:
+        write_new(output / "probe-preflight-wrong-inode.json", json.dumps({"returncode": rejected.returncode,
+            "stdout": rejected.stdout.decode(errors="replace"), "stderr": rejected.stderr.decode(errors="replace")}, sort_keys=True).encode())
     require(rejected.returncode == 2 and rejected.stderr.strip() == b"Fixture lifetime probe unknown: root identity",
             "Native root identity mismatch was not specifically refused")
     return {"physical_and_system_alias": True, "mismatched_inode_rejected": True}
@@ -514,6 +559,7 @@ def main():
                 "cases": {}, "all_passed": False}
     server = None
     try:
+        evidence["json_contract"] = native_json_contract(owned, output)
         package_root = package(owned)
         framework = package_root / "Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework"
         binary = owned.path / "SparkleFixture"
@@ -523,7 +569,7 @@ def main():
         probe = owned.path / "FixtureLifetimeProbe"
         run(["/usr/bin/xcrun", "clang", "-fobjc-arc", "-fmodules", "-Wall", "-Wextra", "-Werror", "-Wno-unused-parameter",
              "-mmacosx-version-min=15.0", "-framework", "AppKit", ROOT / "Scripts/Fixtures/SparkleUpdateFixture/probe.m", "-o", probe])
-        evidence["probe_preflight"] = preflight_probe(owned, probe)
+        evidence["probe_preflight"] = preflight_probe(owned, probe, output)
         entitlements = owned.path / "empty-entitlements.plist"
         write_new(entitlements, plistlib.dumps({}))
         test_key, other_key = owned.path / "PUBLIC-RFC8032-vector1.txt", owned.path / "PUBLIC-RFC8032-vector2.txt"

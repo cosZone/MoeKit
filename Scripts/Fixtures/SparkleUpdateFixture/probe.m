@@ -13,6 +13,7 @@
 #import <stdlib.h>
 #import <limits.h>
 #import "probe_policy.h"
+#import "fixture_json.h"
 
 // POSIX physical paths are identity inputs; Foundation standardization may
 // intentionally remove /private and must not be used for identity comparisons.
@@ -274,7 +275,7 @@ int main(int argc, const char *argv[]) {
             fstat(rootFD, &pinned) || !sameRoot(before, after) || !sameRoot(before, named) || !sameRoot(before, pinned)) return fail(@"root changed");
         close(rootFD);
         NSDictionary *result = @{@"schema": @1, @"bundle_id": identifier, @"uid": @(geteuid()), @"app_count": @(liveApps),
-            @"owned_processes": processes, @"services": services, @"idle": @(absent && liveApps == 0 && processes.count == 0)};
+            @"owned_processes": processes, @"services": services, @"idle": FixtureJSONBoolean(absent && liveApps == 0 && processes.count == 0)};
         NSData *json = [NSJSONSerialization dataWithJSONObject:result options:NSJSONWritingSortedKeys error:NULL];
         if (!json || fwrite(json.bytes, 1, json.length, stdout) != json.length || fputc('\n', stdout) == EOF) return fail(@"output");
         return 0;

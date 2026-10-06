@@ -9,6 +9,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import re
 import unittest
 from unittest import mock
 from types import SimpleNamespace
@@ -211,7 +212,7 @@ class HarnessBoundaryTests(unittest.TestCase):
                                identity=SimpleNamespace(st_dev=7, st_ino=19), verify=mock.Mock())
         identifier = "org.moekit.CIFixture.r" + root.marker + ".valid"
         success = json.dumps({"idle": True, "bundle_id": identifier})
-        refusal = SimpleNamespace(returncode=2, stderr=b"Fixture lifetime probe unknown: root identity\n")
+        refusal = SimpleNamespace(returncode=2, stdout=b"", stderr=b"Fixture lifetime probe unknown: root identity\n")
         with mock.patch.object(Path, "is_dir", return_value=True), mock.patch.object(fixture.os.path, "samefile", return_value=True), \
              mock.patch.object(fixture, "run", return_value=success) as native, \
              mock.patch.object(fixture.subprocess, "run", return_value=refusal) as mismatch:
@@ -309,6 +310,108 @@ class HarnessBoundaryTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "under /private/var"):
                 fixture.preflight_probe(root, "/not-executed")
             native.assert_not_called()
+
+    @staticmethod
+    def json_contract_payload():
+        return {"cases": [{key: flag for key in fixture.JSON_BOOLEAN_FIELDS} for flag in (False, True)],
+                "numeric_controls": {"zero": 0, "one": 1}}
+
+    def test_json_contract_accepts_actual_booleans_and_integer_controls(self):
+        result = fixture.validate_json_contract(json.dumps(self.json_contract_payload()))
+        self.assertEqual(result, {"passed": True, "boolean_fields": 10, "truth_values": 2, "numeric_controls": 2})
+
+    def test_json_contract_rejects_numeric_string_null_or_container_booleans(self):
+        for key in fixture.JSON_BOOLEAN_FIELDS:
+            for bad in (0, 1, "true", "false", None, [], {}):
+                with self.subTest(key=key, value=bad):
+                    value = self.json_contract_payload()
+                    value["cases"][1][key] = bad
+                    with self.assertRaisesRegex(RuntimeError, "actual false/true types"):
+                        fixture.validate_json_contract(json.dumps(value))
+
+    def test_json_contract_rejects_inverted_truth_values(self):
+        value = self.json_contract_payload()
+        value["cases"].reverse()
+        with self.assertRaisesRegex(RuntimeError, "actual false/true types"):
+            fixture.validate_json_contract(json.dumps(value))
+
+    def test_json_contract_rejects_missing_or_extra_boolean_fields(self):
+        for extra in (False, True):
+            value = self.json_contract_payload()
+            if extra: value["cases"][0]["extra"] = False
+            else: value["cases"][0].pop("idle")
+            with self.assertRaisesRegex(RuntimeError, "fields differ"):
+                fixture.validate_json_contract(json.dumps(value))
+
+    def test_json_contract_does_not_coerce_numeric_controls_to_booleans(self):
+        value = self.json_contract_payload()
+        value["numeric_controls"] = {"zero": False, "one": True}
+        with self.assertRaisesRegex(RuntimeError, "remain integers"):
+            fixture.validate_json_contract(json.dumps(value))
+
+    def test_json_contract_output_budget(self):
+        with self.assertRaisesRegex(RuntimeError, "output exceeded budget"):
+            fixture.validate_json_contract("x" * 16_385)
+
+    def test_every_native_semantic_boolean_uses_the_shared_explicit_factory(self):
+        directory = Path(__file__).parent
+        helper = (directory / "fixture_json.h").read_text()
+        self.assertIn("return [NSNumber numberWithBool:value]", helper)
+        observed = set()
+        for name in ("main.m", "probe.m", "test_json_contract.m"):
+            source = (directory / name).read_text()
+            self.assertIn('#import "fixture_json.h"', source)
+            for key in fixture.JSON_BOOLEAN_FIELDS:
+                for match in re.finditer(r'@"' + re.escape(key) + r'"\s*:\s*', source):
+                    self.assertTrue(source[match.end():].startswith("FixtureJSONBoolean("), (name, key))
+                    if name != "test_json_contract.m": observed.add(key)
+        self.assertEqual(observed, fixture.JSON_BOOLEAN_FIELDS)
+        native = (directory / "test_json_contract.m").read_text()
+        self.assertIn("CFBooleanGetTypeID()", native)
+        self.assertIn("NSJSONSerialization dataWithJSONObject", native)
+        self.assertIn("booleanFields(NO), booleanFields(YES)", native)
+
+    def test_native_json_contract_preserves_payload_before_validation_failure(self):
+        value = self.json_contract_payload()
+        value["cases"][1]["idle"] = 1
+        raw = json.dumps(value)
+        with tempfile.TemporaryDirectory(prefix="moekit-json-contract-") as directory:
+            output = Path(directory)
+            owned = SimpleNamespace(path=output, verify=mock.Mock())
+            with mock.patch.object(fixture, "run", side_effect=("", raw)) as commands:
+                with self.assertRaisesRegex(RuntimeError, "actual false/true types"):
+                    fixture.native_json_contract(owned, output)
+            self.assertEqual((output / "native-json-contract.json").read_text(), raw)
+            self.assertIn("-framework", commands.call_args_list[0].args[0])
+            self.assertTrue(commands.call_args_list[1].kwargs["separate_stderr"])
+
+    def test_preflight_preserves_numeric_or_false_idle_snapshot_before_refusal(self):
+        root = SimpleNamespace(path=Path("/private/var/folders/owned/moekit-sparkle-fixture"), marker="c" * 32,
+                               identity=SimpleNamespace(st_dev=7, st_ino=19), verify=mock.Mock())
+        identifier = "org.moekit.CIFixture.r" + root.marker + ".valid"
+        for idle, reason in ((1, "JSON boolean"), (0, "JSON boolean"), (False, "empty owned fixture")):
+            with self.subTest(idle=idle), tempfile.TemporaryDirectory(prefix="moekit-preflight-json-") as directory:
+                output = Path(directory)
+                raw = json.dumps({"idle": idle, "bundle_id": identifier, "app_count": 0,
+                                  "owned_processes": [], "services": {"-spki": "absent", "-spks": "absent", "-spkp": "absent"}})
+                with mock.patch.object(Path, "is_dir", return_value=True), mock.patch.object(fixture.os.path, "samefile", return_value=True), \
+                     mock.patch.object(fixture, "run", return_value=raw), mock.patch.object(fixture.subprocess, "run") as mismatch:
+                    with self.assertRaisesRegex(RuntimeError, reason):
+                        fixture.preflight_probe(root, "/not-executed", output)
+                    mismatch.assert_not_called()
+                self.assertEqual((output / "probe-preflight-physical.json").read_text(), raw)
+                self.assertFalse((output / "probe-preflight-system-alias.json").exists())
+
+    def test_preflight_snapshot_budget_refuses_before_persisting_oversized_payload(self):
+        root = SimpleNamespace(path=Path("/private/var/folders/owned/moekit-sparkle-fixture"), marker="c" * 32,
+                               identity=SimpleNamespace(st_dev=7, st_ino=19), verify=mock.Mock())
+        with tempfile.TemporaryDirectory(prefix="moekit-preflight-budget-") as directory:
+            output = Path(directory)
+            with mock.patch.object(Path, "is_dir", return_value=True), mock.patch.object(fixture.os.path, "samefile", return_value=True), \
+                 mock.patch.object(fixture, "run", return_value="x" * 16_385):
+                with self.assertRaisesRegex(RuntimeError, "snapshot exceeded budget"):
+                    fixture.preflight_probe(root, "/not-executed", output)
+            self.assertEqual(list(output.iterdir()), [])
 
     def test_native_source_uses_real_cancel_and_install_checkpoint(self):
         source = (Path(__file__).parent / "main.m").read_text()

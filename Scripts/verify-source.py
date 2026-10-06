@@ -93,6 +93,9 @@ for path in sources:
                           and not re.search(r"\b(?:kill|killpg|raise|proc_signal)\s*\(", text))
         require(allowed_adapter or allowed_signal or not re.search(pattern, text), f"Execution API outside reviewed adapter: {path.relative_to(ROOT)} ({pattern})")
 
+require("Sources/Services/DarwinDirectoryEntry.swift" in (ROOT / "Scripts/test-catalog-concurrency.py").read_text(),
+        "Standalone catalog fixture must compile the shared directory-entry decoder")
+
 installer_sources = list((ROOT / "Sources/Installer").glob("*.swift"))
 for path in installer_sources:
     text = path.read_text()

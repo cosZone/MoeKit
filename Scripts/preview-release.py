@@ -34,8 +34,11 @@ HELPER_PATH = "Contents/MacOS/MoleAnalysisSupervisor"
 HELPER_ID = BUNDLE_ID + ".MoleAnalysisSupervisor"
 GIT_HELPER_PATH = "Contents/MacOS/GitObjectInspector"
 GIT_HELPER_ID = BUNDLE_ID + ".GitObjectInspector"
+GIT_TRANSPORT_HELPER_PATH = "Contents/MacOS/GitRemoteTransport"
+GIT_TRANSPORT_HELPER_ID = BUNDLE_ID + ".GitRemoteTransport"
 # Exact reviewed original helpers only. Never broaden this from bundle discovery.
-HELPERS = ((HELPER_PATH, HELPER_ID), (GIT_HELPER_PATH, GIT_HELPER_ID))
+HELPERS = ((HELPER_PATH, HELPER_ID), (GIT_HELPER_PATH, GIT_HELPER_ID),
+           (GIT_TRANSPORT_HELPER_PATH, GIT_TRANSPORT_HELPER_ID))
 SPARKLE_ROOT = "Contents/Frameworks/Sparkle.framework"
 SPARKLE_VERSION_ROOT = SPARKLE_ROOT + "/Versions/B"
 SPARKLE_CODE = (

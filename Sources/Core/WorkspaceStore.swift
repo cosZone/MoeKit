@@ -13,6 +13,7 @@ final class WorkspaceStore {
     let moleAnalysis: MoleAnalysisStore
     let installerTrash: InstallerTrashStore
     let gitCleanup: GitCleanupStore
+    let gitWorktreeFinish: GitWorktreeFinishStore
     let trash: TrashStore
     let dockerCleanup: DockerCleanupStore
     let toolPreparation: ToolPreparationStore
@@ -33,6 +34,7 @@ final class WorkspaceStore {
             trash.updateContext(.init(isDemoEnabled: isDemoEnabled, modeGeneration: toolPreparation.modeGeneration))
             processes.resetForModeChange()
             gitCleanup.invalidate()
+            gitWorktreeFinish.setDemoEnabled(isDemoEnabled)
             dockerCleanup.updateDemo(isDemoEnabled)
             moleAnalysis.setDemoEnabled(isDemoEnabled)
             cancelScan()
@@ -52,7 +54,7 @@ final class WorkspaceStore {
         }
     }
     var projects: [ProjectRecord] = [] {
-        didSet { reconcileProjectSelection(); refreshInstallerTrashContext(); gitCleanup.invalidate() }
+        didSet { reconcileProjectSelection(); refreshInstallerTrashContext(); gitCleanup.invalidate(); gitWorktreeFinish.invalidate() }
     }
     var tasks: [TaskRecord] = [] { didSet { reconcileTaskSelection() } }
     var pendingDiscovery: RepositoryScanResult?
@@ -83,6 +85,7 @@ final class WorkspaceStore {
          moleAnalysis: MoleAnalysisStore? = nil,
          installerTrash: InstallerTrashStore? = nil,
          gitCleanup: GitCleanupStore? = nil,
+         gitWorktreeFinish: GitWorktreeFinishStore? = nil,
          trash: TrashStore? = nil,
          dockerCleanup: DockerCleanupStore? = nil) {
         self.isDemoEnabled = isDemoEnabled
@@ -93,6 +96,7 @@ final class WorkspaceStore {
         self.moleAnalysis = moleAnalysis ?? MoleAnalysisStore()
         self.installerTrash = installerTrash ?? InstallerTrashStore()
         self.gitCleanup = gitCleanup ?? GitCleanupStore()
+        self.gitWorktreeFinish = gitWorktreeFinish ?? GitWorktreeFinishStore()
         self.trash = trash ?? TrashStore()
         self.dockerCleanup = dockerCleanup ?? DockerCleanupStore()
         self.dockerCleanup.updateDemo(isDemoEnabled)
@@ -100,6 +104,7 @@ final class WorkspaceStore {
         // actor-isolated default argument inside SwiftUI State initialization.
         let preparation = toolPreparation ?? ToolPreparationStore()
         self.toolPreparation = preparation
+        self.gitWorktreeFinish.setDemoEnabled(isDemoEnabled)
         self.moleAnalysis.setDemoEnabled(isDemoEnabled)
         preparation.setDemoEnabled(isDemoEnabled)
         self.trash.bindContext { [weak self] in

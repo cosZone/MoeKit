@@ -142,7 +142,9 @@ int main(int argc, char **argv) {
     // ABI: Apple-signed copied Git, app-owned snapshot, object1, object2.
     // Exact 'version', '-' asks for version provenance. Otherwise object2 '-'
     // asks for object1's tree; a second SHA asks for ancestry.
-    if (argc != 5 || !absolute(argv[1]) || !absolute(argv[2])) return INVALID;
+    if ((argc != 5 && argc != 6) || !absolute(argv[1]) || !absolute(argv[2])) return INVALID;
+    bool count = argc == 6 && strcmp(argv[5], "count") == 0;
+    if (argc == 6 && (!count || !strcmp(argv[3], "version") || !strcmp(argv[4], "-"))) return INVALID;
     bool version = strcmp(argv[3], "version") == 0;
     if (version) {
         if (strcmp(argv[4], "-")) return INVALID;
@@ -156,10 +158,11 @@ int main(int argc, char **argv) {
     if (lstat(argv[1], &binary) || !S_ISREG(binary.st_mode) ||
         lstat(argv[2], &home) || !S_ISDIR(home.st_mode) ||
         home.st_uid != geteuid() || (home.st_mode & 0077)) return INVALID;
-    char home_env[4110], directory[4110], tree[48];
+    char home_env[4110], directory[4110], tree[48], excluded[42];
     snprintf(home_env, sizeof(home_env), "HOME=%s", argv[2]);
     snprintf(directory, sizeof(directory), "--git-dir=%s", argv[2]);
     snprintf(tree, sizeof(tree), "%s^{tree}", argv[3]);
+    snprintf(excluded, sizeof(excluded), "^%s", argv[4]);
     char *env[] = { home_env, "PATH=/usr/bin:/bin", "LC_ALL=C",
         "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_SYSTEM=/dev/null", "GIT_CONFIG_GLOBAL=/dev/null",
         "GIT_ATTR_NOSYSTEM=1", "GIT_TERMINAL_PROMPT=0", "GIT_ALLOW_PROTOCOL=",
@@ -169,8 +172,10 @@ int main(int argc, char **argv) {
     char *ancestry_args[] = { argv[1], "--no-optional-locks", "--no-replace-objects", directory,
         "-c", "protocol.allow=never", "-c", "core.hooksPath=/dev/null", "merge-base", "--is-ancestor", argv[3], argv[4], NULL };
     char *version_args[] = { argv[1], "--version", NULL };
-    bool ancestry = !version && strcmp(argv[4], "-") != 0;
-    char **args = version ? version_args : ancestry ? ancestry_args : tree_args;
+    char *count_args[] = { argv[1], "--no-optional-locks", "--no-replace-objects", directory,
+        "-c", "protocol.allow=never", "-c", "core.hooksPath=/dev/null", "rev-list", "--count", argv[3], excluded, NULL };
+    bool ancestry = !count && !version && strcmp(argv[4], "-") != 0;
+    char **args = count ? count_args : version ? version_args : ancestry ? ancestry_args : tree_args;
     int out[2], err[2], ready[2];
     if (make_pipe(out)) return INTERNAL;
     if (make_pipe(err)) { close(out[0]); close(out[1]); return INTERNAL; }

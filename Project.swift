@@ -83,8 +83,17 @@ let project = Project(
                 inputPaths: ["$(GIT_INSPECTOR_SOURCE_DIR)/GitObjectInspector"],
                 outputPaths: ["$(TARGET_BUILD_DIR)/$(EXECUTABLE_FOLDER_PATH)/GitObjectInspector"],
                 basedOnDependencyAnalysis: true
+            ), .post(
+                script: """
+                set -eu
+                /bin/cp -p "${SCRIPT_INPUT_FILE_0}" "${SCRIPT_OUTPUT_FILE_0}"
+                """,
+                name: "Embed verified Git remote transport",
+                inputPaths: ["$(GIT_TRANSPORT_SOURCE_DIR)/GitRemoteTransport"],
+                outputPaths: ["$(TARGET_BUILD_DIR)/$(EXECUTABLE_FOLDER_PATH)/GitRemoteTransport"],
+                basedOnDependencyAnalysis: true
             )],
-            dependencies: [.target(name: "MoleAnalysisSupervisor"), .target(name: "GitObjectInspector"), .external(name: "Sparkle")],
+            dependencies: [.target(name: "MoleAnalysisSupervisor"), .target(name: "GitObjectInspector"), .target(name: "GitRemoteTransport"), .external(name: "Sparkle")],
             settings: .settings(base: [
                 "ASSETCATALOG_COMPILER_APPICON_NAME": "AppIcon",
                 "ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME": "",
@@ -97,6 +106,9 @@ let project = Project(
                 "GIT_INSPECTOR_SOURCE_DIR": "$(GIT_INSPECTOR_SOURCE_DIR_$(DEPLOYMENT_LOCATION))",
                 "GIT_INSPECTOR_SOURCE_DIR_NO": "$(BUILT_PRODUCTS_DIR)",
                 "GIT_INSPECTOR_SOURCE_DIR_YES": "$(UNINSTALLED_PRODUCTS_DIR)/$(PLATFORM_NAME)",
+                "GIT_TRANSPORT_SOURCE_DIR": "$(GIT_TRANSPORT_SOURCE_DIR_$(DEPLOYMENT_LOCATION))",
+                "GIT_TRANSPORT_SOURCE_DIR_NO": "$(BUILT_PRODUCTS_DIR)",
+                "GIT_TRANSPORT_SOURCE_DIR_YES": "$(UNINSTALLED_PRODUCTS_DIR)/$(PLATFORM_NAME)",
             ])
         ),
         .target(
@@ -120,6 +132,20 @@ let project = Project(
             bundleId: "com.yusixian.MoeKit.GitObjectInspector",
             deploymentTargets: .macOS("15.0"),
             sources: ["Helpers/GitObjectInspector/main.c"],
+            settings: .settings(base: [
+                "SKIP_INSTALL": "YES",
+                "CODE_SIGN_INJECT_BASE_ENTITLEMENTS": "NO",
+                "OTHER_CFLAGS": "$(inherited) -Wall -Wextra -Werror",
+                "OTHER_CODE_SIGN_FLAGS": "$(inherited) -i $(PRODUCT_BUNDLE_IDENTIFIER)",
+            ])
+        ),
+        .target(
+            name: "GitRemoteTransport",
+            destinations: .macOS,
+            product: .commandLineTool,
+            bundleId: "com.yusixian.MoeKit.GitRemoteTransport",
+            deploymentTargets: .macOS("15.0"),
+            sources: ["Helpers/GitRemoteTransport/main.c"],
             settings: .settings(base: [
                 "SKIP_INSTALL": "YES",
                 "CODE_SIGN_INJECT_BASE_ENTITLEMENTS": "NO",

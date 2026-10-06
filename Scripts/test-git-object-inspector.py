@@ -180,10 +180,10 @@ class InspectorTests(unittest.TestCase):
             "UNRELATED_SECRET": "synthetic-do-not-inherit",
         }
 
-    def start(self, mode="success", *, first=SHA, second="-", binary=None, snapshot=None, helper=None, **kwargs):
+    def start(self, mode="success", *, first=SHA, second="-", binary=None, snapshot=None, helper=None, operation=None, **kwargs):
         (self.snapshot / "fixture-mode").write_text(mode, encoding="ascii")
         process = subprocess.Popen([str(helper or self.helper), str(binary or self.fixture),
-                                    str(snapshot or self.snapshot), first, second],
+                                    str(snapshot or self.snapshot), first, second] + ([operation] if operation else []),
                                    stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                    env=self.environment, **kwargs)
         def cleanup():
@@ -453,6 +453,13 @@ class InspectorTests(unittest.TestCase):
         self.finish(self.start(binary=self.git, first=root, second=descendant), 0)
         self.finish(self.start(binary=self.git, first=descendant, second=unique), 75)
         self.finish(self.start(binary=self.git, first="0" * 40), 73)
+        out, err = self.finish(self.start(binary=self.git, first=descendant, second=root, operation="count"), 0)
+        self.assertEqual(out, b"1\n")
+        self.assertEqual(err, b"")
+        out, _ = self.finish(self.start(binary=self.git, first=root, second=descendant, operation="count"), 0)
+        self.assertEqual(out, b"0\n")
+        self.finish(self.start(binary=self.git, first=descendant, second=root, operation="push"), 64)
+        self.finish(self.start(binary=self.git, first="version", operation="count"), 64)
         # Test driver rewrites only its own mode marker; Git must not mutate data.
         after = self.snapshot_state()
         before.pop("fixture-mode"); after.pop("fixture-mode")

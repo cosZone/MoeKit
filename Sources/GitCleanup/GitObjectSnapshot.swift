@@ -88,7 +88,14 @@ final class GitObjectSnapshot {
     func requireAncestor(_ ancestor: String, _ descendant: String) throws {
         _ = try run(ancestor, descendant)
     }
-    private func run(_ first: String, _ second: String) throws -> Data {
+    func uniqueCommitCount(_ source: String, excluding target: String) throws -> Int {
+        let data = try run(source, target, count: true)
+        guard let text = String(data: data, encoding: .utf8), text.hasSuffix("\n"),
+              text.dropLast().allSatisfy({ $0.isASCII && $0.isNumber }),
+              let value = Int(text.dropLast()), value >= 0 else { throw GitCleanupFailure.helper }
+        return value
+    }
+    private func run(_ first: String, _ second: String, count: Bool = false) throws -> Data {
         try Task.checkCancellation()
         try GitCleanupInspectionStage.check("private executable namespace") {
             try privateRoot.validate(); try InstallerFileAccess.validatePrivate(privateRoot.fd, directory: true)
@@ -108,7 +115,7 @@ final class GitObjectSnapshot {
         let process = Process()
         let input = Pipe(), output = Pipe(), errors = Pipe()
         process.executableURL = helper
-        process.arguments = [git.path, directory.path, first, second]
+        process.arguments = [git.path, directory.path, first, second] + (count ? ["count"] : [])
         process.environment = ["PATH": "/usr/bin:/bin", "LC_ALL": "C"]
         process.currentDirectoryURL = directory
         process.standardInput = input; process.standardOutput = output; process.standardError = errors

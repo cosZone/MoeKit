@@ -28,3 +28,9 @@ status: unreleased
 文档网站源码、Fumadocs 中文指南、站内搜索、Docker 镜像与 Dokploy 配置指南已合入仓库，但公开站点部署和生产域名尚未完成。网站独立部署，不是 App 安装包的一部分。
 
 原生视觉、VoiceOver、双架构实机体验与真实进程权限覆盖仍需手动验收。后续版本以独立 Markdown 记录保存实际交付内容和验证范围。
+
+## AI worktree 收尾（后续源码）
+
+新增从真实 Git 证据出发的收尾流程：干净 linked worktree fast-forward 到现有本地分支，包含在主 worktree 检出的 main；复核后可另行批准精确 HTTPS 远端 non-force push，并独立读取远端 OID 确认结果，最后单独检查和确认退役。原目标内容/index/ref 保留；不运行仓库脚本或测试，不将 AI 完成消息当作证据，不自动 stash/reset/rebase/force push。未知远端结果保留工作树，提供只读复查。
+
+这是未发布源码工作，不属于 preview.10 或 preview.11 的发布范围。macOS 编译、合成原生 fixture、完整 GUI 与真实凭据体验的验证范围应分别记录；源码合入不代表安装包或真实用户操作已经验收。设计与限制见仓库 Documentation/Git-worktree-finish.md。

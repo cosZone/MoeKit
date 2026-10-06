@@ -36,7 +36,7 @@ MoeKit 工作流直接读取上述三个名字，**不要求创建 `Prod` enviro
 - 无私有签名 secrets 的独立 job 运行 Release 配置单元测试（`ENABLE_TESTABILITY=YES`），随后从相同源码单独 archive universal Release；测试只运行 runner 的当前 CPU 架构
 - 归档 `.app` 同时包含 arm64、x86_64，Bundle ID 固定为 `com.yusixian.MoeKit`，最低 macOS 15.0
 - 签名 job 不编译源码、执行应用或运行第三方安装器；它只验证同次 run/attempt 的产物，用临时 keychain 内唯一的 Apple Development 身份重新签名，核对证书指纹、预期 Team ID、两种架构、bundle 信息与 provenance
-- Hardened Runtime 开启；无额外 entitlements、无 get-task-allow、无 App Sandbox、无 provisioning profile。允许两个显式列出的原创辅助程序 `Contents/MacOS/MoleAnalysisSupervisor` 和 `Contents/MacOS/GitObjectInspector`，标识分别固定为 `com.yusixian.MoeKit.MoleAnalysisSupervisor` 和 `com.yusixian.MoeKit.GitObjectInspector`；另允许固定 Sparkle 2.10.0 框架及其四个精确嵌套 helper；仅允许官方 manifest 的精确相对链接。其他 helper/framework/XPC 与可执行资源一律拒绝
+- Hardened Runtime 开启；无额外 entitlements、无 get-task-allow、无 App Sandbox、无 provisioning profile。当前后续源码允许三个显式列出的原创辅助程序 `Contents/MacOS/MoleAnalysisSupervisor`、`Contents/MacOS/GitObjectInspector` 和 `Contents/MacOS/GitRemoteTransport`，标识分别固定为 `com.yusixian.MoeKit.MoleAnalysisSupervisor`、`com.yusixian.MoeKit.GitObjectInspector` 和 `com.yusixian.MoeKit.GitRemoteTransport`；第三个 helper 不存在于已发布 preview.10 的八份代码对象中，新源码发布时须核对九份代码对象；另允许固定 Sparkle 2.10.0 框架及其四个精确嵌套 helper；仅允许官方 manifest 的精确相对链接。其他 helper/framework/XPC 与可执行资源一律拒绝
 - 先用同一个现有 Apple Development 身份显式逐个签名两个原创 helper、Sparkle 的四个嵌套 helper、Sparkle.framework，再签名父 App；不使用 `--deep` 签名或继承旧 entitlements。八份代码每个 arm64／x86_64 slice 均验证精确标识、Hardened Runtime、空 entitlements、Apple trust anchor、预期 Team ID 与导入证书指纹；ZIP 往返与 DMG 内再次逐个核验代码，全部文件内容（含 helper 与签名）必须相同
 - 这两个 helper 均由本仓库原创 C 源码构建。第三方 Mole 分析器和 Apple Git 不随 App 分发，不进入发布签名流程，也不会被重新签名；发布 allowlist 显式拒绝额外的 `Contents/MacOS/git`
 - 不使用公证或安全时间戳；证书过期／撤销可能影响后续校验。代码签名并不承诺长期分发可用性

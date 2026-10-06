@@ -15,8 +15,12 @@ enum CleanupPermanentRemoval {
             throw CleanupFailure.refused(String(localized: "This tree exceeds the bounded directory-descriptor budget for permanent removal. Restore it or manage it in Finder; no deletion was authorized."))
         }
     }
+    // Explicit caller isolation keeps borrowed descriptors and synchronous
+    // checkpoint captures on the same actor (Swift 6 SE-0420). No suspension,
+    // unchecked Sendable conformance or cross-actor descriptor transfer occurs.
     static func remove(manifest: CleanupManifest, directory: InstallerDirectoryAnchor,
                        parent: InstallerDirectoryAnchor, name: String, environment: CleanupEnvironment,
+                       isolation: isolated (any Actor)? = #isolation,
                        checkpoint: (CleanupCheckpoint) throws -> Void = { _ in }) throws {
         try preflight(manifest)
         try InstallerFileAccess.validatePrivate(parent.fd, directory: true)
@@ -99,11 +103,12 @@ enum CleanupPermanentRemoval {
     /// and durable capture into an operation-owned private directory.
     static func remove(manifest: CleanupManifest, parent: InstallerDirectoryAnchor, name: String,
                        environment: CleanupEnvironment,
+                       isolation: isolated (any Actor)? = #isolation,
                        checkpoint: (CleanupCheckpoint) throws -> Void = { _ in }) throws {
         guard let entry = manifest.entries.first, entry.relativePath.isEmpty else { throw CleanupFailure.changed }
         if entry.kind == .directory {
             try remove(manifest: manifest, directory: parent.child(name), parent: parent,
-                       name: name, environment: environment, checkpoint: checkpoint)
+                       name: name, environment: environment, isolation: isolation, checkpoint: checkpoint)
             return
         }
         guard manifest.entries.count == 1 else { throw CleanupFailure.changed }

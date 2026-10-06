@@ -79,10 +79,11 @@ actor NativeTrashExecutor: TrashExecuting {
                   selectedPaths == Set(inspection.display.items.map(\.id)),
                   Set(try CleanupFiles.names(root, limit: Self.maximumItems)) == Set(inspection.display.items.map { $0.url.lastPathComponent }) else { throw TrashFailure.changed }
         }
-        let items = try selectedPaths.sorted().map { path -> TrashItem in
+        var items: [TrashItem] = []
+        for path in selectedPaths.sorted() {
             guard let item = inspection.display.items.first(where: { $0.id == path }), item.isEligible else { throw TrashFailure.changed }
             try revalidate(item, root: root)
-            return item
+            items.append(item)
         }
         guard items.count <= Self.maximumItems, items.reduce(0, { $0 + ($1.manifest?.itemCount ?? 0) }) <= CleanupFiles.maximumEntries else { throw TrashFailure.limit }
         _ = try items.reduce(Int64(0)) { sum, item in
@@ -159,7 +160,7 @@ actor NativeTrashExecutor: TrashExecuting {
             try validate(root); try journal.storage.validate()
             guard actual == (try CleanupFiles.manifest(parent: operation, name: "payload", environment: environment.files)) else { throw TrashFailure.changed }
             started = true
-            try CleanupPermanentRemoval.remove(manifest: actual, parent: operation, name: "payload", environment: environment.files) { point in
+            try CleanupPermanentRemoval.remove(manifest: actual, parent: operation, name: "payload", environment: environment.files, isolation: self) { point in
                 try self.checkpoint(point)
                 try self.validate(root)
                 try journal.storage.validate()

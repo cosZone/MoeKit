@@ -20,8 +20,14 @@ The first source milestone implements navigation, explicit demo fixtures, bounde
 
 - Sources/Cleanup is a separate original native adapter: explicit multi-cache inventory and Trash, receipt-backed original-path restore, and an independently confirmed irreversible selected-receipt removal. Never wire selections to broad Mole clean/purge.
 - Protect project/Git/credential/control namespaces and outside neighbors. Cache location or CACHEDIR.TAG is evidence only, never authorization. Links are leaves, not traversal. No general Git artifact deletion without tracked-content proof.
-- Permanent removal exists only in CleanupPermanentRemoval.swift: immutable manifest, fresh private per-entry capture and identity checks, separate action-time UI confirmation, no whole-Trash clearing. No automatic retry after partial or uncertain outcomes.
+- Permanent removal exists only in CleanupPermanentRemoval.swift: immutable manifest, fresh private per-entry capture and identity checks, and separate action-time UI confirmation. Cache recovery itself never empties Trash. Sources/Trash separately supports current-user home Trash selected deletion and a typed-confirmed exact snapshot clear; it reuses the sink for files, links and directories. No external-volume or other-user Trash clearing is allowed. No automatic retry after partial or uncertain outcomes.
 - Test mutations only in unique marker/identity-owned fixtures. Actual native Trash fixtures require hosted-runner opt-in, production path/volume guards and affirmative exact-head evidence. Never test against real user caches.
+
+## Native Trash management
+
+- Sources/Trash accepts only the fixed current-user home .Trash. Read Documentation/Trash-management.md for budgets and scope; do not wire arbitrary paths or external .Trashes to it.
+- All deletions require immutable full-path manifests and a fresh one-use irreversible UI confirmation. Clear-snapshot additionally requires the literal EMPTY; new arrivals never expand an old confirmation.
+- Retain uncertain/substituted objects, interrupted payloads, per-entry slots and private records. No automatic retry, rollback, overwrite or history purge. No real-user Trash tests: use uniquely created owned temporary fixture trees only.
 
 ## Verification and publishing
 

@@ -8556,6 +8556,716 @@
           }
         }
       }
+    },
+    "%lld Trash items · %@ logical size": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 个废纸篓项目 · 逻辑大小 %@"
+          }
+        }
+      }
+    },
+    "%lld of %lld items processed": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已处理 %lld / %lld 项"
+          }
+        }
+      }
+    },
+    "%lld selected · %lld scanned items": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已选 %lld 项 · 已扫描 %lld 项"
+          }
+        }
+      }
+    },
+    "Actual Trash deletion outcomes": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "废纸篓删除的真实结果"
+          }
+        }
+      }
+    },
+    "Another Trash operation is still running. Wait for its actual result.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "另一个废纸篓操作仍在运行。请等待其真实结果。"
+          }
+        }
+      }
+    },
+    "Caches": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缓存"
+          }
+        }
+      }
+    },
+    "Cancellation stops before the next mutation when possible. Completed deletions cannot be undone. Remaining and uncertain data is retained; check the per-item results.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消会尽可能在下一次修改前停止。已完成的删除无法撤销。剩余或状态不确定的数据会保留，请查看每项结果。"
+          }
+        }
+      }
+    },
+    "Checking the Trash operation…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在检查废纸篓操作…"
+          }
+        }
+      }
+    },
+    "Cleanup category": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清理类别"
+          }
+        }
+      }
+    },
+    "Clear scanned Trash is unavailable while any item is unreadable or unsupported. You can select the eligible items individually.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "存在无法读取或不支持的项目时，不能清空已扫描废纸篓。你仍可单独选择支持的项目。"
+          }
+        }
+      }
+    },
+    "Close apps and workloads using these items first. Identity checks do not prove global non-use. Hard links, open files, clones and APFS snapshots may reduce or delay physical space reclaimed.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请先关闭使用这些项目的应用和任务。身份检查不能证明所有进程均未使用它们。硬链接、已打开的文件、克隆与 APFS 快照可能减少或延迟实际空间回收。"
+          }
+        }
+      }
+    },
+    "Confirm clearing this Trash snapshot": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "确认清空本次废纸篓快照"
+          }
+        }
+      }
+    },
+    "Confirm permanent deletion of selected Trash items": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "确认永久删除所选废纸篓项目"
+          }
+        }
+      }
+    },
+    "Confirmation creates private records containing the reviewed paths. If interrupted, remaining or changed data stays in that operation folder for manual inspection. No automatic retry, restore, or record cleanup occurs.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "确认后会创建包含复查路径的私有记录。若操作中断，剩余或发生变化的数据会保留在操作文件夹中，供手动检查。不会自动重试、恢复或清理记录。"
+          }
+        }
+      }
+    },
+    "Credential, vault, and MoeKit recovery locations are protected. Manage this item yourself in Finder.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "凭据、保险库和 MoeKit 恢复位置受到保护。请自行在 Finder 中管理此项目。"
+          }
+        }
+      }
+    },
+    "Current user · home Trash only": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前用户 · 仅个人废纸篓"
+          }
+        }
+      }
+    },
+    "Deletion did not begin. Captured or changed data is retained in the operation folder. Inspect it in Finder before taking another action.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除尚未开始。已捕获或发生变化的数据保留在操作文件夹中。请先在 Finder 中检查，再决定下一步。"
+          }
+        }
+      }
+    },
+    "Deletion did not begin. The item remains unverified at its Trash location; inspect it and scan again.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除尚未开始。项目在废纸篓位置的状态仍未验证；请检查后重新扫描。"
+          }
+        }
+      }
+    },
+    "Deletion stopped after it began. Some confirmed entries may be gone; remaining or uncertain data is retained in the operation folder. No automatic retry occurs.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除开始后停止。部分已确认内容可能已被删除；剩余或状态不确定的数据保留在操作文件夹中。不会自动重试。"
+          }
+        }
+      }
+    },
+    "Deselect all": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消全选"
+          }
+        }
+      }
+    },
+    "EMPTY": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "EMPTY"
+          }
+        }
+      }
+    },
+    "Exact Trash item": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "精确废纸篓项目"
+          }
+        }
+      }
+    },
+    "External-volume Trash and other users’ Trash are not included. Original locations and deletion dates are unavailable; Last modified is the file’s modification date. Symbolic links are listed as links and never followed.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不包含外置卷或其他用户的废纸篓。原始位置与删除日期不可用；“最后修改”表示文件的修改日期。符号链接仅作为链接列出，不会跟随其目标。"
+          }
+        }
+      }
+    },
+    "Filter Trash names": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "筛选废纸篓项目名称"
+          }
+        }
+      }
+    },
+    "Filtering changes the visible rows only. Review always lists every selected item, including selected items hidden by the filter.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "筛选只改变当前显示的行。复查会列出所有已选项目，包括被筛选隐藏的已选项。"
+          }
+        }
+      }
+    },
+    "I have stopped apps and workloads using these Trash items": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "我已停止使用这些废纸篓项目的应用和任务"
+          }
+        }
+      }
+    },
+    "I understand every listed item will be permanently deleted and cannot be restored": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "我理解所列的每个项目都将永久删除，且无法恢复"
+          }
+        }
+      }
+    },
+    "Item": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "项目"
+          }
+        }
+      }
+    },
+    "Largest first": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "较大项目优先"
+          }
+        }
+      }
+    },
+    "Last modified": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最后修改"
+          }
+        }
+      }
+    },
+    "No Trash operation records found": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未找到废纸篓操作记录"
+          }
+        }
+      }
+    },
+    "Not attempted. The batch stopped or was cancelled; this item was not automatically retried.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚未尝试。批处理已停止或取消；此项目未自动重试。"
+          }
+        }
+      }
+    },
+    "Only the exact items and contents listed below are authorized. Deletion is permanent and cannot be undone through Trash or MoeKit. Items arriving later are never added to this confirmation.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅授权下方列出的精确项目及其内容。删除是永久的，无法通过废纸篓或 MoeKit 撤销。后续进入废纸篓的项目绝不会加入本次确认。"
+          }
+        }
+      }
+    },
+    "Operation folder": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "操作文件夹"
+          }
+        }
+      }
+    },
+    "Operation requires manual inspection": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此操作需要手动检查"
+          }
+        }
+      }
+    },
+    "Original location": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "原始位置"
+          }
+        }
+      }
+    },
+    "Ownership, permissions, file flags, cloud metadata, or this volume make this item unsupported. No permissions were changed.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所有权、权限、文件标志、云元数据或所在卷导致此项目不受支持。未修改任何权限。"
+          }
+        }
+      }
+    },
+    "Permanent deletion cannot be undone": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "永久删除无法撤销"
+          }
+        }
+      }
+    },
+    "Permanently delete confirmed items": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "永久删除已确认的项目"
+          }
+        }
+      }
+    },
+    "Permanently deleted the confirmed item. Physical disk space reclaimed may be smaller or delayed.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已永久删除确认的项目。实际回收的磁盘空间可能较少或延迟释放。"
+          }
+        }
+      }
+    },
+    "Private operation records and retained data": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "私有操作记录与保留数据"
+          }
+        }
+      }
+    },
+    "Read Trash operation records": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "读取废纸篓操作记录"
+          }
+        }
+      }
+    },
+    "Read-only history of this Trash adapter. An interrupted operation may retain a payload and individual delete-entry slots. Inspect all contents manually; these records do not authorize another deletion.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此废纸篓模块的只读历史。中断的操作可能保留 payload 和独立的 delete-entry 项目。请手动检查全部内容；这些记录不能授权再次删除。"
+          }
+        }
+      }
+    },
+    "Recorded deletion completed": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已记录删除完成"
+          }
+        }
+      }
+    },
+    "Reveal operation folder in Finder": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在 Finder 中显示操作文件夹"
+          }
+        }
+      }
+    },
+    "Review clear scanned Trash…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复查清空已扫描废纸篓…"
+          }
+        }
+      }
+    },
+    "Review selected deletion…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复查所选项目的删除…"
+          }
+        }
+      }
+    },
+    "Review your Trash before deleting": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除前复查废纸篓"
+          }
+        }
+      }
+    },
+    "Reviewed Trash path": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已复查的废纸篓路径"
+          }
+        }
+      }
+    },
+    "Scan again for the current contents. Later arrivals and unattempted items were not included in the completed deletion.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请重新扫描以查看当前内容。后续进入废纸篓及尚未尝试的项目未包含在已完成的删除中。"
+          }
+        }
+      }
+    },
+    "Scan home Trash": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "扫描个人废纸篓"
+          }
+        }
+      }
+    },
+    "Scan your home Trash, select exact items, then review a separate permanent-deletion confirmation. Clear scanned Trash reviews the complete snapshot and requires typing EMPTY.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "扫描个人废纸篓，选择精确项目，再单独复查并确认永久删除。清空已扫描废纸篓会复查完整快照，并要求输入 EMPTY。"
+          }
+        }
+      }
+    },
+    "Scanned at %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "扫描时间：%@"
+          }
+        }
+      }
+    },
+    "Select eligible items": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择支持的项目"
+          }
+        }
+      }
+    },
+    "Show home Trash in Finder": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在 Finder 中显示个人废纸篓"
+          }
+        }
+      }
+    },
+    "The latest 128 operation records are shown. Older records remain in the private records folder.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示最近的 128 条操作记录。更早的记录仍保留在私有记录文件夹中。"
+          }
+        }
+      }
+    },
+    "This Trash confirmation expired or was already used. Review a new plan.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本次废纸篓确认已过期或已被使用。请复查新的计划。"
+          }
+        }
+      }
+    },
+    "This Trash inventory exceeds the bounded safety budget. Manage larger items in Finder; unknown contents cannot be confirmed here.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此废纸篓清单超出了安全扫描上限。请在 Finder 中管理较大的项目；此处不能确认未知内容。"
+          }
+        }
+      }
+    },
+    "This scan does not include external volumes.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本次扫描不包含外置卷。"
+          }
+        }
+      }
+    },
+    "Trash": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "废纸篓"
+          }
+        }
+      }
+    },
+    "Trash contents or their containing folders changed. Scan again and review a new confirmation.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "废纸篓内容或所在文件夹已发生变化。请重新扫描并复查新的确认。"
+          }
+        }
+      }
+    },
+    "Trash location": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "废纸篓位置"
+          }
+        }
+      }
+    },
+    "Trash management": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "废纸篓管理"
+          }
+        }
+      }
+    },
+    "Trash operation cancelled. Already completed deletions cannot be undone; review every item’s actual outcome.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "废纸篓操作已取消。已完成的删除无法撤销；请复查每项的真实结果。"
+          }
+        }
+      }
+    },
+    "Trash operation records": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "废纸篓操作记录"
+          }
+        }
+      }
+    },
+    "Trash operation records could not be verified. Any retained data is preserved; nothing is retried automatically.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法验证废纸篓操作记录。保留数据将继续保留，不会自动重试。"
+          }
+        }
+      }
+    },
+    "Trash operations are unavailable in Demo. Actual results from this session remain visible.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "示例模式下不可操作废纸篓。本次会话的真实操作结果仍会保留显示。"
+          }
+        }
+      }
+    },
+    "Type EMPTY to confirm this complete snapshot": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "输入 EMPTY 以确认完整快照"
+          }
+        }
+      }
+    },
+    "Waiting for the actual Trash outcome…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在等待废纸篓操作的真实结果…"
+          }
+        }
+      }
+    },
+    "Your home Trash could not be read. Check macOS privacy permissions or inspect it in Finder, then scan again.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法读取个人废纸篓。请检查 macOS 隐私权限，或先在 Finder 中检查，再重新扫描。"
+          }
+        }
+      }
+    },
+    "Your home Trash is empty": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "个人废纸篓为空"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

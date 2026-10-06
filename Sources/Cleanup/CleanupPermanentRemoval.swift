@@ -17,8 +17,10 @@ enum CleanupPermanentRemoval {
     }
     static func remove(manifest: CleanupManifest, directory: InstallerDirectoryAnchor,
                        parent: InstallerDirectoryAnchor, name: String, environment: CleanupEnvironment,
+                       boundary: CleanupRemovalBoundary? = nil,
                        checkpoint: @Sendable (CleanupCheckpoint) throws -> Void = { _ in }) throws {
         try preflight(manifest)
+        try boundary?.validate()
         try InstallerFileAccess.validatePrivate(parent.fd, directory: true)
         try CleanupFiles.validateNamespace(parent, environment: environment)
         guard let root = manifest.entries.first, root.relativePath.isEmpty,
@@ -49,14 +51,14 @@ enum CleanupPermanentRemoval {
                 guard matchesLeaf(entry.identity, current, removedLinks: count) else { throw CleanupFailure.changed }
                 try checkLink(entry, parent: owner, name: parts.name)
             }
-            try checkpoint(.beforeLeafCapture); try Task.checkCancellation()
+            try checkpoint(.beforeLeafCapture); try boundary?.validate(); try Task.checkCancellation()
             try CleanupFiles.validateNamespace(owner, environment: environment)
             try CleanupFiles.validateNamespace(parent, environment: environment)
             try InstallerFileAccess.validatePrivate(parent.fd, directory: true)
             // The durable deleteIntent manifest binds each retained slot to its original path.
             let slot = String(format: "delete-entry-%06d", index)
             try InstallerFileAccess.exclusiveMove(from: owner, name: parts.name, to: parent, destinationName: slot)
-            try checkpoint(.afterLeafCapture)
+            try checkpoint(.afterLeafCapture); try boundary?.validate()
             let captured = try InstallerFileAccess.snapshotAt(parent.fd, slot)
             // A substituted file/link/directory is preserved at the private slot,
             // never traversed or unlinked. Its source may have been moved, but
@@ -84,16 +86,54 @@ enum CleanupPermanentRemoval {
         try Task.checkCancellation(); try parent.validate(); try directory.validate()
         let beforeRoot = try InstallerFileAccess.snapshotAt(parent.fd, name)
         guard root.identity.matchesDirectory(beforeRoot), try CleanupFiles.names(directory).isEmpty else { throw CleanupFailure.changed }
-        try checkpoint(.beforeLeafCapture); try Task.checkCancellation()
+        try checkpoint(.beforeLeafCapture); try boundary?.validate(); try Task.checkCancellation()
         try CleanupFiles.validateNamespace(parent, environment: environment)
         let rootSlot = "delete-entry-000000"
         try InstallerFileAccess.exclusiveMove(from: parent, name: name, to: parent, destinationName: rootSlot)
-        try checkpoint(.afterLeafCapture)
+        try checkpoint(.afterLeafCapture); try boundary?.validate()
         let capturedRoot = try InstallerFileAccess.snapshotAt(parent.fd, rootSlot)
         guard beforeRoot.matchesCaptured(capturedRoot), try CleanupFiles.names(parent.child(rootSlot)).isEmpty else { throw CleanupFailure.changed }
         try CleanupFiles.validateNamespace(parent, environment: environment)
         guard capturedRoot == (try InstallerFileAccess.snapshotAt(parent.fd, rootSlot)),
               unlinkat(parent.fd, rootSlot, AT_REMOVEDIR) == 0 else { throw CleanupFailure.changed }
+    }
+    /// File/link-root variant, used only after a new Trash removal confirmation
+    /// and durable capture into an operation-owned private directory.
+    static func remove(manifest: CleanupManifest, parent: InstallerDirectoryAnchor, name: String,
+                       environment: CleanupEnvironment,
+                       boundary: CleanupRemovalBoundary? = nil,
+                       checkpoint: @Sendable (CleanupCheckpoint) throws -> Void = { _ in }) throws {
+        guard let entry = manifest.entries.first, entry.relativePath.isEmpty else { throw CleanupFailure.changed }
+        if entry.kind == .directory {
+            try remove(manifest: manifest, directory: parent.child(name), parent: parent,
+                       name: name, environment: environment, boundary: boundary, checkpoint: checkpoint)
+            return
+        }
+        guard manifest.entries.count == 1 else { throw CleanupFailure.changed }
+        try Task.checkCancellation()
+        try CleanupFiles.validateNamespace(parent, environment: environment)
+        try InstallerFileAccess.validatePrivate(parent.fd, directory: true)
+        guard entry.identity == (try InstallerFileAccess.snapshotAt(parent.fd, name)) else { throw CleanupFailure.changed }
+        try checkLink(entry, parent: parent, name: name)
+        try checkpoint(.beforeLeafCapture); try boundary?.validate(); try Task.checkCancellation()
+        let slot = "delete-entry-000000"
+        try InstallerFileAccess.exclusiveMove(from: parent, name: name, to: parent, destinationName: slot)
+        try checkpoint(.afterLeafCapture); try boundary?.validate()
+        let captured = try InstallerFileAccess.snapshotAt(parent.fd, slot)
+        guard entry.identity.matchesCaptured(captured) else { throw CleanupFailure.changed }
+        try checkLink(entry, parent: parent, name: slot)
+        if entry.kind == .file {
+            let file = try InstallerFileDescriptor(parent: parent, name: slot)
+            guard captured == (try InstallerFileAccess.snapshot(file.fd)) else { throw CleanupFailure.changed }
+            try InstallerFileAccess.rejectMutationGrantingACL(file.fd)
+            try InstallerFileAccess.rejectCloudAttributes(file.fd)
+        }
+        try Task.checkCancellation()
+        try CleanupFiles.validateNamespace(parent, environment: environment)
+        try InstallerFileAccess.validatePrivate(parent.fd, directory: true)
+        guard captured == (try InstallerFileAccess.snapshotAt(parent.fd, slot)),
+              unlinkat(parent.fd, slot, 0) == 0 else { throw CleanupFailure.changed }
+        guard fsync(parent.fd) == 0 else { throw CleanupFailure.journal }
     }
     private static func checkLink(_ entry: CleanupEntry, parent: InstallerDirectoryAnchor, name: String) throws {
         guard entry.kind == .symbolicLink else { return }
@@ -115,5 +155,24 @@ enum CleanupPermanentRemoval {
             && expected.bytes == actual.bytes && expected.modifiedSeconds == actual.modifiedSeconds
             && expected.modifiedNanoseconds == actual.modifiedNanoseconds && expected.links > removedLinks
             && actual.links == expected.links - removedLinks
+    }
+}
+
+/// Borrowed synchronous boundary checks for a confirmed Trash operation. These
+/// references stay on the caller's executor; neither this value nor a callback
+/// is transferred to another task. Fixed production scope and home ownership
+/// were checked before entry; retained ancestor identities prevent replacement.
+struct CleanupRemovalBoundary {
+    let root: InstallerDirectoryAnchor
+    let storage: InstallerRecoveryJournal
+    let environment: CleanupEnvironment
+    func validate() throws {
+        guard root.url.path == environment.trash.path,
+              root.url.deletingLastPathComponent().path == environment.home.path else { throw CleanupFailure.changed }
+        try CleanupFiles.validateNamespace(root, environment: environment)
+        try InstallerFileAccess.validatePrivate(root.fd, directory: true)
+        try InstallerFileAccess.rejectCloudAttributes(root.fd)
+        if environment.enforceProductionPolicy { try InstallerFileAccess.validateVolume(root.fd, url: root.url) }
+        try storage.validate()
     }
 }

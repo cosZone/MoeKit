@@ -108,6 +108,14 @@ for path in (ROOT / "Sources/Cleanup").glob("*.swift"):
     require(path.name == "CleanupPermanentRemoval.swift" or not re.search(r"\bunlinkat\s*\(", text),
             f"Irreversible cleanup outside separately confirmed private-slot sink: {path.relative_to(ROOT)}")
 
+# The Trash adapter must reuse the shared exact-manifest sink. It cannot
+# introduce a second unlink, pathname recursion, shell or permission repair path.
+for path in (ROOT / "Sources/Trash").glob("*.swift"):
+    text = path.read_text()
+    for pattern in (r"\b(?:unlink|unlinkat|rmdir|chmod|fchmod|chown|fchown)\s*\(",
+                    r"\.removeItem\s*\(", r"\.moveItem\s*\(", r"\brenameat\s*\("):
+        require(not re.search(pattern, text), f"Trash mutation outside the shared exact-plan sink: {path.relative_to(ROOT)} ({pattern})")
+
 helper = ROOT / "Sources/Installer/InstallerUseEvidence.swift"
 if helper.is_file():
     text = helper.read_text()

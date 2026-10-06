@@ -10,6 +10,7 @@ struct ToolPreparationTests {
     func conventionalLocations() {
         let home = URL(fileURLWithPath: "/synthetic-home", isDirectory: true)
         #expect(PreparedTool.mole.conventionalLocations(home: home).map(\.path) == [
+            "/synthetic-home/" + MoleAnalyzerRelease.native.installationDirectoryName + "/analyze-go",
             "/synthetic-home/.config/mole/bin/analyze-go", "/opt/homebrew/bin/mo", "/opt/homebrew/bin/mole", "/usr/local/bin/mo",
             "/usr/local/bin/mole", "/synthetic-home/.local/bin/mo", "/synthetic-home/.local/bin/mole"])
         #expect(PreparedTool.git.conventionalLocations(home: home).map(\.path) == [
@@ -29,17 +30,24 @@ struct ToolPreparationTests {
             #expect(release.assetURL.absoluteString == "https://github.com/tw93/Mole/releases/download/V1.57.0/" + asset)
             #expect(release.releaseURL.absoluteString == "https://github.com/tw93/Mole/releases/tag/V1.57.0")
             #expect(command.contains("umask 077 &&"))
-            #expect(command.contains(#"/usr/bin/mktemp -d "$HOME/MoeKit-Mole-V1.57.0.XXXXXX""#))
+            #expect(command.contains(#"/usr/bin/mktemp -d "$HOME/MoeKit-Mole-download.XXXXXX""#))
             #expect(command.contains("/usr/bin/curl -q --fail --location --show-error --proto '=https' --proto-redir '=https'"))
             #expect(command.contains("--connect-timeout 15 --max-time 120 --max-filesize \(release.byteCount)"))
             let size = try #require(command.range(of: "-eq \(release.byteCount) &&"))
             let digest = try #require(command.range(of: "'\(release.sha256)'"))
             let verify = try #require(command.range(of: "/usr/bin/shasum -a 256 -c - &&"))
-            let permission = try #require(command.range(of: #"/bin/chmod 700 "$mole_dir/analyze-go" &&"#))
+            let permission = try #require(command.range(of: #"/bin/chmod 700 "$mole_download/analyze-go" &&"#))
             #expect(size.upperBound < digest.lowerBound)
             #expect(digest.upperBound < verify.lowerBound)
             #expect(verify.upperBound < permission.lowerBound)
             #expect(command.contains("Analyzer path: %s"))
+            #expect(command.contains("Mole analyzer ready"))
+            #expect(command.contains(release.installationDirectoryName))
+            #expect(command.contains(#"test -e "$mole_dir" || test -L "$mole_dir""#))
+            let create = try #require(command.range(of: #"/bin/mkdir -m 700 "$mole_dir" &&"#))
+            let link = try #require(command.range(of: #"/bin/ln "$mole_download/analyze-go" "$mole_dir/analyze-go""#))
+            #expect(permission.upperBound < create.lowerBound)
+            #expect(create.upperBound < link.lowerBound)
             for forbidden in ["brew", "install.sh", "xattr", "sudo", "rm ", "latest", "PATH=", "--json", "| bash", "| sh"] {
                 #expect(!command.contains(forbidden))
             }

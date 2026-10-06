@@ -5,6 +5,10 @@ import Observation
 /// specific, still-current confirmation plan. Cancellation holds ownership.
 @MainActor @Observable
 final class MoleAnalysisStore {
+    private(set) var installation: MoleInstallationReport?
+    private(set) var isDiscovering = false {
+        didSet { UpdateInstallationSafety.shared.changed(self) }
+    }
     private(set) var executable: URL?
     private(set) var directory: URL?
     private(set) var plan: MoleAnalysisPlan?
@@ -22,18 +26,47 @@ final class MoleAnalysisStore {
         didSet { UpdateInstallationSafety.shared.changed(self) }
     }
     private(set) var isDemoEnabled = false
+    @ObservationIgnored private let discovery: any MoleInstallationDiscovering
     @ObservationIgnored private let executor: any MoleAnalysisExecuting
     @ObservationIgnored private var task: Task<Void, Never>?
     @ObservationIgnored private var generation = UUID()
 
-    init(executor: any MoleAnalysisExecuting = MoleAnalysisExecutor()) { self.executor = executor }
-    var isBusy: Bool { isPreparing || isRunning || isCancelling }
+    init(executor: any MoleAnalysisExecuting = MoleAnalysisExecutor(),
+         discovery: any MoleInstallationDiscovering = MoleInstallationDiscovery()) {
+        self.executor = executor; self.discovery = discovery
+    }
+    var isBusy: Bool { isDiscovering || isPreparing || isRunning || isCancelling }
+
+    /// Called only when the user opens analysis. App initialization and Demo
+    /// never inspect the installation or any selected folder.
+    func discoverIfNeeded() {
+        guard installation == nil, executable == nil else { return }
+        discoverInstalledAnalyzer()
+    }
+    func discoverInstalledAnalyzer() {
+        guard !isBusy, !isDemoEnabled else { return }
+        invalidateSelection(); executable = nil; installation = nil
+        let request = generation
+        isDiscovering = true
+        task = Task { [weak self, discovery] in
+            do {
+                let report = try await discovery.discover()
+                try Task.checkCancellation()
+                guard let self else { return }
+                if self.generation == request, !self.isDemoEnabled {
+                    self.installation = report
+                    self.executable = report.verifiedExecutable
+                }
+                self.finish()
+            } catch { self?.fail(error, request: request) }
+        }
+    }
     var canPrepare: Bool { executable != nil && directory != nil && !isBusy && !isDemoEnabled }
 
     func selectionTicket() -> UUID? { !isBusy && !isDemoEnabled ? generation : nil }
     func selectExecutable(_ url: URL, ticket: UUID) {
         guard !isBusy, !isDemoEnabled, ticket == generation else { return }
-        executable = url; invalidateSelection()
+        installation = nil; executable = url; invalidateSelection()
     }
     func selectDirectory(_ url: URL, ticket: UUID) {
         guard !isBusy, !isDemoEnabled, ticket == generation else { return }
@@ -90,11 +123,11 @@ final class MoleAnalysisStore {
 
     func setDemoEnabled(_ enabled: Bool) {
         guard enabled != isDemoEnabled else { return }
-        isDemoEnabled = enabled; cancel(); executable = nil; directory = nil; result = nil; errorMessage = nil
+        isDemoEnabled = enabled; cancel(); installation = nil; executable = nil; directory = nil; result = nil; errorMessage = nil
     }
     private func fail(_ error: any Error, request: UUID) {
         if generation == request, !isDemoEnabled {
-            errorMessage = (error as? MoleAnalysisFailure)?.errorDescription ??
+            errorMessage = isDiscovering ? String(localized: "The installation check did not finish. Recheck to try again. No tool was run.") : (error as? MoleAnalysisFailure)?.errorDescription ??
                 String(localized: "The analysis could not finish. No new report was accepted.")
         } else if isCancelling, !isDemoEnabled {
             errorMessage = (error as? MoleAnalysisFailure) == .cleanupIncomplete ?
@@ -102,5 +135,5 @@ final class MoleAnalysisStore {
         }
         finish()
     }
-    private func finish() { task = nil; isPreparing = false; isRunning = false; isCancelling = false }
+    private func finish() { task = nil; isDiscovering = false; isPreparing = false; isRunning = false; isCancelling = false }
 }

@@ -117,49 +117,27 @@ struct ToolPreparationView: View {
 struct ToolInstallationGuidanceView: View {
     let tool: PreparedTool
     @State private var copiedCommand: String?
-    @State private var showsCommand = false
 
     var body: some View {
         GroupBox {
-            VStack(alignment: .leading, spacing: 12) {
-                Text(tool == .mole ? "Get the supported analyzer" : "Install or review manually").font(.headline)
-                if tool == .mole {
-                    let release = MoleAnalyzerRelease.native
-                    Text("MoeKit currently accepts only the original Mole V1.57.0 release analyzer. Homebrew, source builds and other versions are unsupported.")
-                        .font(.callout).foregroundStyle(.secondary)
-                    Link("Official Mole V1.57.0 release", destination: release.releaseURL)
-                    Text("Asset for this app: \(release.assetName)").font(.callout.monospaced()).textSelection(.enabled)
-                    Link("View the exact analyzer download", destination: release.assetURL)
-                    Text("Expected size: \(release.byteCount) bytes").font(.caption).foregroundStyle(.secondary)
-                    Text("SHA-256: \(release.sha256)").font(.caption.monospaced()).textSelection(.enabled)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text("Review the release, then optionally copy and run the download command yourself in Terminal. It creates a new private folder in your home directory, downloads one analyzer, checks its size and SHA-256, and only then makes it executable. It does not run Mole. A failed download or check leaves the new folder for you to review.")
-                        .font(.callout).foregroundStyle(.secondary)
-                    Text("In Mole → Space → Analyze with Mole…, choose analyze-go at the path printed by Terminal. If already installed by Mole’s official script, its usual path is ~/.config/mole/bin/analyze-go. MoeKit still verifies the exact bytes before each run.")
-                        .font(.callout).foregroundStyle(.secondary)
-                    Text("A browser download may have a macOS quarantine marker. MoeKit refuses quarantined files; neither this command nor MoeKit removes that marker or bypasses Gatekeeper. Do not retry a blocked file through another download route to evade a security warning.")
-                        .font(.caption).foregroundStyle(.secondary)
-                } else {
+            if tool == .mole {
+                MoleInstallationGuidanceView().padding(6)
+            } else {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Install or review manually").font(.headline)
                     Link("Official installation instructions", destination: tool.documentationURL)
                     Text("If you already use Homebrew, its documented install command is:")
                         .font(.callout).foregroundStyle(.secondary)
                     Text(tool.installCommand).font(.body.monospaced()).textSelection(.enabled)
                     Text("Copying only changes the clipboard. Running this command yourself can install dependencies, access the network and update Homebrew. Review the official instructions first.")
                         .font(.caption).foregroundStyle(.secondary)
-                }
-                if tool == .mole {
-                    DisclosureGroup("Review download command", isExpanded: $showsCommand) {
-                        ToolDownloadCommandView(command: tool.installCommand)
+                    Button(copiedCommand == tool.installCommand ? "Copied" : "Copy command") {
+                        let command = tool.installCommand
+                        NSPasteboard.general.clearContents()
+                        if NSPasteboard.general.setString(command, forType: .string) { copiedCommand = command }
                     }
-                    Text("Copying only changes the clipboard. The download command accesses GitHub and writes the new folder only when you run it yourself.")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                Button(copiedCommand == tool.installCommand ? "Copied" : (tool == .mole ? "Copy download command" : "Copy command")) {
-                    let command = tool.installCommand
-                    NSPasteboard.general.clearContents()
-                    if NSPasteboard.general.setString(command, forType: .string) { copiedCommand = command }
-                }
-            }.frame(maxWidth: .infinity, alignment: .leading).padding(6)
+                }.frame(maxWidth: .infinity, alignment: .leading).padding(6)
+            }
         }
     }
 }

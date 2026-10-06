@@ -100,9 +100,13 @@ def verify(directory: Path, language: str) -> int:
     })
     expected.update({
         f"mole-analysis-{scenario}-{language}-{appearance}-{width}x{height}": (width, height)
-        for scenario in ("initial", "confirmation", "partial", "failure")
+        for scenario in ("initial", "ready", "missing", "incompatible", "unverified", "advanced", "confirmation", "partial", "failure")
         for appearance in ("light", "dark")
         for width, height in ((720, 560), (900, 800))
+    })
+    expected.update({
+        f"mole-analysis-guide-{language}-{appearance}-720x1400": (720, 1400)
+        for appearance in ("light", "dark")
     })
     expected.update({
         f"installer-{scenario}-{language}-{appearance}-720x1600": (720, 1600)
@@ -173,6 +177,8 @@ def verify(directory: Path, language: str) -> int:
             required.update({"Native signals: 0", "Visible required controls: 7",
                 "Confirmation initially acknowledged: false",
                 "Evidence source: public SwiftUI bounds anchors on displayed views"})
+        if name.startswith("mole-analysis-"):
+            required.add(f"Setup ready title: {'可以开始分析' if language == 'zh-Hans' else 'Ready to analyze'}")
         if name.startswith("tool-preparation-"):
             required.add(f"Download copy title: {'复制下载命令' if language == 'zh-Hans' else 'Copy download command'}")
             required.add(f"Tool candidate title: {'已找到 · 未验证' if language == 'zh-Hans' else 'Found · unverified'}")

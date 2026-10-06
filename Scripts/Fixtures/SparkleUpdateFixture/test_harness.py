@@ -9,6 +9,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import traceback
 import re
 import unittest
 from unittest import mock
@@ -103,6 +104,191 @@ class HarnessBoundaryTests(unittest.TestCase):
             with self.assertRaises(OSError): fixture.read_events(root.path / "events")
         finally:
             fixture.os.close(root.fd)
+
+    def aborted_event_fixture(self, data=b'{"event":"launch"}\n'):
+        root = fixture.OwnedRoot()
+        self.addCleanup(fixture.os.close, root.fd)
+        case = root.directory("case")
+        installed = root.directory("case", "Installed")
+        events = case / "events.jsonl"
+        fixture.write_new(events, data)
+        namespace = fixture.CaseNamespace(root, case, installed, events)
+        output = tempfile.TemporaryDirectory(prefix="moekit-aborted-events-")
+        self.addCleanup(output.cleanup)
+        return namespace, Path(output.name) / "case.aborted-events.json"
+
+    def test_aborted_events_preserve_complete_records_and_original_exception(self):
+        namespace, output = self.aborted_event_fixture(b'{"event":"launch"}\n{"event":')
+        original = RuntimeError("original lifetime refusal")
+        def fail_original():
+            raise original
+        with mock.patch.object(namespace, "read", wraps=namespace.read) as read:
+            try:
+                with fixture.retain_aborted_events(namespace, output):
+                    fail_original()
+            except RuntimeError as error:
+                self.assertIs(error, original)
+                self.assertEqual(traceback.extract_tb(error.__traceback__)[-1].name, "fail_original")
+                self.assertIsNone(error.__cause__)
+                self.assertIsNone(error.__context__)
+            else:
+                self.fail("Original exception was suppressed")
+            read.assert_called_once_with()
+        self.assertEqual(json.loads(output.read_bytes()), {"schema": 1, "aborted": True, "settled": False,
+            "event_retention": "verified_complete_records", "events": [{"event": "launch"}]})
+        self.assertFalse(output.with_name("case.events.json").exists())
+
+    def test_success_does_not_read_or_write_aborted_event_artifact(self):
+        namespace, output = self.aborted_event_fixture()
+        with mock.patch.object(namespace, "read") as read, mock.patch.object(fixture, "write_new") as write:
+            with fixture.retain_aborted_events(namespace, output):
+                pass
+        read.assert_not_called()
+        write.assert_not_called()
+        self.assertFalse(output.exists())
+
+    def test_aborted_events_refuse_replaced_inode_without_reading_replacement(self):
+        namespace, output = self.aborted_event_fixture()
+        namespace.events.rename(namespace.case / "retained-original-events")
+        fixture.write_new(namespace.events, b'{"event":"replacement-must-not-be-read"}\n')
+        original = RuntimeError("original refusal")
+        with mock.patch.object(fixture, "read_events", wraps=fixture.read_events) as read_events:
+            with self.assertRaises(RuntimeError) as caught:
+                with fixture.retain_aborted_events(namespace, output):
+                    raise original
+            read_events.assert_not_called()
+        self.assertIs(caught.exception, original)
+        self.assertEqual(json.loads(output.read_bytes()), {"schema": 1, "aborted": True, "settled": False,
+            "event_retention": "pinned_namespace_unreadable"})
+
+    def test_aborted_events_keep_input_budget_and_never_read_oversized_inode(self):
+        namespace, output = self.aborted_event_fixture()
+        namespace.events.write_bytes(b"x" * 200_001)
+        with mock.patch.object(fixture, "read_events", wraps=fixture.read_events) as read_events:
+            with self.assertRaisesRegex(RuntimeError, "original refusal"):
+                with fixture.retain_aborted_events(namespace, output):
+                    raise RuntimeError("original refusal")
+            read_events.assert_not_called()
+        evidence = json.loads(output.read_bytes())
+        self.assertEqual(evidence["event_retention"], "pinned_namespace_unreadable")
+        self.assertNotIn("events", evidence)
+        self.assertLess(len(output.read_bytes()), 256)
+
+    def test_aborted_events_refuse_changed_root_or_directory_and_malformed_records(self):
+        for change in ("marker", "installed", "malformed"):
+            with self.subTest(change=change):
+                namespace, output = self.aborted_event_fixture()
+                if change == "marker":
+                    (namespace.owned.path / "owner-marker").write_text("replacement marker")
+                elif change == "installed":
+                    namespace.installed.rename(namespace.case / "retained-installed")
+                    namespace.installed.mkdir(mode=0o700)
+                else:
+                    namespace.events.write_bytes(b'{"event":"launch"}\nnot JSON\n')
+                with self.assertRaisesRegex(RuntimeError, "original refusal"):
+                    with fixture.retain_aborted_events(namespace, output):
+                        raise RuntimeError("original refusal")
+                evidence = json.loads(output.read_bytes())
+                self.assertEqual(evidence["event_retention"], "pinned_namespace_unreadable")
+                self.assertNotIn("events", evidence)
+
+    def test_aborted_event_output_is_bounded_after_json_expansion(self):
+        event = {"event": "launch", "detail": "\U0001f600" * 49_900}
+        data = json.dumps(event, ensure_ascii=False).encode() + b"\n"
+        self.assertLessEqual(len(data), 200_000)
+        namespace, output = self.aborted_event_fixture(data)
+        with self.assertRaisesRegex(RuntimeError, "original refusal"):
+            with fixture.retain_aborted_events(namespace, output):
+                raise RuntimeError("original refusal")
+        payload = output.read_bytes()
+        self.assertGreater(len(payload), len(data))
+        self.assertLessEqual(len(payload), fixture.ABORTED_EVENT_OUTPUT_BUDGET)
+        self.assertEqual(json.loads(payload)["events"], [event])
+
+    def test_aborted_event_output_budget_retains_only_fixed_classification(self):
+        namespace, output = self.aborted_event_fixture(b'{"event":"' + b"x" * 1000 + b'"}\n')
+        with mock.patch.object(fixture, "ABORTED_EVENT_OUTPUT_BUDGET", 256):
+            with self.assertRaisesRegex(RuntimeError, "original refusal"):
+                with fixture.retain_aborted_events(namespace, output):
+                    raise RuntimeError("original refusal")
+        self.assertEqual(json.loads(output.read_bytes()), {"schema": 1, "aborted": True, "settled": False,
+            "event_retention": "artifact_budget_exceeded"})
+        self.assertLessEqual(len(output.read_bytes()), 256)
+
+    def test_aborted_event_output_collision_never_overwrites_or_retries(self):
+        for symlink in (False, True):
+            with self.subTest(symlink=symlink):
+                namespace, output = self.aborted_event_fixture()
+                target = output.with_name("existing") if symlink else output
+                fixture.write_new(target, b"original output")
+                if symlink:
+                    output.symlink_to(target)
+                original = RuntimeError("original refusal")
+                with mock.patch.object(fixture, "write_new", wraps=fixture.write_new) as write:
+                    with self.assertRaises(RuntimeError) as caught:
+                        with fixture.retain_aborted_events(namespace, output):
+                            raise original
+                    write.assert_called_once()
+                self.assertIs(caught.exception, original)
+                self.assertEqual(target.read_bytes(), b"original output")
+                self.assertEqual(output.is_symlink(), symlink)
+
+    def test_diagnostic_failures_cannot_replace_original_abort(self):
+        for original in (RuntimeError("original refusal"), KeyboardInterrupt(), SystemExit(7)):
+            with self.subTest(original=type(original).__name__):
+                namespace, output = self.aborted_event_fixture()
+                with mock.patch.object(namespace, "read", side_effect=OSError("untrusted diagnostic text")) as read, \
+                     mock.patch.object(fixture, "write_new", side_effect=KeyboardInterrupt()) as write:
+                    with self.assertRaises(type(original)) as caught:
+                        with fixture.retain_aborted_events(namespace, output):
+                            raise original
+                    read.assert_called_once_with()
+                    write.assert_called_once()
+                    self.assertNotIn(b"untrusted diagnostic text", write.call_args.args[1])
+                self.assertIs(caught.exception, original)
+
+    def test_scenario_launch_and_settlement_aborts_retain_unsettled_events_once(self):
+        for phase in ("launch", "settlement"):
+            with self.subTest(phase=phase), tempfile.TemporaryDirectory(prefix="moekit-aborted-scenario-") as directory:
+                root = fixture.OwnedRoot()
+                self.addCleanup(fixture.os.close, root.fd)
+                output = Path(directory)
+                server = SimpleNamespace(base="http://127.0.0.1:1", add=mock.Mock())
+                process = mock.Mock()
+                event = {"event": "error", "message": "synthetic complete event"}
+                def launch(*args, **kwargs):
+                    with (root.path / "valid/events.jsonl").open("ab") as events:
+                        events.write(json.dumps(event).encode() + b'\n{"event":')
+                    return process
+                def command(args, **kwargs):
+                    if args[0] == "/usr/bin/ditto":
+                        fixture.write_new(args[-1], b"synthetic archive")
+                    return "a" * 86 + "==" if "-p" in args else ""
+                original = RuntimeError("original " + phase + " refusal")
+                snapshots = [original] if phase == "launch" else [{"idle": False, "owned_processes": []}, original]
+                with mock.patch.object(fixture, "build_app", side_effect=lambda owned, directory, *args: directory / "SparkleFixture.app"), \
+                     mock.patch.object(fixture, "run", side_effect=command), \
+                     mock.patch.object(fixture, "tree_digest", return_value="original digest"), \
+                     mock.patch.object(fixture.subprocess, "Popen", side_effect=launch) as popen, \
+                     mock.patch.object(fixture.Lifetime, "sample", side_effect=snapshots) as sample:
+                    with self.assertRaises(RuntimeError) as caught:
+                        fixture.scenario("valid", root, server, "binary", "framework", "signer", "test-key", "other-key", "entitlements", output, "probe")
+                self.assertIs(caught.exception, original)
+                self.assertEqual(sample.call_count, len(snapshots))
+                popen.assert_called_once()
+                if phase == "settlement":
+                    process.wait.assert_called_once_with(timeout=15)
+                else:
+                    process.wait.assert_not_called()
+                process.poll.assert_not_called()
+                process.terminate.assert_not_called()
+                process.kill.assert_not_called()
+                process.send_signal.assert_not_called()
+                evidence = json.loads((output / "valid.aborted-events.json").read_bytes())
+                self.assertTrue(evidence["aborted"])
+                self.assertIs(evidence["settled"], False)
+                self.assertEqual(evidence["events"], [event])
+                self.assertFalse((output / "valid.events.json").exists())
 
     def test_collects_all_independent_failed_cases(self):
         evidence = {"cases": {}, "all_passed": False}
@@ -258,6 +444,22 @@ class HarnessBoundaryTests(unittest.TestCase):
         self.assertIn("appropriateForURL:nil create:NO", source)
         self.assertNotIn("NSHomeDirectory()", source)
         self.assertIn("namedScope == FixtureScopeOutside && aliasScope == FixtureScopeOutside", source)
+
+    def test_appkit_identity_diagnostic_is_fixed_flags_and_retains_fatal_guard(self):
+        # Source coverage only; native AppKit metadata still requires macOS CI.
+        source = (Path(__file__).parent / "probe.m").read_text()
+        diagnostic = source[source.index('fprintf(stderr, "Fixture app identity diagnostic:'):]
+        diagnostic = diagnostic[:diagnostic.index('return fail(@"app identity mismatch");') + len('return fail(@"app identity mismatch");')]
+        formatting, arguments = diagnostic.split('\\n",', 1)
+        for flag in ("bundle_url", "bundle_physical", "bundle_path_match", "expected_physical", "expected_path_match",
+                     "stat_ok", "directory", "owner_match", "bundle_id_present", "bundle_id_match",
+                     "cached_terminated", "cached_finished_launching"):
+            self.assertIn(flag + "=%d", formatting)
+        self.assertEqual(set(re.findall(r"%[A-Za-z@]+", formatting)), {"%d"})
+        self.assertNotIn("UTF8String", arguments)
+        self.assertNotIn("fileSystemRepresentation", arguments)
+        self.assertNotRegex(arguments, r"\bappPID\s*[,)]")
+        self.assertTrue(diagnostic.endswith('return fail(@"app identity mismatch");'))
 
     def test_path_resample_keeps_one_internal_invocation_budget(self):
         source = (Path(__file__).parent / "probe.m").read_text()

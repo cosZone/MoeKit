@@ -13,6 +13,8 @@ description: 先核对来源和版本，再了解 macOS 的安全提示。
 
 当前已交付 [0.1.0-preview.10 开发签名预览](https://github.com/cosZone/MoeKit/releases/tag/v0.1.0-preview.10)：[下载 DMG](https://github.com/cosZone/MoeKit/releases/download/v0.1.0-preview.10/MoeKit-v0.1.0-preview.10-macOS.dmg) · [下载 ZIP](https://github.com/cosZone/MoeKit/releases/download/v0.1.0-preview.10/MoeKit-v0.1.0-preview.10-macOS.zip)。包内是同一份 universal Release App，并附校验和、构建信息与已签名 appcast。本版首次接入 Sparkle 签名更新，保留此前 Git、Mole、缓存、精确进程与 Downloads 磁盘映像工作流。使用 Apple Development 签名，未公证。精确测试与公开下载验证见 [版本记录](/changelog/0.1.0-preview.10)；文档网站独立构建，不是安装包组件。
 
+[preview.11](/changelog/0.1.0-preview.11) 的个人废纸篓与 Docker 清理已合入源码，正在准备发布；当前上述 preview.10 下载不含这两项新增功能。准备中的记录不是可下载产物。
+
 **preview.9 及更早版本仍需手动下载并安装本版一次。** 旧版没有自动安装器，不能自行安装 Sparkle；请先完成当前操作并退出旧应用，再按下述正常安装步骤替换应用。
 
 先查看 [GitHub Releases](https://github.com/cosZone/MoeKit/releases)。只有实际发布页中附带的文件才是已交付版本；文档中的版本计划或示例号不构成下载承诺。

@@ -9,6 +9,8 @@ MoeKit 是面向 macOS 的个人 CLI 工具箱。Mole 是第一个内置模块�
 
 当前已交付 [preview.10](/changelog/0.1.0-preview.10)：首次提供 Sparkle 签名更新、后台检查和可选的自动下载安装；从 preview.9 及更早版本仍需先手动安装一次。此前的 Git 整理、独立 Dock／菜单栏设置、项目发现、Mole 分析、精确进程停止、原生缓存与单个 Downloads 磁盘映像工作流继续保留各自边界。**页面中出现某个工具入口，不代表它已经能执行任意命令。**
 
+源码另已合入正在准备的 [preview.11](/changelog/0.1.0-preview.11)：独立确认的个人废纸篓与本地 Docker 清理。它们尚未进入公开安装包；不可恢复确认、保护范围与不确定结果见 [功能状态](/docs/status) 和 [Mole 页面](/docs/mole)。
+
 - [安装与预览](/docs/installation)：系统要求、构建方式和签名限制
 - [功能状态](/docs/status)：哪些已实现，哪些仍在计划中
 - [项目管理](/docs/projects)：从你选择的目录发现 Git 项目

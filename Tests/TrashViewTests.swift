@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import Observation
 import XCTest
 @testable import MoeKit
 
@@ -58,6 +59,58 @@ final class TrashViewTests: XCTestCase {
             }
         }
     }
+    @MainActor
+    func testNavigationKeepsInFlightResultsAndErrorsReachable() async throws {
+        for fail in [false, true] {
+            let directory = FileManager.default.temporaryDirectory.appendingPathComponent("MoeKit-Trash-Navigation-\(UUID())")
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+            let fixture = TrashStoreFixture(holdMutation: true, failMutation: fail)
+            let operation = TrashStore(executor: fixture)
+            let workspace = WorkspaceStore(isDemoEnabled: false, persistence: CatalogPersistence(directory: directory), trash: operation)
+            let navigation = TrashNavigationState(), capture = TrashRenderCapture()
+            let hosting = NSHostingView(rootView: TrashNavigationHarness(navigation: navigation).environment(workspace)
+                .frame(width: 960, height: 1800).installerCaptureViewport()
+                .environment(\.installerCaptureCollector, { capture.regions = $0 }))
+            hosting.sizingOptions = []; hosting.frame = .init(x: 0, y: 0, width: 960, height: 1800)
+            let window = TrashCaptureWindow(contentRect: hosting.frame, styleMask: [.titled], backing: .buffered, defer: false)
+            window.isReleasedWhenClosed = false; window.contentView = hosting; window.orderFront(nil)
+            defer { window.orderOut(nil); window.contentView = nil; window.close() }
+            try await layout(hosting)
+            workspace.trash.inspect(); await settle(operation)
+            operation.select(paths: Set(operation.items.map(\.id))); operation.prepare(action: .selectedItems); await settle(operation)
+            let plan = try XCTUnwrap(operation.plan)
+            operation.attestIrreversible(true, planID: plan.id); operation.attestWorkloadsStopped(true, planID: plan.id)
+            operation.confirm(planID: plan.id); await fixture.waitUntilHeld()
+            try await layout(hosting)
+            XCTAssertTrue(operation.isBusy); XCTAssertFalse(UpdateInstallationSafety.shared.canTerminate)
+            navigation.showTrash = false; try await layout(hosting)
+            XCTAssertTrue(operation.isBusy && operation.isCancelling)
+            XCTAssertFalse(capture.regions.contains { $0.id == "trash.heading" })
+            navigation.showTrash = true; try await layout(hosting)
+            XCTAssertTrue(workspace.trash === operation)
+            XCTAssertTrue(capture.regions.contains { $0.id == "trash.progress.state" })
+            XCTAssertNotNil(operation.progress); XCTAssertFalse(UpdateInstallationSafety.shared.canTerminate)
+            await fixture.release(); await settle(operation); try await layout(hosting)
+            XCTAssertFalse(operation.blocksAppUpdate)
+            if fail {
+                XCTAssertNotNil(workspace.trash.lastMutationError)
+                XCTAssertTrue(capture.regions.contains { $0.id == "trash.mutation.error" })
+            } else {
+                XCTAssertEqual(workspace.trash.lastOutcome?.items.map(\.status), [.deleted, .notAttempted])
+                XCTAssertTrue(capture.regions.contains { $0.id == "trash.outcome.heading" })
+            }
+            // Tear down the complete hosting tree, then construct another one.
+            // The workspace, not an old view identity, owns the actual result.
+            window.contentView = nil
+            let replacement = NSHostingView(rootView: TrashWorkspaceView().environment(workspace).frame(width: 960, height: 1800))
+            window.contentView = replacement; try await layout(replacement)
+            XCTAssertTrue(workspace.trash === operation)
+            XCTAssertTrue(fail ? workspace.trash.lastMutationError != nil : workspace.trash.lastOutcome != nil)
+        }
+    }
+    @MainActor private func layout(_ view: NSView) async throws {
+        for _ in 0..<8 { view.layoutSubtreeIfNeeded(); try await Task.sleep(for: .milliseconds(40)) }
+    }
     @MainActor private func settle(_ store: TrashStore) async {
         let deadline = Date().addingTimeInterval(5)
         while store.isBusy && Date() < deadline { try? await Task.sleep(for: .milliseconds(5)) }
@@ -68,3 +121,12 @@ final class TrashViewTests: XCTestCase {
     override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect { frameRect }
 }
 @MainActor private final class TrashRenderCapture { var regions: [InstallerCaptureRegion] = [] }
+
+@MainActor @Observable private final class TrashNavigationState { var showTrash = true }
+@MainActor private struct TrashNavigationHarness: View {
+    let navigation: TrashNavigationState
+    var body: some View {
+        if navigation.showTrash { TrashWorkspaceView() }
+        else { Text("Synthetic alternate workspace") }
+    }
+}

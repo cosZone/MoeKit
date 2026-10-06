@@ -4,13 +4,11 @@ import SwiftUI
 @MainActor
 struct TrashWorkspaceView: View {
     @Environment(WorkspaceStore.self) private var workspace
-    @State private var store: TrashStore
+    private let suppliedStore: TrashStore?
+    private var store: TrashStore { suppliedStore ?? workspace.trash }
     @State private var search = ""
     @State private var sortBySize = false
-    init(store: TrashStore? = nil) { _store = State(initialValue: store ?? TrashStore()) }
-    private var workspaceContext: TrashWorkspaceContext {
-        .init(isDemoEnabled: workspace.isDemoEnabled, modeGeneration: workspace.toolPreparation.modeGeneration)
-    }
+    init(store: TrashStore? = nil) { suppliedStore = store }
     private var visibleItems: [TrashItem] {
         let filtered = store.items.filter { search.isEmpty || $0.url.lastPathComponent.localizedStandardContains(search) }
         return filtered.sorted {
@@ -36,17 +34,12 @@ struct TrashWorkspaceView: View {
                     if let inspection = store.inspection { inventory(inspection) }
                     if let plan = store.plan { confirmation(plan) }
                     if let outcome = store.lastOutcome { outcomes(outcome) }
-                    if let error = store.lastMutationError { warning(error) }
+                    if let error = store.lastMutationError { warning(error).installerCaptureIdentity("trash.mutation.error", text: error) }
                     records
                 }.padding(20)
             }
             StatusBar(leading: String(localized: "Permanent deletion cannot be undone"), trailing: "MoeKit · Native")
         }
-        .onAppear {
-            store.bindContext { .init(isDemoEnabled: workspace.isDemoEnabled, modeGeneration: workspace.toolPreparation.modeGeneration) }
-            store.onMutationOutcome = { workspace.moleAnalysis.invalidateLiveResult() }
-        }
-        .onChange(of: workspaceContext) { _, value in store.updateContext(value) }
         .onDisappear { store.cancel() }
     }
     private var introduction: some View {
@@ -78,6 +71,7 @@ struct TrashWorkspaceView: View {
                     Text("\(progress.finished) of \(progress.total) items processed").monospacedDigit()
                 } else { ProgressView().controlSize(.small) }
                 Text(store.isCancelling ? "Waiting for the actual Trash outcome…" : "Checking the Trash operation…")
+                    .installerCaptureIdentity("trash.progress.state", text: store.isCancelling ? String(localized: "Waiting for the actual Trash outcome…") : String(localized: "Checking the Trash operation…"))
                 Spacer()
                 Button("Cancel") { store.cancel() }.disabled(store.isCancelling)
             }
@@ -196,6 +190,7 @@ struct TrashWorkspaceView: View {
         GroupBox {
             VStack(alignment: .leading, spacing: 10) {
                 Text("Actual Trash deletion outcomes").font(.headline)
+                    .installerCaptureIdentity("trash.outcome.heading", text: String(localized: "Actual Trash deletion outcomes"))
                 if store.isDemoEnabled { Text("Actual operations from this session, not example data").font(.caption) }
                 ForEach(outcome.items) { item in
                     path("Reviewed Trash path", item.originalURL)

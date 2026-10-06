@@ -142,14 +142,14 @@ struct TrashStoreTests {
 
 actor TrashStoreFixture: TrashExecuting {
     private(set) var inspectCount = 0, removeCount = 0, readCount = 0
-    private let blocked: Bool, holdInspection: Bool, holdPreparation: Bool, holdMutation: Bool, expired: Bool, mismatch: Bool
+    private let blocked: Bool, holdInspection: Bool, holdPreparation: Bool, holdMutation: Bool, expired: Bool, mismatch: Bool, failMutation: Bool
     private var waiter: CheckedContinuation<Void, Never>?
     private var report: TrashInspection?
     private var plan: TrashRemovalPlan?
     init(blocked: Bool = false, holdInspection: Bool = false, holdPreparation: Bool = false, holdMutation: Bool = false,
-         expired: Bool = false, mismatch: Bool = false) {
+         expired: Bool = false, mismatch: Bool = false, failMutation: Bool = false) {
         self.blocked = blocked; self.holdInspection = holdInspection; self.holdPreparation = holdPreparation
-        self.holdMutation = holdMutation; self.expired = expired; self.mismatch = mismatch
+        self.holdMutation = holdMutation; self.expired = expired; self.mismatch = mismatch; self.failMutation = failMutation
     }
     func inspect(context: TrashContext) async throws -> TrashInspection {
         inspectCount += 1
@@ -176,6 +176,7 @@ actor TrashStoreFixture: TrashExecuting {
         plan = nil; removeCount += 1
         progress(.init(finished: 0, total: value.items.count, currentPath: value.items.first?.url.path))
         if holdMutation { await withCheckedContinuation { waiter = $0 } }
+        if failMutation { throw TrashFailure.changed }
         return .init(items: value.items.enumerated().map { index, item in
             .init(originalURL: item.url, status: holdMutation && index > 0 ? .notAttempted : .deleted,
                   message: "Synthetic actual outcome", operationURL: nil)

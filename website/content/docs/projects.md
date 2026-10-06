@@ -43,3 +43,9 @@ Projects → Git cleanup… 可分别检查并确认一个干净 linked worktree
 普通 SHA-1／index v2、同卷本地目录是首个支持范围。退役拒绝脏文件、untracked／ignored、独有提交、锁定或主 worktree 及重叠项目；分支移除拒绝任何 worktree 正在检出的分支和 packed 删除目标。链接、跨范围、受保护或未知配置同样不可操作。Git 只读取配置隔离的临时对象副本，不运行目标仓库的 hooks、filters 或脚本；不自动下载安装或捆绑 Apple Git。
 
 这套操作已随 [preview.9](/changelog/0.1.0-preview.9) 交付，preview.8 不包含。恢复另行确认，不覆盖原路径；两个移动不是事务，部分结果保留数据并停止，不自动重试。详细预算、工具来源和恢复限制见 [设计记录](https://github.com/cosZone/MoeKit/blob/c5de70153e2eb6f9d1c547c17cf3926565514e50/Documentation/Git-cleanup-design.md)。
+
+## AI worktree 收尾（preview.12）
+
+检查实际 Git 状态后，可以分别确认本地 fast-forward 合入、可选推送和核验后的 worktree 退役。退役保留恢复数据；不会代跑项目测试，也不会因为 AI 声称完成就自动整理。
+
+推送只支持受审的 HTTPS 非 force 流程；本地合入、网络／凭据检查、实际推送与退役分别确认。不确定结果保留并等待另行核对，不自动重试。真实远端 TLS／Keychain 交互仍需实机验收。完整支持范围见 [Git 收尾说明](https://github.com/cosZone/MoeKit/blob/fa630c57dd87862597874d5ba459453beac95e60/Documentation/Git-worktree-finish.md)。

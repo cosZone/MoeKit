@@ -906,6 +906,22 @@ def existing_release(api, tag: str):
         page += 1
 
 
+def release_body(context, info, notes, dmg_name, zip_name) -> str:
+    """Keep reviewed notes intact; add only missing common limits and audit links."""
+    download = f"https://github.com/{REPOSITORY}/releases/download/v{context['version']}/"
+    limits = []
+    if "macOS 15+" not in notes:
+        limits.append("macOS 15+（Apple Silicon / Intel）")
+    if "Apple Development" not in notes or not any(
+            text in notes for text in ("未公证", "未经过 Apple 公证")):
+        limits.append("Apple Development 开发签名，未经过 Apple 公证")
+    body = (f"[下载 DMG（推荐）]({download}{dmg_name}) · [下载 ZIP]({download}{zip_name})\n\n" + notes)
+    if limits:
+        body += "\n\n" + "；".join(limits) + "。"
+    return (body + f"\n\n[源码]({info['source_url']}) · [构建]({info['run_url']}) · "
+            f"[校验和]({download}SHA256SUMS.txt) · [构建信息]({download}BUILD_INFO.json)\n")
+
+
 def publish() -> None:
     context = validate()
     directory = Path("Preview")
@@ -929,17 +945,7 @@ def publish() -> None:
     if current is None:
         api.request("POST", base + "/git/refs", {"ref": "refs/tags/" + tag, "sha": context["source_sha"]})
     require(tag_commit(api, tag) == context["source_sha"], "Release tag does not match the exact reviewed commit.")
-    download = f"https://github.com/{REPOSITORY}/releases/download/{tag}/"
-    body = (f"[下载 DMG（推荐）]({download}{dmg_name}) · [下载 ZIP]({download}{zip_name})\n\n"
-            "macOS 15+ · 通用版本（Apple Silicon / Intel）\n\n" + notes + "\n\n---\n\n"
-            f"源码：[{context['source_sha'][:12]}]({info['source_url']}) · "
-            f"[构建与测试]({info['run_url']})（attempt {context['run_attempt']}）\n\n"
-            f"[SHA256SUMS.txt]({download}SHA256SUMS.txt) 覆盖 DMG、ZIP 与 "
-            f"[BUILD_INFO.json]({download}BUILD_INFO.json)；两种包内 App 的文件内容、签名与构建来源已核对一致。\n\n"
-            "Apple Development 开发签名；不是 Developer ID 分发签名，未经过 Apple 公证。"
-            "Gatekeeper 仍可能阻止打开，DMG 不改变这一限制。\n\n"
-            "Release 配置单元测试在 runner 架构通过；通用归档从同一源码单独构建。"
-            "原生 UI、VoiceOver、双架构实机运行与隐私授权沿用仍需手动验收。\n")
+    body = release_body(context, info, notes, dmg_name, zip_name)
     # Draft first: partial uploads are never presented as a completed public release.
     release = api.request("POST", base + "/releases", {"tag_name": tag, "target_commitish": context["source_sha"],
                           "name": tag, "body": body, "draft": True,

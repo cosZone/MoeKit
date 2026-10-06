@@ -7,9 +7,9 @@ description: 把项目、工具和任务放进一个 macOS 原生工作台。
 
 MoeKit 是面向 macOS 的个人 CLI 工具箱。Mole 是第一个内置模块，工具箱的边界不止于磁盘整理。
 
-当前版本是 [preview.11](/changelog/0.1.0-preview.11)：新增个人废纸篓管理与本地 Docker 清理，并保留项目整理、Mole 分析、进程查看和 Sparkle 更新。
+当前版本是 [preview.12](/changelog/0.1.0-preview.12)：Mole 准备更容易，支持 AI worktree 收尾，界面与菜单栏更简洁。个人废纸篓、Docker 清理、进程查看和 Sparkle 更新继续可用。
 
-Mole 新手准备与 AI worktree 收尾等后续改动尚未进入此安装包，见 [开发进展](/changelog/unreleased)。
+下载与上手见 [安装指南](/docs/installation)，后续改动见 [开发进展](/changelog/unreleased)。
 - [安装与预览](/docs/installation)：系统要求、构建方式和签名限制
 - [功能状态](/docs/status)：哪些已实现，哪些仍在计划中
 - [项目管理](/docs/projects)：从你选择的目录发现 Git 项目

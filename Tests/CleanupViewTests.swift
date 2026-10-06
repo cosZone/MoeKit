@@ -10,7 +10,7 @@ final class CleanupViewTests: XCTestCase {
     func testCleanupConfirmationRenders() async throws {
         let language = try XCTUnwrap(Bundle.main.preferredLocalizations.first)
         XCTAssertTrue(["en", "zh-Hans"].contains(language))
-        XCTAssertEqual(String(localized: "Native cache cleanup"), language == "zh-Hans" ? "原生缓存清理" : "Native cache cleanup")
+        XCTAssertEqual(String(localized: "Cache cleanup"), language == "zh-Hans" ? "缓存清理" : "Cache cleanup")
         for scenario in ["first-use", "trash-review", "restore-review", "permanent-review", "uncertain-recovery"] {
             for dark in [false, true] {
                 let directory = FileManager.default.temporaryDirectory.appendingPathComponent("MoeKit-cache-render-\(UUID())")

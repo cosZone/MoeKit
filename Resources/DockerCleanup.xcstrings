@@ -790,6 +790,96 @@
           }
         }
       }
+    },
+    "Choose Docker Desktop or a local Engine, then scan its contents. Start Docker yourself first.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择 Docker Desktop 或本机 Engine 后扫描内容。请先自行启动 Docker。"
+          }
+        }
+      }
+    },
+    "Connect and scan": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "连接并扫描"
+          }
+        }
+      }
+    },
+    "Connection details": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "连接详情"
+          }
+        }
+      }
+    },
+    "MoeKit ignores Docker CLI contexts and does not read credentials or start Docker.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MoeKit 不使用 Docker CLI 上下文，也不读取凭据或启动 Docker。"
+          }
+        }
+      }
+    },
+    "Only images unused by every container can be selected, including stopped containers. Sizes are estimates, not guaranteed savings.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅可选择未被任何容器引用的镜像，包括已停止的容器。大小仅供参考，不保证释放等量空间。"
+          }
+        }
+      }
+    },
+    "Only selected created or exited containers can be deleted. Their writable data is permanently lost; volumes stay. All other states are protected.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅可删除明确选择的新建或已退出容器。可写数据将永久丢失，卷会保留；其他状态均受保护。"
+          }
+        }
+      }
+    },
+    "Review selection…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复查所选项…"
+          }
+        }
+      }
+    },
+    "Stop remaining actions": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "停止后续操作"
+          }
+        }
+      }
+    },
+    "Volumes are shown for reference and cannot be deleted here.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "卷仅供查看，不能在此删除。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

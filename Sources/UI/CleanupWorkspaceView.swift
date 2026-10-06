@@ -16,10 +16,10 @@ struct CleanupWorkspaceView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Label("Native cache cleanup", systemImage: "trash").fontWeight(.medium)
-                    .installerCaptureIdentity("cleanup.heading", text: String(localized: "Native cache cleanup"))
+                Label("Cache cleanup", systemImage: "trash").fontWeight(.medium)
+                    .installerCaptureIdentity("cleanup.heading", text: String(localized: "Cache cleanup"))
                 Spacer()
-                Text("Explicit selection · native macOS Trash").foregroundStyle(.secondary)
+                Text("Move selected caches to Trash").foregroundStyle(.secondary)
             }.padding(.horizontal, 16).frame(height: 38)
             Divider()
             ScrollView {
@@ -45,7 +45,7 @@ struct CleanupWorkspaceView: View {
                     recovery
                 }.padding(20)
             }
-            StatusBar(leading: String(localized: "Logical sizes are not a physical-space recovery estimate"), trailing: "MoeKit · Native")
+            StatusBar(leading: String(localized: "Sizes do not guarantee free space"), trailing: "MoeKit · Native")
         }
         .onAppear {
             store.bindContext { Self.context(workspace) }
@@ -57,10 +57,14 @@ struct CleanupWorkspaceView: View {
 
     private var introduction: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Review caches before changing files").font(.title2.weight(.semibold))
-            Text("Choose your user cache folder, or a folder containing directories with a valid CACHEDIR.TAG. Only eligible direct-child directories are offered. A cache name or marker does not prove the contents are disposable.")
-            Text("Git projects, worktrees and unverified build artifacts are protected. No Mole cleanup command, package removal, project deletion or broad Trash emptying runs here.")
-                .font(.caption).foregroundStyle(.secondary)
+            Text("Choose caches to remove").font(.title2.weight(.semibold))
+            Text("Inspect a cache folder, select items, then review. A cache label does not mean its contents are safe to remove.")
+            DisclosureGroup("Supported folders and protections") {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Choose your user cache folder, or a folder containing directories with a valid CACHEDIR.TAG. Only eligible direct-child directories are offered. A cache name or marker does not prove the contents are disposable.")
+                    Text("Git projects, worktrees and unverified build artifacts are protected. No Mole cleanup command, package removal, project deletion or broad Trash emptying runs here.")
+                }.font(.caption).foregroundStyle(.secondary).padding(.top, 6)
+            }
             if store.isDemoEnabled {
                 Label("Native cleanup is unavailable in Demo. Actual operation receipts from this session remain visible.", systemImage: "lock")
                     .foregroundStyle(.secondary)
@@ -74,16 +78,16 @@ struct CleanupWorkspaceView: View {
     private var folderSelection: some View {
         GroupBox {
             VStack(alignment: .leading, spacing: 10) {
-                Text("1. Choose a folder and inspect").font(.headline)
-                Text("Choosing a folder does not scan it. Inspect reads a bounded, complete inventory without following symbolic links or changing cache contents.")
+                Text("1. Choose a cache folder").font(.headline)
+                Text("Choose a folder, then inspect it. Inspection does not change files.")
                     .font(.caption).foregroundStyle(.secondary)
                 if let root = store.rootURL { path("Selected folder", root) }
                 else { Text("No folder selected").foregroundStyle(.secondary) }
                 HStack {
-                    Button("Choose user caches") { chooseUserCaches() }
-                    Button("Choose folder containing caches…") { chooseFolder() }
+                    Button("User caches") { chooseUserCaches() }
+                    Button("Other folder…") { chooseFolder() }
                     Spacer()
-                    Button("Inspect selected folder") { store.inspect() }.disabled(!store.canInspect)
+                    Button("Inspect folder") { store.inspect() }.disabled(!store.canInspect)
                 }.disabled(store.isBusy || store.isDemoEnabled)
             }.padding(6)
         }
@@ -92,7 +96,7 @@ struct CleanupWorkspaceView: View {
     private func candidates(_ inspection: CleanupInspection) -> some View {
         GroupBox {
             VStack(alignment: .leading, spacing: 10) {
-                Text("2. Select caches to review").font(.headline)
+                Text("2. Select caches").font(.headline)
                 Text(inspection.observedAt, format: .dateTime).font(.caption).foregroundStyle(.secondary)
                 if inspection.candidates.isEmpty {
                     Text("No eligible cache candidates were found in this folder. This does not prove the folder is empty.")
@@ -126,7 +130,7 @@ struct CleanupWorkspaceView: View {
                 HStack {
                     Text("\(store.selectedPaths.count) selected").foregroundStyle(.secondary)
                     Spacer()
-                    Button("Review selected caches…") { store.prepare() }.disabled(!store.canPrepare)
+                    Button("Review selection…") { store.prepare() }.disabled(!store.canPrepare)
                 }
                 Text("Use Command-click or Shift-click to select multiple eligible rows. Blocked rows cannot be selected for cleanup.")
                     .font(.caption).foregroundStyle(.secondary)
@@ -137,8 +141,8 @@ struct CleanupWorkspaceView: View {
     private func trashConfirmation(_ plan: CleanupPlan) -> some View {
         GroupBox {
             VStack(alignment: .leading, spacing: 12) {
-                Text("3. Confirm these exact caches").font(.headline)
-                    .installerCaptureIdentity("cleanup.trash.heading", text: String(localized: "3. Confirm these exact caches"))
+                Text("3. Move selected caches to Trash").font(.headline)
+                    .installerCaptureIdentity("cleanup.trash.heading", text: String(localized: "3. Move selected caches to Trash"))
                 Text("\(plan.targets.count) caches · \(size(plan.logicalBytes)) of logical content").monospacedDigit()
                 Text("MoeKit will recheck and move only these reviewed cache directories to native macOS Trash. Files remain stored in Trash; this step does not free their storage.")
                     .installerCaptureIdentity("cleanup.trash.effects", text: String(localized: "MoeKit will recheck and move only these reviewed cache directories to native macOS Trash. Files remain stored in Trash; this step does not free their storage."))
@@ -245,7 +249,7 @@ struct CleanupWorkspaceView: View {
     private func outcomes(_ outcome: CleanupOutcome) -> some View {
         GroupBox {
             VStack(alignment: .leading, spacing: 10) {
-                Text("Latest actual per-item outcomes").font(.headline)
+                Text("Results by item").font(.headline)
                 if store.isDemoEnabled { Text("Actual operations from this session, not example data").font(.caption) }
                 ForEach(outcome.items) { item in
                     VStack(alignment: .leading, spacing: 6) {
@@ -263,11 +267,11 @@ struct CleanupWorkspaceView: View {
         GroupBox {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
-                    Text("Cache recovery receipts").font(.headline)
+                    Text("Cache recovery").font(.headline)
                     Spacer()
-                    Button("Read cache recovery records") { store.loadRecovery() }.disabled(!store.canReadRecovery)
+                    Button("Load recovery records") { store.loadRecovery() }.disabled(!store.canReadRecovery)
                 }
-                Text("Explicit read-only listing of MoeKit’s cache receipts. No broad Trash scan or automatic recovery occurs. Restore and permanent deletion each require a fresh review and separate confirmation.")
+                Text("Load MoeKit’s cache records. Restore and permanent deletion each need a new review and confirmation.")
                     .font(.caption).foregroundStyle(.secondary)
                 if store.recoveryItems.isEmpty {
                     Text(store.hasReadRecovery ? "No validated cache recovery records found" : "Cache recovery records have not been read")

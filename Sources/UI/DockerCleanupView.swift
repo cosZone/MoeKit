@@ -16,7 +16,7 @@ struct DockerCleanupView: View {
                 Spacer()
                 if store.isBusy {
                     ProgressView().controlSize(.small)
-                    Button(d("Stop further operations")) { store.cancel() }
+                    Button(d("Stop remaining actions")) { store.cancel() }
                 }
             }.padding(14)
             Divider()
@@ -31,9 +31,9 @@ struct DockerCleanupView: View {
                     if !store.isDemoEnabled, let inventory = store.inventory {
                         DockerDaemonIdentityView(daemon: inventory.daemon)
                         inventoryRows(inventory)
-                        Button(d("Review selected operations…")) { store.prepare() }.disabled(!store.canPrepare)
+                        Button(d("Review selection…")) { store.prepare() }.disabled(!store.canPrepare)
                             .accessibilityIdentifier("docker.review")
-                            .installerCaptureIdentity("docker.review", text: d("Review selected operations…"))
+                            .installerCaptureIdentity("docker.review", text: d("Review selection…"))
                     }
                     if !store.isDemoEnabled {
                         ForEach(store.reports) { result in results(result) }
@@ -51,7 +51,7 @@ struct DockerCleanupView: View {
 
     private var connection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(d("Choose a local daemon, then read its inventory. MoeKit ignores the active Docker CLI context and never reads Docker credentials or starts Docker."))
+            Text(d("Choose Docker Desktop or a local Engine, then scan its contents. Start Docker yourself first."))
                 .foregroundStyle(.secondary)
             HStack {
                 Picker(d("Local endpoint"), selection: Binding(get: { store.endpoint == .desktop ? 0 : 1 }, set: {
@@ -60,20 +60,24 @@ struct DockerCleanupView: View {
                     Text("Docker Desktop").tag(0)
                     Text(d("Local Docker Engine")).tag(1)
                 }.frame(maxWidth: 330).disabled(!store.canInspect)
-                Button(d("Connect and refresh inventory")) { store.inspect() }.disabled(!store.canInspect)
+                Button(d("Connect and scan")) { store.inspect() }.disabled(!store.canInspect)
                     .accessibilityIdentifier("docker.connect")
-                    .installerCaptureIdentity("docker.connect", text: d("Connect and refresh inventory"))
+                    .installerCaptureIdentity("docker.connect", text: d("Connect and scan"))
             }
             Text(store.endpoint.socketPath).font(.system(.caption, design: .monospaced)).textSelection(.enabled)
-            Text(d("Only local Unix sockets are supported. Remote contexts, automatic installation, permission changes and network pulls are unavailable."))
-                .font(.caption).foregroundStyle(.secondary)
+            DisclosureGroup(d("Connection details")) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(d("MoeKit ignores Docker CLI contexts and does not read credentials or start Docker."))
+                    Text(d("Only local Unix sockets are supported. Remote contexts, automatic installation, permission changes and network pulls are unavailable."))
+                }.font(.caption).foregroundStyle(.secondary).padding(.top, 6)
+            }
         }
     }
 
     private func inventoryRows(_ inventory: DockerInventory) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             Text(d("Images")).font(.headline)
-            Text(d("An image is selectable only when no container references it, including stopped containers. Shared layers are not added together; sizes below are estimates, not promised disk savings."))
+            Text(d("Only images unused by every container can be selected, including stopped containers. Sizes are estimates, not guaranteed savings."))
                 .font(.caption).foregroundStyle(.secondary)
             ForEach(inventory.images) { image in
                 HStack(alignment: .top) {
@@ -103,7 +107,7 @@ struct DockerCleanupView: View {
             }
             if inventory.images.isEmpty { Text(d("No images")).foregroundStyle(.secondary) }
             Text(d("Containers")).font(.headline)
-            Text(d("Only explicitly selected created or exited containers can be removed. Their writable layers are permanently deleted. Running, paused, restarting, dead and unknown states stay protected. Volumes are retained."))
+            Text(d("Only selected created or exited containers can be deleted. Their writable data is permanently lost; volumes stay. All other states are protected."))
                 .font(.caption).foregroundStyle(.secondary)
             ForEach(inventory.containers) { container in
                 HStack(alignment: .top) {
@@ -135,7 +139,7 @@ struct DockerCleanupView: View {
             }
             if inventory.buildCache.isEmpty { Text(d("No build cache")).foregroundStyle(.secondary) }
             Text(d("Volumes · always protected")).font(.headline)
-            Text(d("Named and anonymous volumes are listed for visibility only. No volume prune, deletion or filesystem traversal is performed."))
+            Text(d("Volumes are shown for reference and cannot be deleted here."))
                 .font(.caption).foregroundStyle(.secondary)
             ForEach(inventory.volumes) { volume in
                 Label("\(safe(volume.name)) · \(safe(volume.driver))", systemImage: "lock.fill").font(.caption)

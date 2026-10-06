@@ -25,7 +25,7 @@ class CacheRenderTests(unittest.TestCase):
         for name, (scenario, compact) in verify.expected(language).items():
             height = 560 if compact else 2200
             ids = sorted(verify.requirements(scenario, compact))
-            labels = {'cleanup.heading': '原生缓存清理' if language == 'zh-Hans' else 'Native cache cleanup',
+            labels = {'cleanup.heading': '缓存清理' if language == 'zh-Hans' else 'Cache cleanup',
                       'cleanup.trash.confirm': '将所选缓存移入废纸篓' if language == 'zh-Hans' else 'Move selected caches to Trash',
                       'cleanup.trash.target.0.root': '"/Synthetic/Caches/one"', 'cleanup.trash.target.1.root': '"/Synthetic/Caches/two"',
                       'cleanup.trash.recovery-path': '"/Synthetic/Recovery"', 'cleanup.recovery.original-path': '"/Synthetic/Caches/one"',

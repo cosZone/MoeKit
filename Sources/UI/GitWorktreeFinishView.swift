@@ -27,7 +27,7 @@ struct GitWorktreeFinishView: View {
             Text(project.path).font(.caption).textSelection(.enabled)
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    Text("Review actual Git state, integrate committed work into a local branch, then separately review retiring the worktree. An AI completion message does not prove that files are saved, commits are merged, or tests have passed.")
+                    Text("Review commits, integrate them locally, then review retirement separately. An AI completion message does not verify saved files, merged commits or tests.")
                     inspectionSection
                     if state.isBusy {
                         ProgressView(state.isMutating ? String(localized: "Integrating and verifying locally…") : String(localized: "Inspecting local Git state…"))
@@ -65,11 +65,11 @@ struct GitWorktreeFinishView: View {
 
     private var inspectionSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("1. Inspect source and target").font(.headline)
+            Text("1. Check source and target").font(.headline)
             TextField("Target local branch", text: $targetBranch)
                 .disabled(isBusy || workspace.isDemoEnabled)
                 .accessibilityIdentifier("git-finish.target-branch")
-            Text("The target must be an existing local branch. A clean checked-out primary worktree can be updated; diverged histories and unsupported layouts require Git outside MoeKit.")
+            Text("Choose an existing local branch. Its clean main worktree can be updated. Diverged histories and unsupported layouts need Git outside MoeKit.")
                 .font(.caption).foregroundStyle(.secondary)
             HStack {
                 Button("Choose shared parent folder…") { chooseScope() }
@@ -77,9 +77,13 @@ struct GitWorktreeFinishView: View {
                 Text(scope?.path ?? String(localized: "No folder selected"))
                     .font(.caption).textSelection(.enabled)
             }
-            Text("Inspection reads only the selected scope and copies bounded Git objects into an app-owned temporary directory. A verified Apple Git binary inspects that copy. No repository hooks, filters, scripts or network operations run.")
+            Text("Checks the selected folder using a private temporary copy of Git data. No hooks, project scripts or network operations run.")
                 .font(.caption).foregroundStyle(.secondary)
-            Button("Inspect finish plan") {
+            DisclosureGroup("Inspection details") {
+                Text("Inspection reads only the selected scope and copies bounded Git objects into an app-owned temporary directory. A verified Apple Git binary inspects that copy. No repository hooks, filters, scripts or network operations run.")
+                    .font(.caption).foregroundStyle(.secondary).padding(.top, 6)
+            }.font(.caption).foregroundStyle(.secondary)
+            Button("Check integration") {
                 guard !workspace.isDemoEnabled, let scope else { return }
                 stoppedTools = false; confirmation = ""
                 state.inspect(.init(scope: scope, project: project, targetBranch: targetBranch,
@@ -106,31 +110,31 @@ struct GitWorktreeFinishView: View {
             } else {
                 Text("Target branch is not checked out in a worktree").font(.caption).foregroundStyle(.secondary)
             }
-            Text("Untracked and ignored files are counted together and protected. MoeKit does not run repository ignore rules or classify ignored files separately.")
+            Text("Untracked and ignored files are counted together. Both stay protected.")
                 .font(.caption).foregroundStyle(.secondary)
             Text(plan.gitVersion).font(.caption).foregroundStyle(.secondary)
             Text("Existing commit signatures are preserved; signature trust is not checked.").font(.caption).foregroundStyle(.secondary)
             if !plan.blockers.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
-                    Label("Resolve these blockers before integrating", systemImage: "exclamationmark.triangle")
+                    Label("Resolve before integrating", systemImage: "exclamationmark.triangle")
                         .font(.headline).foregroundStyle(.orange)
                     ForEach(Array(plan.blockers.enumerated()), id: \.offset) { _, blocker in
                         Text(LocalizedStringKey(blocker)).textSelection(.enabled)
                     }
                 }.accessibilityIdentifier("git-finish.blockers")
             } else if plan.uniqueCommitCount == 0 {
-                Label("The source has no commits missing from this target. Review retirement separately in Git cleanup.", systemImage: "checkmark.circle")
+                Label("All source commits are already in the target. Review retirement separately in Git cleanup.", systemImage: "checkmark.circle")
             }
             if plan.canMerge {
-                Text("Fast-forward only: the target branch moves to the source commit. If the target is checked out in the primary worktree, its tracked files and index are updated too. Source files and the source branch stay in place.")
+                Text("Fast-forward moves the target branch to the source commit. If checked out in the main worktree, its tracked files and index also change. The source files and branch stay.")
                 Text("Recovery: \(plan.recovery.path)").font(.caption).textSelection(.enabled)
-                Text("Close tools using both worktrees. This is a fresh bounded check, not an atomic filesystem snapshot or proof that no other program can write. Do not edit or run Git until verification finishes.")
+                Text("Close tools using both worktrees. Other apps can still write during these checks. Do not edit or run Git until verification finishes.")
                     .font(.caption).foregroundStyle(.secondary)
                 Toggle("I closed terminals, editors and Git operations using both worktrees", isOn: $stoppedTools)
                     .accessibilityIdentifier("git-finish.closed-tools")
                 TextField("Type the exact target branch name to confirm", text: $confirmation)
                     .accessibilityIdentifier("git-finish.confirmation-text")
-                Text("This confirmation authorizes only local integration. Retiring the worktree requires another inspection and confirmation.")
+                Text("This confirms local integration only. Retirement needs a separate review and confirmation.")
                     .font(.caption).foregroundStyle(.secondary)
                 Button("Confirm local fast-forward") {
                     guard !workspace.isDemoEnabled, matches(plan.request) else { return }
@@ -161,7 +165,7 @@ struct GitWorktreeFinishView: View {
             Label("3. Local integration verified", systemImage: "checkmark.circle.fill")
                 .font(.headline).foregroundStyle(.green)
                 .accessibilityIdentifier("git-finish.verified")
-            Text("MoeKit rechecked the local target ref and applicable worktree/index against the source commit. This does not verify project behavior or test results.")
+            Text("The local branch and any updated worktree match the source commit. Project behavior and tests are not verified.")
             Text("Verified commit: \(result.verifiedOID)").font(.caption).textSelection(.enabled)
             Text("Recovery: \(result.recovery.path)").font(.caption).textSelection(.enabled)
             Text("Keep the recovery folder if an operation is interrupted. Local integration has no automatic undo in this view.")
@@ -170,8 +174,8 @@ struct GitWorktreeFinishView: View {
                 .disabled(isBusy || state.remotePush.result != nil)
             if wantsRemote { GitRemotePushView(finish: result, state: state.remotePush) }
             else { Text("Local-only finish selected. No remote push is authorized.").font(.caption).foregroundStyle(.secondary) }
-            Text("5. Review worktree retirement separately").font(.headline)
-            Text("The next screen starts a new inspection. A separate confirmation can move the clean worktree into recovery while keeping its branch. Retirement does not reclaim disk space.")
+            Text("Review worktree retirement").font(.headline)
+            Text("Review again to move the clean worktree into recovery. Its branch stays, and no disk space is freed. A separate confirmation is required.")
             Button("Review retirement…") {
                 guard !workspace.isDemoEnabled, !isBusy, state.result?.id == result.id,
                       matches(result.plan.request), !wantsRemote || remoteVerified(for: result) else { return }

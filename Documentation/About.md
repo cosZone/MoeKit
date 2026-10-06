@@ -4,7 +4,7 @@
 
 - **MoeKit → About MoeKit** opens one dedicated SwiftUI `Window`; opening the command again brings that window forward. Escape, Command-W and the standard close control dismiss it. It is not restored or opened automatically on launch.
 - **Settings → About** shows the same content alongside the existing General settings. The About view does not change the preview toggle, workspace selection or project data.
-- The content uses the application's existing icon, bundle version/build, bundle copyright, native text styles and SF Symbols. Missing version/build fields remain unavailable rather than falling back to a made-up release.
+- The content uses the application's existing icon, bundle copyright, native text styles and SF Symbols. Its primary version is the validated `MoeKitPreviewVersion` / `MoeKitReleaseVersion` label, such as `0.1.0-preview.11`; development builds fall back to `CFBundleShortVersionString`. `CFBundleVersion` appears separately as “Internal build”. Missing fields remain unavailable rather than inventing a release. This presentation does not change the monotonic Sparkle build mapping or release metadata.
 
 ## Public links
 

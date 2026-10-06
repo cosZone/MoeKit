@@ -24,7 +24,7 @@ struct MoleWorkspaceView: View {
                 HStack {
                     Label(store.selectedCapability.title, systemImage: store.selectedCapability.systemImage).fontWeight(.medium)
                     Spacer()
-                    Text("Adapter not connected").foregroundStyle(.secondary)
+                    Text("Not available yet").foregroundStyle(.secondary)
                 }.padding(.horizontal, 16).frame(height: 36)
                 Divider()
                 ContentUnavailableView {
@@ -102,7 +102,7 @@ private struct MoleSpaceView: View {
                     ProgressView().controlSize(.mini)
                     Text("Importing report…").foregroundStyle(.secondary)
                 }
-                Text(store.isDemoEnabled ? "Example sizes" : (hasReport ? "Imported report · upstream-reported sizes" : "No report imported"))
+                Text(store.isDemoEnabled ? "Example sizes" : (hasReport ? "Imported report" : "No report imported"))
                     .foregroundStyle(.secondary)
             }.padding(.horizontal, 16).frame(height: 38)
             Divider()
@@ -153,11 +153,12 @@ private struct MoleSpaceView: View {
                 .overlay {
                     if rows.isEmpty {
                         ContentUnavailableView {
-                            Label(store.isImporting ? "Importing report…" : (hasReport ? "No matching entries" : "Explore a Mole space report"), systemImage: store.isImporting ? "hourglass" : "internaldrive")
+                            Label(store.isImporting ? "Importing report…" : (hasReport ? "No matching entries" : "See what takes up space"), systemImage: store.isImporting ? "hourglass" : "internaldrive")
                         } description: {
-                            Text(store.isImporting ? "Reading the selected JSON report. No CLI is running and no reported files are changed." : (hasReport ? "Try a different search. Empty results do not prove an empty disk." : "Choose Import report to open an existing Mole analyze --json file. MoeKit reads only that file; it does not run Mole or scan the paths in the report. Report sizes are not reclaimable space."))
+                            Text(store.isImporting ? "Reading the report only. No files are changed." : (hasReport ? "Try a different search. Empty results do not prove an empty disk." : "Analyze a folder, or import a Mole JSON report. Importing only reads the report. Reported sizes are not space you can necessarily free."))
                         } actions: {
                             if !hasReport && !store.isImporting {
+                                Button("Analyze with Mole…") { showAnalysis = true }.disabled(store.isDemoEnabled)
                                 Button("Import report…") { store.chooseMoleReport() }.disabled(store.isDemoEnabled || store.isImporting)
                             } else if hasReport && !store.toolSearch.isEmpty {
                                 Button("Clear search") { store.toolSearch = "" }
@@ -170,7 +171,7 @@ private struct MoleSpaceView: View {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 5) {
                     Text(selectedRow?.name ?? String(localized: "Select an entry")).fontWeight(.semibold)
-                    Text(selectedRow?.path ?? String(localized: "Report data is not a cleanup plan"))
+                    Text(selectedRow?.path ?? String(localized: "Select an entry to see its path"))
                         .font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                 }
                 Spacer()

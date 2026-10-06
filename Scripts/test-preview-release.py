@@ -286,7 +286,8 @@ class BundleCodeLayout(unittest.TestCase):
 
     def test_reviewed_code_allowlist_and_inside_out_order_are_exact(self):
         expected = (("Contents/MacOS/MoleAnalysisSupervisor", "com.yusixian.MoeKit.MoleAnalysisSupervisor"),
-                    ("Contents/MacOS/GitObjectInspector", "com.yusixian.MoeKit.GitObjectInspector"))
+                    ("Contents/MacOS/GitObjectInspector", "com.yusixian.MoeKit.GitObjectInspector"),
+                    ("Contents/MacOS/GitRemoteTransport", "com.yusixian.MoeKit.GitRemoteTransport"))
         self.assertEqual(release.HELPERS, expected)
         self.assertEqual(release.EXECUTABLE_PATHS,
                          {"Contents/MacOS/MoeKit", *(path for path, _ in expected), *release.SPARKLE_EXECUTABLES})
@@ -296,11 +297,11 @@ class BundleCodeLayout(unittest.TestCase):
         self.assertEqual(release.VERIFIED_CODE_PATHS, [path for path, _ in expected + release.SPARKLE_CODE] + ["."])
         self.assertEqual(len(release.SPARKLE_EXECUTABLES), 5)
 
-    def test_only_three_exact_executables_and_both_architectures(self):
+    def test_only_exact_executables_and_both_architectures(self):
         command = self.verify()
         self.assertEqual({call.args[2] for call in command.call_args_list},
                          {str(self.app / relative) for relative in release.EXECUTABLE_PATHS})
-        self.assertEqual(len(command.call_args_list), 8)
+        self.assertEqual(len(command.call_args_list), 9)
         for bad_architectures in ("arm64", "x86_64", "arm64 x86_64 i386", ""):
             with self.subTest(architectures=bad_architectures):
                 for broken in release.EXECUTABLE_PATHS:
@@ -411,6 +412,10 @@ class GitInspectorBundleCodeLayout(BundleCodeLayout):
     helper_path = release.GIT_HELPER_PATH
 
 
+class GitTransportBundleCodeLayout(BundleCodeLayout):
+    helper_path = release.GIT_TRANSPORT_HELPER_PATH
+
+
 class SparkleLayout(BundleCodeLayout):
     helper_path = release.SPARKLE_VERSION_ROOT + "/Autoupdate"
 
@@ -499,7 +504,7 @@ class CodeObjectSigning(unittest.TestCase):
         keychain = Path("synthetic/preview.keychain-db")
         with patch.object(release, "run") as command:
             release.sign_code_objects(self.app, self.identity, keychain)
-        self.assertEqual(len(command.call_args_list), 8)
+        self.assertEqual(len(command.call_args_list), 9)
         for call, (path, identifier) in zip(command.call_args_list, release.code_objects(self.app)):
             self.assertEqual(call.args, ("/usr/bin/codesign", "--force", "--sign", self.identity,
                                         "--keychain", str(keychain), "--identifier", identifier,
@@ -512,12 +517,12 @@ class CodeObjectSigning(unittest.TestCase):
     def test_each_architecture_has_identifier_runtime_entitlements_and_strict_requirement_checks(self):
         with patch.object(release, "run", return_value=b"") as command, patch.object(release, "captured_run", side_effect=self.display) as display:
             release.verify_code_objects(self.app)
-        self.assertEqual(len(display.call_args_list), 16)
+        self.assertEqual(len(display.call_args_list), 18)
         pairs = {(call.args[-1], call.args[3]) for call in display.call_args_list}
         self.assertEqual(pairs, {(str(path), architecture) for path, _ in release.code_objects(self.app)
                                  for architecture in release.ARCHITECTURES})
         verifications = [call for call in command.call_args_list if call.kwargs["operation"] == "codesign-verify"]
-        self.assertEqual(len(verifications), 8)
+        self.assertEqual(len(verifications), 9)
         for call, (path, identifier) in zip(verifications, release.code_objects(self.app)):
             self.assertEqual(call.args, ("/usr/bin/codesign", "--verify", "--strict", "--all-architectures",
                                         f'-R=identifier "{identifier}"', str(path)))
@@ -564,8 +569,8 @@ class CodeObjectSigning(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             calls = self.verify_development(Path(temporary))
         extractions = [args for args, operation in calls if operation == "certificate-extract"]
-        self.assertEqual(len(extractions), 16)
-        self.assertEqual(len({args[4] for args in extractions}), 16)
+        self.assertEqual(len(extractions), 18)
+        self.assertEqual(len({args[4] for args in extractions}), 18)
         requirements = [args[-2] for args, operation in calls
                         if operation == "codesign-verify" and "certificate leaf" in args[-2]]
         self.assertEqual(requirements, [f'-R=identifier "{identifier}" and anchor apple generic '
@@ -598,6 +603,11 @@ class CodeObjectSigning(unittest.TestCase):
 class GitInspectorCodeObjectSigning(CodeObjectSigning):
     helper_path = release.GIT_HELPER_PATH
     helper_id = release.GIT_HELPER_ID
+
+
+class GitTransportCodeObjectSigning(CodeObjectSigning):
+    helper_path = release.GIT_TRANSPORT_HELPER_PATH
+    helper_id = release.GIT_TRANSPORT_HELPER_ID
 
 
 class SparkleCodeObjectSigning(CodeObjectSigning):

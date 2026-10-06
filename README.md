@@ -35,6 +35,12 @@ Swift 6 · SwiftUI / AppKit · macOS 15+ · Tuist 4.148.3 · SPM
 
 Tools → Mole → Cleanup 新增原生批量缓存清理：主动检查用户缓存目录 → 选择多个精确缓存 → 复查完整清单并确认 → 移入废纸篓；每项记录可独立确认原路径恢复，或另行确认不可恢复的永久移除。移动到废纸篓不释放空间，永久移除也不保证等量物理空间立即回收。此工作流已随 preview.8 交付，preview.7 不包含；首版验证见 [preview.8 记录](website/content/changelog/0.1.0-preview.8.md)，后续回归见上方对应版本记录；后续源码改动不自动进入已发布安装包。支持范围、限制和使用方式见 [原生缓存清理](Documentation/Native-cache-cleanup.md)。
 
+## 后续源码：AI worktree 收尾
+
+此功能不属于 preview.10 或 preview.11 的发布范围。后续源码从 linked worktree 的 Git cleanup → Finish AI worktree 提供完整独立步骤：检查真实 Git 状态 → 确认本地 fast-forward（支持主 worktree 中的 clean main）→ 复核 ref/index/文件 → 可选的精确 HTTPS 远端检查、另行确认 non-force push 和独立远端 OID 复核 → 单独检查并确认退役。AI 完成标签不代表 clean、merged 或测试通过；项目测试不会由此流程执行。
+
+目标原文件/index/ref 与分阶段记录保留在私有恢复目录。分叉、脏文件、untracked/ignored、未知布局和并发变化会停止；远端结果不明时只提供另行请求的复查，不盲目重试。HTTPS 仅使用显式批准的既有 Keychain Git 凭据，固定 helper 不保存/删除凭据，不显示原始认证输出。详细支持子集、权限、非原子恢复边界及验证要求见 [AI worktree 收尾设计](Documentation/Git-worktree-finish.md)。源码及 CI 不等于新安装包已经发布。
+
 ## preview.11：新增清理分类的边界
 
 Trash 只读取固定的当前用户 `~/.Trash`，不支持外置卷或其他用户废纸篓；先主动扫描和完整复查，再逐次确认不可恢复删除。清空只针对已验证快照，新到达项目不被悄悄加入。中断数据与私有记录保留供检查，不提供通用恢复或自动重试。Docker 只连接用户明确选择的固定本机 Unix socket，不读取 CLI context／凭据、启动 daemon 或拉取镜像；所有容器引用（包括停止容器）都保护镜像，停止容器可写层删除不可恢复，卷与运行容器保持保护。整类未使用构建缓存是另一个明确确认范围。

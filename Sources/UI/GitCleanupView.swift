@@ -12,15 +12,39 @@ struct GitCleanupView: View {
     @State private var stoppedWork = false
     @State private var confirmation = ""
     @State private var restoreTarget: GitCleanupReceipt?
+    @State private var isFinishingWorktree = false
 
     var body: some View {
+        if isFinishingWorktree {
+            GitWorktreeFinishView(project: project, onBack: { isFinishingWorktree = false }, onRetirementReview: { result in
+                // This opens a form only. The cleanup adapter must prepare a
+                // fresh retirement plan and obtain its own exact confirmation.
+                scope = result.plan.request.scope
+                branch = result.plan.sourceBranch
+                baseBranch = result.plan.request.targetBranch
+                action = .retireWorktree
+                stoppedWork = false; confirmation = ""
+                workspace.gitCleanup.invalidate()
+                isFinishingWorktree = false
+            })
+        } else { cleanupBody }
+    }
+
+    private var cleanupBody: some View {
         let state = workspace.gitCleanup
-        VStack(alignment: .leading, spacing: 14) {
+        return VStack(alignment: .leading, spacing: 14) {
             Label("Git cleanup", systemImage: "arrow.triangle.branch").font(.title2).fontWeight(.semibold)
             Text(project.path).font(.caption).textSelection(.enabled)
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     Text("Retire one clean linked worktree, or separately remove one fully merged local branch. Files and refs move into a private recovery folder inside the main repository. This does not reclaim disk space.")
+                    if project.kind == .worktree {
+                        Button("Finish AI worktree…") {
+                            guard !workspace.isDemoEnabled else { return }
+                            state.invalidate(); isFinishingWorktree = true
+                        }.disabled(state.isBusy || workspace.isDemoEnabled)
+                            .accessibilityIdentifier("git-cleanup.finish-worktree")
+                    }
                     Picker("Action", selection: $action) {
                         if project.kind == .worktree { Text("Retire linked worktree").tag(GitCleanupAction.retireWorktree) }
                         Text("Delete merged local branch").tag(GitCleanupAction.deleteBranch)

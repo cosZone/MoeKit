@@ -103,6 +103,8 @@ jobs:
                           app_settings.get("MOLE_SUPERVISOR_SOURCE_DIR") ==
                           str(Path(app_settings["UNINSTALLED_PRODUCTS_DIR"]) / app_settings["PLATFORM_NAME"]) and
                           app_settings.get("GIT_INSPECTOR_SOURCE_DIR") ==
+                          str(Path(app_settings["UNINSTALLED_PRODUCTS_DIR"]) / app_settings["PLATFORM_NAME"]) and
+                          app_settings.get("GIT_TRANSPORT_SOURCE_DIR") ==
                           str(Path(app_settings["UNINSTALLED_PRODUCTS_DIR"]) / app_settings["PLATFORM_NAME"]),
                           "The archive must declare the exact physical helper inputs.")
           app = Path("build/MoeKit.xcarchive/Products/Applications/MoeKit.app")
@@ -166,6 +168,8 @@ jobs:
           python3 Scripts/test-sparkle-render-artifacts.py
           python3 Scripts/test-mole-supervisor.py
           python3 Scripts/test-git-object-inspector.py
+          python3 Scripts/test-git-finish-evidence.py
+          python3 Scripts/test-git-remote-transport.py
           python3 Scripts/test-installer-fixture-evidence.py
           python3 Scripts/test-cache-fixture-evidence.py
           python3 Scripts/test-cache-render-artifacts.py
@@ -199,7 +203,9 @@ jobs:
             '-skip-testing:MoeKitTests/InstallerUseEvidenceTests/nativeIdleCurrentUserCoverage()'
           python3 Scripts/verify-process-fixture-evidence.py --directory ProcessFixtureEvidence --source-sha "$SOURCE_SHA"
       - name: Verify affirmative native cache fixture evidence
-        run: python3 Scripts/verify-cache-fixture-evidence.py --directory InstallerFixtureEvidence --source-sha "$SOURCE_SHA"
+        run: |
+          python3 Scripts/verify-cache-fixture-evidence.py --directory InstallerFixtureEvidence --source-sha "$SOURCE_SHA"
+          python3 Scripts/verify-git-finish-evidence.py --directory InstallerFixtureEvidence --source-sha "$SOURCE_SHA"
       - name: Verify affirmative native installer fixture evidence
         run: python3 Scripts/verify-installer-fixture-evidence.py --directory InstallerFixtureEvidence --source-sha "$SOURCE_SHA" --kinds native-trash mounted-image live-mole
       - name: Render workspaces and first-use guidance in Simplified Chinese
@@ -295,6 +301,14 @@ jobs:
           path: ChineseUIRenderArtifacts/
           if-no-files-found: ignore
           retention-days: 14
+      - name: Preserve exact-head Git finish lifecycle evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: git-finish-evidence-debug-${{ env.SOURCE_SHA }}
+          path: InstallerFixtureEvidence/git-finish-native.json
+          if-no-files-found: ignore
+          retention-days: 14
       - name: Preserve test results
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -386,6 +400,11 @@ jobs:
                         -only-testing:MoeKitTests/GitCleanupAuthorityTests
                         -only-testing:MoeKitTests/GitCleanupStoreTests
                         -only-testing:MoeKitTests/GitCleanupExecutorTests
+                        -only-testing:MoeKitTests/GitWorktreeFinishAuthorityTests
+                        -only-testing:MoeKitTests/GitWorktreeFinishExecutorTests
+                        -only-testing:MoeKitTests/GitWorktreeFinishStoreTests
+                        -only-testing:MoeKitTests/GitRemotePushStoreTests
+                        -only-testing:MoeKitTests/GitRemotePushValidationTests
                         -only-testing:MoeKitTests/CleanupExecutorTests
                         -only-testing:MoeKitTests/CleanupStoreTests
                         -only-testing:MoeKitTests/TrashExecutorTests
@@ -418,6 +437,7 @@ jobs:
           xcodebuild "${args[@]}" build-for-testing
           xcodebuild "${args[@]}" "${test_args[@]}"
           python3 Scripts/verify-process-fixture-evidence.py --directory ProcessFixtureEvidence --source-sha "$SOURCE_SHA"
+          python3 Scripts/verify-git-finish-evidence.py --directory InstallerFixtureEvidence --source-sha "$SOURCE_SHA"
           if [ "$INSTRUMENTATION" = none ]; then
             python3 Scripts/verify-installer-fixture-evidence.py --directory InstallerFixtureEvidence --source-sha "$SOURCE_SHA" --kinds native-trash mounted-image live-mole
             python3 Scripts/verify-cache-fixture-evidence.py --directory InstallerFixtureEvidence --source-sha "$SOURCE_SHA"
@@ -437,7 +457,7 @@ jobs:
                       "MoleAnalysisModelsTests", "MoleAnalysisFilesTests", "MoleAnalysisStoreTests",
                       "MoleInstallationDiscoveryTests", "MoleSetupStoreTests",
                       "InstallerFileAccessTests", "InstallerTrashExecutorTests", "InstallerUseEvidenceTests", "InstallerTrashStoreTests",
-                      "GitPlainIndexTests", "GitCleanupInspectionTests", "GitCleanupAuthorityTests", "GitCleanupStoreTests", "GitCleanupExecutorTests",
+                      "GitPlainIndexTests", "GitCleanupInspectionTests", "GitCleanupAuthorityTests", "GitCleanupStoreTests", "GitCleanupExecutorTests", "GitWorktreeFinishAuthorityTests", "GitWorktreeFinishExecutorTests", "GitWorktreeFinishStoreTests", "GitRemotePushStoreTests", "GitRemotePushValidationTests",
                       "CleanupExecutorTests", "CleanupStoreTests", "ProcessTerminationTests", "ProcessTerminationStoreTests", "NativeProcessTerminationTests",
                       "ReleaseVersionTests", "ReleaseCheckStoreTests", "ReleaseTransportTests", "AppEntryPointTests",
                       "SparkleUpdateTests", "UpdateInstallationSafetyTests", "AppUpdateTerminationTests")
@@ -453,6 +473,14 @@ jobs:
           configuration=release
           if [ "$INSTRUMENTATION" = address-sanitizer ]; then configuration=asan; fi
           python3 Scripts/test-catalog-concurrency.py --configuration "$configuration" | tee CatalogConcurrencyResults.txt
+      - name: Preserve exact-head optimized Git finish lifecycle evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: git-finish-evidence-${{ matrix.instrumentation }}-${{ env.SOURCE_SHA }}
+          path: InstallerFixtureEvidence/git-finish-native.json
+          if-no-files-found: ignore
+          retention-days: 14
       - name: Preserve optimized test results and build settings
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

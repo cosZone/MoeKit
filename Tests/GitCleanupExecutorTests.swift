@@ -43,7 +43,7 @@ struct GitCleanupAuthorityTests {
 /// Every command below targets only this newly created synthetic repository.
 /// No inherited environment, user config, templates, credentials or network is used.
 /// Trusted production mutation ancestry deliberately rejects world-writable /tmp.
-private struct GitCleanupNativeFixture: Sendable {
+struct GitCleanupNativeFixture: Sendable {
     let root: URL
     let main: URL
     let worktree: URL

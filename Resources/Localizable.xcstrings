@@ -9406,6 +9406,1046 @@
           }
         }
       }
+    },
+    "1. Inspect source and target": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1. 检查源工作树与目标"
+          }
+        }
+      }
+    },
+    "2. Review local integration": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2. 复查本地合并"
+          }
+        }
+      }
+    },
+    "3. Local integration verified": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "3. 已验证本地合并"
+          }
+        }
+      }
+    },
+    "4. Optional remote handoff": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "4. 按需处理远端操作"
+          }
+        }
+      }
+    },
+    "5. Review worktree retirement separately": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "5. 单独复查工作树退役"
+          }
+        }
+      }
+    },
+    "Back to Git cleanup": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "返回 Git 整理"
+          }
+        }
+      }
+    },
+    "Cancel inspection": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消检查"
+          }
+        }
+      }
+    },
+    "Cancelling stops further checks. A running private query must finish its supervisor timeout and exit checks; closing this view is not immediate termination.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消会停止后续检查。正在运行的私有查询仍须完成监督程序的超时与退出检查；关闭此视图不会立即终止它。"
+          }
+        }
+      }
+    },
+    "Choose a parent containing both the main repository and the linked worktree.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请选择同时包含主仓库和关联工作树的父目录。"
+          }
+        }
+      }
+    },
+    "Choose shared parent folder…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择共同父目录…"
+          }
+        }
+      }
+    },
+    "Close tools using both worktrees. This is a fresh bounded check, not an atomic filesystem snapshot or proof that no other program can write. Do not edit or run Git until verification finishes.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请关闭使用这两个工作树的工具。本次有界复查不是原子文件系统快照，也不能证明其他程序无法写入。验证完成前，请勿编辑文件或运行 Git。"
+          }
+        }
+      }
+    },
+    "Confirm local fast-forward": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "确认本地快进合并"
+          }
+        }
+      }
+    },
+    "Extra directories": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "额外目录"
+          }
+        }
+      }
+    },
+    "Fast-forward only: the target branch moves to the source commit. If the target is checked out in the primary worktree, its tracked files and index are updated too. Source files and the source branch stay in place.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅支持快进合并：将目标分支推进到源提交。如果目标分支已在主工作树中检出，还会更新该工作树的受跟踪文件和 index。源文件和源分支保持原位。"
+          }
+        }
+      }
+    },
+    "Finish AI worktree": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完成 AI 工作树收尾"
+          }
+        }
+      }
+    },
+    "Finish AI worktree…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完成 AI 工作树收尾…"
+          }
+        }
+      }
+    },
+    "I closed terminals, editors and Git operations using both worktrees": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "我已关闭使用这两个工作树的终端、编辑器和 Git 操作"
+          }
+        }
+      }
+    },
+    "Inspect finish plan": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查收尾计划"
+          }
+        }
+      }
+    },
+    "Inspecting local Git state…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在检查本地 Git 状态…"
+          }
+        }
+      }
+    },
+    "Inspection reads only the selected scope and copies bounded Git objects into an app-owned temporary directory. A verified Apple Git binary inspects that copy. No repository hooks, filters, scripts or network operations run.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查仅读取选定范围，并将有界 Git 对象复制到应用自有的临时目录，由经过验证的 Apple Git 检查副本。不会运行仓库 hooks、filters、脚本或网络操作。"
+          }
+        }
+      }
+    },
+    "Integrating and verifying locally…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在进行本地合并与验证…"
+          }
+        }
+      }
+    },
+    "Keep the recovery folder if an operation is interrupted. Local integration has no automatic undo in this view.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "操作中断时，请保留恢复目录。此视图不提供本地合并的自动撤销。"
+          }
+        }
+      }
+    },
+    "Modified tracked files": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已修改的受跟踪文件"
+          }
+        }
+      }
+    },
+    "MoeKit has not fetched, pushed, created a pull request, or checked remote CI. If remote integration is needed, review and complete that step in your Git client or hosting service before retiring the worktree.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MoeKit 尚未 fetch、push、创建 PR 或检查远端 CI。如需合入远端，请先在 Git 客户端或托管服务中复查并完成该步骤，再退役工作树。"
+          }
+        }
+      }
+    },
+    "MoeKit rechecked the local target ref and applicable worktree/index against the source commit. This does not verify project behavior or test results.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MoeKit 已按照源提交重新核对本地目标 ref，以及适用的工作树和 index。此验证不涵盖项目行为或测试结果。"
+          }
+        }
+      }
+    },
+    "None": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无"
+          }
+        }
+      }
+    },
+    "Present": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "有"
+          }
+        }
+      }
+    },
+    "Previous integration needs review": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上次合并需要复查"
+          }
+        }
+      }
+    },
+    "Previous local integration completed": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上次本地合并已完成"
+          }
+        }
+      }
+    },
+    "Previous target branch": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上次的目标分支"
+          }
+        }
+      }
+    },
+    "Project tests have not been run by MoeKit": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MoeKit 尚未运行项目测试"
+          }
+        }
+      }
+    },
+    "Recovery: %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复目录：%@"
+          }
+        }
+      }
+    },
+    "Resolve these blockers before integrating": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "合并前请先处理以下阻碍"
+          }
+        }
+      }
+    },
+    "Review actual Git state, integrate committed work into a local branch, then separately review retiring the worktree. An AI completion message does not prove that files are saved, commits are merged, or tests have passed.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "先复查实际 Git 状态，将已提交的工作合入本地分支，再单独复查工作树退役。AI 的完成消息不能证明文件已保存、提交已合并或测试已通过。"
+          }
+        }
+      }
+    },
+    "Review retirement…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复查退役…"
+          }
+        }
+      }
+    },
+    "Source branch": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "源分支"
+          }
+        }
+      }
+    },
+    "Source commit: %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "源提交：%@"
+          }
+        }
+      }
+    },
+    "Source commits not in target": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚未包含于目标的源提交数"
+          }
+        }
+      }
+    },
+    "Source worktree state": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "源工作树状态"
+          }
+        }
+      }
+    },
+    "Staged changes": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暂存改动"
+          }
+        }
+      }
+    },
+    "Target branch is not checked out in a worktree": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "目标分支未在任何工作树中检出"
+          }
+        }
+      }
+    },
+    "Target commit before integration: %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "合并前的目标提交：%@"
+          }
+        }
+      }
+    },
+    "Target local branch": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "目标本地分支"
+          }
+        }
+      }
+    },
+    "Target worktree state": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "目标工作树状态"
+          }
+        }
+      }
+    },
+    "Target worktree state is unknown": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "目标工作树状态未知"
+          }
+        }
+      }
+    },
+    "Target worktree: %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "目标工作树：%@"
+          }
+        }
+      }
+    },
+    "The branches have diverged. Resolve the merge in your Git client; both worktrees are retained.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分支历史已分叉。请在 Git 客户端中处理合并；两个工作树均会保留。"
+          }
+        }
+      }
+    },
+    "The next screen starts a new inspection. A separate confirmation can move the clean worktree into recovery while keeping its branch. Retirement does not reclaim disk space.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下一步会开始新的检查。经单独确认后，可将干净的工作树移入恢复目录，并保留其分支。退役不会回收磁盘空间。"
+          }
+        }
+      }
+    },
+    "The primary target worktree is not exactly clean. Preserve its changes before merging.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "主工作树中的目标并非完全干净。请先妥善保存其改动，再进行合并。"
+          }
+        }
+      }
+    },
+    "The source has no commits missing from this target. Review retirement separately in Git cleanup.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "源分支没有目标尚未包含的提交。可在 Git 整理中单独复查退役。"
+          }
+        }
+      }
+    },
+    "The source has no commits to add to this target. You can inspect retirement separately.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "源分支没有可加入此目标的新提交。可以单独检查退役条件。"
+          }
+        }
+      }
+    },
+    "The source worktree has staged, modified, untracked, ignored, or extra directory content. Preserve it before merging.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "源工作树中存在暂存、已修改、未跟踪、被忽略的文件或额外目录。请先妥善保存这些内容，再进行合并。"
+          }
+        }
+      }
+    },
+    "The target must be an existing local branch. A clean checked-out primary worktree can be updated; diverged histories and unsupported layouts require Git outside MoeKit.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "目标必须是现有本地分支。已检出目标分支且干净的主工作树可以更新；历史分叉或不支持的布局需在 MoeKit 外使用 Git 处理。"
+          }
+        }
+      }
+    },
+    "This confirmation authorizes only local integration. Retiring the worktree requires another inspection and confirmation.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此次确认仅授权本地合并。退役工作树需要再次检查并单独确认。"
+          }
+        }
+      }
+    },
+    "This is a session record, not a fresh inspection. Inspect the current source and target again before another operation.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这是本次会话的操作记录，不是最新检查结果。再次操作前，请重新检查当前源与目标。"
+          }
+        }
+      }
+    },
+    "Type the exact target branch name to confirm": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "输入完整且准确的目标分支名以确认"
+          }
+        }
+      }
+    },
+    "Untracked and ignored files are counted together and protected. MoeKit does not run repository ignore rules or classify ignored files separately.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未跟踪和被忽略的文件会合并计数并受保护。MoeKit 不运行仓库忽略规则，也不单独判断哪些文件被忽略。"
+          }
+        }
+      }
+    },
+    "Untracked or ignored files": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未跟踪或被忽略的文件"
+          }
+        }
+      }
+    },
+    "Use shared parent": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用共同父目录"
+          }
+        }
+      }
+    },
+    "Verified commit: %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已验证提交：%@"
+          }
+        }
+      }
+    },
+    "Push to a remote branch before retirement": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "退役前推送到远端分支"
+          }
+        }
+      }
+    },
+    "Local-only finish selected. No remote push is authorized.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已选择仅本地收尾，尚未授权远端推送。"
+          }
+        }
+      }
+    },
+    "4. Review and verify the remote push": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "4. 复查并验证远端推送"
+          }
+        }
+      }
+    },
+    "Exact HTTPS repository URL": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "精确的 HTTPS 仓库地址"
+          }
+        }
+      }
+    },
+    "Remote branch name": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "远端分支名"
+          }
+        }
+      }
+    },
+    "Enter a plain HTTPS URL, such as https://github.com/owner/repository.git, and an existing remote branch. Remote configuration from the repository is not used. No fetch, branch creation, force push, or remote deletion is available.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "输入普通 HTTPS 地址（例如 https://github.com/owner/repository.git）及已有远端分支。不会采用仓库内的远端配置，也不提供 fetch、新建分支、强制推送或远端删除。"
+          }
+        }
+      }
+    },
+    "Credential destination: %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "凭据使用目标：%@"
+          }
+        }
+      }
+    },
+    "Exact remote ref: %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "精确远端引用：%@"
+          }
+        }
+      }
+    },
+    "I allow this connection to use existing macOS Keychain Git credentials for this exact host and repository path": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "我允许此连接为这个精确主机和仓库路径使用现有 macOS 钥匙串 Git 凭据"
+          }
+        }
+      }
+    },
+    "This may read existing credentials even during inspection. Credentials are not shown or logged; the fixed helper cannot store or erase them. Sign in with your Git client first if access is unavailable. Git may internally use a shell only to dispatch MoeKit's fixed credential helper. Repository hooks are disabled; a fixed native gate checks the approved push target.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查远端时也可能读取现有凭据。不会显示或记录凭据；固定辅助程序不能保存或删除它们。无法访问时，请先在 Git 客户端检查登录。Git 内部可能通过 shell 调用 MoeKit 的固定凭据辅助程序。仓库 hooks 禁用，由固定原生检查程序核对已批准的推送目标。"
+          }
+        }
+      }
+    },
+    "Inspect exact remote branch": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查精确远端分支"
+          }
+        }
+      }
+    },
+    "Pushing and independently checking the remote…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在推送并独立复查远端…"
+          }
+        }
+      }
+    },
+    "Checking the exact remote branch…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在检查精确远端分支…"
+          }
+        }
+      }
+    },
+    "Approved destination: %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "批准的目标：%@"
+          }
+        }
+      }
+    },
+    "Remote ref: %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "远端引用：%@"
+          }
+        }
+      }
+    },
+    "Expected remote commit: %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "预期的远端提交：%@"
+          }
+        }
+      }
+    },
+    "Commit to publish: %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将发布的提交：%@"
+          }
+        }
+      }
+    },
+    "This sends the selected commit and its reachable Git history to the displayed repository using an ordinary non-force push. Confirm only if that repository should receive this code and history.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此操作通过普通非强制推送，将所选提交及其可达 Git 历史发送到显示的仓库。仅在该仓库应收到这些代码与历史时确认。"
+          }
+        }
+      }
+    },
+    "Type the exact refs/heads/branch to authorize this push": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "输入精确的 refs/heads/分支名以授权本次推送"
+          }
+        }
+      }
+    },
+    "Confirm exact remote push": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "确认精确远端推送"
+          }
+        }
+      }
+    },
+    "The worktree stays available. Do not assume a timeout means the push failed, and do not retry blindly. Check the exact remote again without sending another push.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工作树仍保留。超时不代表推送必然失败，请勿盲目重试。可重新检查精确远端，而不发送新的推送。"
+          }
+        }
+      }
+    },
+    "Recheck remote only": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅复查远端"
+          }
+        }
+      }
+    },
+    "Remote verification is a fresh observation of the exact ref, not a lock on the server. Remote CI, pull requests, branch protection approvals, and project tests are not checked by this flow.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "远端验证是对精确引用的一次新鲜观察，并不锁定服务器。此流程不检查远端 CI、拉取请求、分支保护审批或项目测试。"
+          }
+        }
+      }
+    },
+    "Remote ref independently verified": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已独立验证远端引用"
+          }
+        }
+      }
+    },
+    "Remote still shows the previous commit": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "远端仍显示先前提交"
+          }
+        }
+      }
+    },
+    "Remote now points to a different commit": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "远端现已指向其他提交"
+          }
+        }
+      }
+    },
+    "Remote outcome is unknown": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "远端结果未知"
+          }
+        }
+      }
+    },
+    "Observed remote commit: %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "观察到的远端提交：%@"
+          }
+        }
+      }
+    },
+    "Last remote destination: %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上次远端目标：%@"
+          }
+        }
+      }
+    },
+    "Last remote ref: %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上次远端引用：%@"
+          }
+        }
+      }
+    },
+    "The last remote check observed the published commit": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上次远端检查已观察到所发布的提交"
+          }
+        }
+      }
+    },
+    "The last remote outcome requires review; no automatic retry was made": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上次远端结果需要复查；未进行自动重试"
+          }
+        }
+      }
+    },
+    "Enter an exact HTTPS repository URL with a plain ASCII DNS host and path. Usernames, ports, escapes, queries, redirects, and other protocols are not supported.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请输入主机名为普通 ASCII DNS 名称的精确 HTTPS 仓库地址。不支持用户名、端口、转义字符、查询参数、重定向或其他协议。"
+          }
+        }
+      }
+    },
+    "This remote branch name is not supported. No wildcard, deletion, or force refspec is available.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不支持此远端分支名。不提供通配符、删除或强制 refspec。"
+          }
+        }
+      }
+    },
+    "The verified Apple HTTPS transport is unavailable. Install Apple Command Line Tools or Xcode; both worktrees are retained.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "经过验证的 Apple HTTPS 传输工具不可用。请安装 Apple Command Line Tools 或 Xcode；两个工作树均保留。"
+          }
+        }
+      }
+    },
+    "The exact remote branch does not exist. This flow does not create remote branches.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此精确远端分支不存在。本流程不会新建远端分支。"
+          }
+        }
+      }
+    },
+    "The remote commit cannot be proved to be an ancestor of the merged commit using local objects. No fetch or force push was attempted.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本地对象无法证明远端提交是已合并提交的祖先。未尝试 fetch 或强制推送。"
+          }
+        }
+      }
+    },
+    "The local target or exact remote branch changed after review. Inspect again before pushing.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本地目标或精确远端分支在复查后发生变化。推送前请重新检查。"
+          }
+        }
+      }
+    },
+    "The remote confirmation expired or was already used. Inspect again.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "远端确认已过期或已经使用。请重新检查。"
+          }
+        }
+      }
+    },
+    "The remote branch could not be verified. Check access in your Git client; no credentials or raw server diagnostics are displayed.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法验证远端分支。请在 Git 客户端检查访问权限；不会显示凭据或原始服务器诊断。"
+          }
+        }
+      }
+    },
+    "Existing commit signatures are preserved; signature trust is not checked.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保留既有提交签名，但不检查签名信任。"
+          }
+        }
+      }
+    },
+    "Existing Keychain entries may be host-scoped. The credential is used only for the displayed HTTPS URL; system Keychain access may require your permission.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "现有钥匙串条目可能按主机保存。凭据只用于显示的 HTTPS 地址；系统钥匙串访问可能需要你的许可。"
+          }
+        }
+      }
+    },
+    "I allow a read-only check of this recorded remote using its existing Keychain credential": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "我允许使用现有钥匙串凭据，对记录中的这个远端进行一次只读检查"
+          }
+        }
+      }
+    },
+    "Recheck recorded remote only": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅复查记录中的远端"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

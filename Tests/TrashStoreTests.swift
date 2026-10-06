@@ -117,6 +117,17 @@ struct TrashStoreTests {
         #expect(!store.canConfirm(planID: plan.id)); store.confirm(planID: plan.id)
         #expect(await fixture.removeCount == 0)
     }
+    @Test("Late read-only progress cannot leak across Demo or cancellation")
+    func staleScanProgress() async {
+        let fixture = TrashStoreFixture(holdInspection: true), store = TrashStore(executor: fixture)
+        configure(store); store.inspect(); await fixture.waitUntilHeld()
+        store.cancel(); configure(store, demo: true)
+        await fixture.emitLateProgress()
+        for _ in 0..<10 { await Task.yield() }
+        #expect(store.scanProgress == nil)
+        await fixture.release(); await settle(store)
+        #expect(store.inspection == nil && store.scanProgress == nil)
+    }
     @Test("Expired confirmations cannot execute")
     func expired() async throws {
         let fixture = TrashStoreFixture(expired: true), store = TrashStore(executor: fixture)
@@ -143,6 +154,7 @@ struct TrashStoreTests {
 actor TrashStoreFixture: TrashExecuting {
     private(set) var inspectCount = 0, removeCount = 0, readCount = 0
     private let blocked: Bool, holdInspection: Bool, holdPreparation: Bool, holdMutation: Bool, expired: Bool, mismatch: Bool, failMutation: Bool
+    private var scanCallback: (@Sendable (DirectoryScanProgress) -> Void)?
     private var waiter: CheckedContinuation<Void, Never>?
     private var report: TrashInspection?
     private var plan: TrashRemovalPlan?
@@ -150,6 +162,14 @@ actor TrashStoreFixture: TrashExecuting {
          expired: Bool = false, mismatch: Bool = false, failMutation: Bool = false) {
         self.blocked = blocked; self.holdInspection = holdInspection; self.holdPreparation = holdPreparation
         self.holdMutation = holdMutation; self.expired = expired; self.mismatch = mismatch; self.failMutation = failMutation
+    }
+    func inspect(context: TrashContext, progress: @escaping @Sendable (DirectoryScanProgress) -> Void) async throws -> TrashInspection {
+        scanCallback = progress
+        progress(.init(phase: .sizing, finished: 0, total: 2, currentPath: "/Synthetic/Trash"))
+        return try await inspect(context: context)
+    }
+    func emitLateProgress() {
+        scanCallback?(.init(phase: .sizing, finished: 1, total: 2, currentPath: "/Sensitive/old-trash"))
     }
     func inspect(context: TrashContext) async throws -> TrashInspection {
         inspectCount += 1

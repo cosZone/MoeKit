@@ -45,3 +45,11 @@ The supported budgets are 256 top-level items, 25,000 manifest entries, 64 path 
 `TrashExecutorTests` uses only uniquely created owned temporary fixture trees, never the real user's Trash. Cases cover files, nonempty trees, symlinks, internal/external hard links, exact snapshot membership, later arrivals, changed descendants, replacement roots/leaves, ACLs, unsupported file types, no-overwrite behavior, cancellation, retry rejection, partial batches and incomplete records. `TrashStoreTests` covers inert construction, stale generations, one-use and typed confirmation, expiry, cancellation, Demo isolation and update-installation blocking. `TrashViewTests` renders synthetic selected/clear confirmation views in English and Simplified Chinese, light/dark appearance; rendering does not claim keyboard or VoiceOver acceptance.
 
 Run `python3 Scripts/verify-source.py`, then the documented macOS Debug and optimized Release tests. Native CI includes the new tests in its Release address-sanitizer selection and Chinese view run. Linux structural checks are not Swift compilation. No real user Trash has been deleted during development. Full-window interaction, keyboard, VoiceOver, live permission prompts and actual user-Mac acceptance remain manual checks; use only a disposable owned fixture account for destructive acceptance.
+
+## 只读扫描与删除资格
+
+大小统计不以可删除为前提。受保护或权限不满足删除条件的项目仍显示可读取的大小；部分读取保留已知字节并标记“部分”，完全未知不伪装成空项目。扫描显示当前路径及统计／资格检查两阶段进度，取消或切换 Demo 后丢弃迟到的进度。
+
+列表超过 256 项时，保留已列出的项目并显示未完整列出的原因，此时禁用“清空已扫描项目”；仍可对完整验证的已列出项目逐项复查。共享只读统计预算为 250,000 项／45 秒，每项最多 25,000 项／2 秒／48 层。目录、文件大小仅从元数据获取，不打开文件内容，不跟随链接，不遍历其他卷。
+
+这些显示结果不能授权删除。现有固定个人废纸篓边界、完整清单、私有权限、身份重验、逐次确认和 EMPTY 确认保持不变；扫描失败不会申请权限、启动 root、修改 ACL 或自动重试删除。

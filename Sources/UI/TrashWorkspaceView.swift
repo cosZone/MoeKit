@@ -30,6 +30,7 @@ struct TrashWorkspaceView: View {
                     introduction
                     controls
                     if store.isBusy { operationProgress }
+                    if let progress = store.scanProgress { DiskInventoryProgressView(progress: progress) }
                     if let error = store.errorMessage { warning(error) }
                     if let inspection = store.inspection { inventory(inspection) }
                     if let plan = store.plan { confirmation(plan) }
@@ -89,7 +90,8 @@ struct TrashWorkspaceView: View {
             VStack(alignment: .leading, spacing: 10) {
                 path("Trash location", inspection.rootURL, id: "trash.root")
                 Text("Scanned at \(inspection.observedAt.formatted(date: .abbreviated, time: .standard))").font(.caption).foregroundStyle(.secondary)
-                if inspection.items.isEmpty {
+                ForEach(inspection.issues, id: \.self) { warning($0) }
+                if inspection.items.isEmpty && inspection.listingIsComplete {
                     Label("Your home Trash is empty", systemImage: "trash").font(.headline).padding(.vertical, 12)
                     Text("This scan does not include external volumes.").font(.caption).foregroundStyle(.secondary)
                 } else {
@@ -105,7 +107,7 @@ struct TrashWorkspaceView: View {
                             }
                         }.width(min: 220, ideal: 320)
                         TableColumn("Logical size") { item in
-                            Text(item.logicalBytes.map(size) ?? String(localized: "Unavailable")).monospacedDigit()
+                            Text(item.displayedSize).monospacedDigit().help(item.sizeEstimate?.issues.joined(separator: "\n") ?? "")
                         }.width(min: 90, ideal: 105)
                         TableColumn("Last modified") { item in
                             if let date = item.modifiedAt { Text(date, format: .dateTime.year().month().day()).font(.caption) }
@@ -126,6 +128,8 @@ struct TrashWorkspaceView: View {
                         Text("Clear scanned Trash is unavailable while any item is unreadable or unsupported. You can select the eligible items individually.")
                             .font(.caption).foregroundStyle(.orange)
                     }
+                    Text("Readable sizes remain available for protected items. Partial sizes include only inspected file metadata; no link targets are followed.")
+                        .font(.caption).foregroundStyle(.secondary)
                     Text("Filtering changes the visible rows only. Review always lists every selected item, including selected items hidden by the filter.")
                         .font(.caption).foregroundStyle(.secondary)
                 }

@@ -20,6 +20,7 @@ final class TrashStore {
     private(set) var errorMessage: String?
     private(set) var lastMutationError: String?
     private(set) var lastOutcome: TrashOutcome?
+    private(set) var scanProgress: DirectoryScanProgress?
     private(set) var progress: TrashProgress?
     private(set) var recoveryItems: [TrashRecoveryItem] = []
     private(set) var hasReadRecords = false
@@ -69,7 +70,14 @@ final class TrashStore {
         task = Task { [weak self, executor] in
             do {
                 await prior?.value; try Task.checkCancellation()
-                let result = try await executor.inspect(context: scope)
+                let result = try await executor.inspect(context: scope) { [weak self] value in
+                    Task { @MainActor [weak self] in
+                        guard let self else { return }; self.synchronize()
+                        guard self.requestID == request, self.revision == expected,
+                              self.context == scope, !self.isDemoEnabled, !self.isCancelling else { return }
+                        self.scanProgress = value
+                    }
+                }
                 try Task.checkCancellation()
                 guard let self else { return }
                 self.synchronize()
@@ -171,6 +179,7 @@ final class TrashStore {
     func cancel() { invalidate(clearInspection: false) }
     private func synchronize() { if let contextProvider { updateContext(contextProvider()) } }
     private func invalidate(clearInspection: Bool) {
+        scanProgress = nil
         revision = UUID(); plan = nil; irreversibleAccepted = false; workloadsStopped = false; typedConfirmation = ""; errorMessage = nil
         if clearInspection { inspection = nil; selectedPaths = [] }
         if task != nil { task?.cancel(); isCancelling = true }
@@ -180,11 +189,11 @@ final class TrashStore {
         }
     }
     private func begin() -> UUID {
-        let id = UUID(); requestID = id; isBusy = true; isCancelling = false; progress = nil; return id
+        let id = UUID(); requestID = id; isBusy = true; isCancelling = false; progress = nil; scanProgress = nil; return id
     }
     private func finish(_ id: UUID) {
         guard requestID == id else { return }
-        requestID = nil; task = nil; isBusy = false; isCancelling = false; progress = nil
+        requestID = nil; task = nil; isBusy = false; isCancelling = false; progress = nil; scanProgress = nil
     }
     private func fail(_ error: any Error, request: UUID, expected: UUID) {
         synchronize(); if revision == expected, !isDemoEnabled { errorMessage = TrashFailure.message(error) }; finish(request)

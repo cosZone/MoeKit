@@ -28,7 +28,12 @@ struct CleanupCandidate: Identifiable, Equatable, Sendable {
     let evidence: String
     let manifest: CleanupManifest?
     let blocker: String?
+    var sizeEstimate: DiskUsageEstimate? = nil
     var isEligible: Bool { manifest != nil && blocker == nil }
+    var displayedSize: String {
+        if let manifest { return ByteCountFormatter.string(fromByteCount: manifest.logicalBytes, countStyle: .file) }
+        return sizeEstimate?.formattedSize ?? String(localized: "Unknown")
+    }
 }
 
 struct CleanupInspection: Equatable, Sendable {
@@ -37,6 +42,8 @@ struct CleanupInspection: Equatable, Sendable {
     let candidates: [CleanupCandidate]
     let context: CleanupContext
     let observedAt: Date
+    var listingIsComplete = true
+    var issues: [String] = []
 }
 
 struct CleanupTarget: Codable, Equatable, Sendable {
@@ -113,12 +120,19 @@ struct CleanupRecoveryPlan: Identifiable, Equatable, Sendable {
 
 protocol CleanupExecuting: Sendable {
     func inspect(root: URL, context: CleanupContext) async throws -> CleanupInspection
+    func inspect(root: URL, context: CleanupContext, progress: @escaping @Sendable (DirectoryScanProgress) -> Void) async throws -> CleanupInspection
     func prepare(inspectionID: UUID, selectedPaths: Set<String>, context: CleanupContext) async throws -> CleanupPlan
     func discardPlans() async
     func moveToTrash(planID: UUID, context: CleanupContext) async throws -> CleanupOutcome
     func recoveryRecords() async throws -> [CleanupRecoveryItem]
     func prepareRecovery(receiptID: UUID, action: CleanupRecoveryPlan.Action, context: CleanupContext) async throws -> CleanupRecoveryPlan
     func applyRecovery(planID: UUID, context: CleanupContext) async throws -> CleanupOutcome
+}
+
+extension CleanupExecuting {
+    func inspect(root: URL, context: CleanupContext, progress: @escaping @Sendable (DirectoryScanProgress) -> Void) async throws -> CleanupInspection {
+        try await inspect(root: root, context: context)
+    }
 }
 
 enum CleanupFailure: Error, LocalizedError, Sendable {

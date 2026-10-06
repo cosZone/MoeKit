@@ -40,6 +40,18 @@ struct CleanupStoreTests {
         #expect(store.rootURL == nil && !store.canInspect)
     }
 
+    @Test("An unknown project catalog allows read-only inspection but never cleanup review")
+    func unknownCatalogCanRead() async throws {
+        let fixture = CleanupStoreFixture(), store = CleanupStore(executor: fixture)
+        store.updateContext(.init(isDemoEnabled: false, modeGeneration: mode, protectedPaths: [], catalogIsKnown: false))
+        store.selectRoot(root, ticket: try #require(store.selectionTicket()))
+        #expect(store.canInspect)
+        store.inspect(); await settle(store)
+        #expect(store.inspection != nil)
+        store.select(paths: [first]); store.prepare()
+        #expect(!store.canPrepare && store.plan == nil)
+        #expect(await fixture.prepareCount == 0)
+    }
     @Test("Only inspected eligible membership is selectable and every selection change resets attestation")
     func selectionMembership() async throws {
         let fixture = CleanupStoreFixture(), store = CleanupStore(executor: fixture)
@@ -97,6 +109,9 @@ struct CleanupStoreTests {
         active.selectRoot(root, ticket: try #require(active.selectionTicket()))
         active.inspect(); await fixture.waitForInspection()
         active.cancel(); context(active, demo: true); context(active, protected: ["/Synthetic/Project"])
+        await fixture.emitLateProgress()
+        for _ in 0..<10 { await Task.yield() }
+        #expect(active.scanProgress == nil)
         #expect(active.isBusy && active.isCancelling)
         active.inspect(); active.loadRecovery()
         await fixture.releaseInspection(); await settle(active)
@@ -283,6 +298,7 @@ actor CleanupStoreFixture: CleanupExecuting {
     private let holdRecoveryMutation: Bool
     private let partialOutcome: Bool
     private let mismatchedPlan: Bool
+    private var scanCallback: (@Sendable (DirectoryScanProgress) -> Void)?
     private var inspectionWaiter: CheckedContinuation<Void, Never>?
     private var preparationWaiter: CheckedContinuation<Void, Never>?
     private var mutationWaiter: CheckedContinuation<Void, Never>?
@@ -302,6 +318,14 @@ actor CleanupStoreFixture: CleanupExecuting {
         self.incompleteRecovery = incompleteRecovery; self.longInventory = longInventory
         self.holdInspection = holdInspection; self.holdPreparation = holdPreparation; self.holdMutation = holdMutation
         self.holdRecoveryMutation = holdRecoveryMutation; self.partialOutcome = partialOutcome; self.mismatchedPlan = mismatchedPlan
+    }
+    func inspect(root: URL, context: CleanupContext, progress: @escaping @Sendable (DirectoryScanProgress) -> Void) async throws -> CleanupInspection {
+        scanCallback = progress
+        progress(.init(phase: .sizing, finished: 0, total: 3, currentPath: root.path))
+        return try await inspect(root: root, context: context)
+    }
+    func emitLateProgress() {
+        scanCallback?(.init(phase: .sizing, finished: 2, total: 3, currentPath: "/Sensitive/old-cache"))
     }
     func inspect(root: URL, context: CleanupContext) async throws -> CleanupInspection {
         inspectCount += 1

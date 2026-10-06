@@ -8,8 +8,8 @@ enum CleanupCheckpoint: Sendable { case beforeCapture, afterCapture, beforeTrash
 actor NativeCleanupExecutor: CleanupExecuting {
     private struct Inspection {
         let display: CleanupInspection
-        let root: InstallerDirectoryAnchor
-        let catalog: InstallerCatalogSnapshot
+        let root: InstallerDirectoryAnchor?
+        let catalog: InstallerCatalogSnapshot?
     }
     private struct Prepared {
         let display: CleanupPlan
@@ -37,57 +37,105 @@ actor NativeCleanupExecutor: CleanupExecuting {
     func discardPlans() { prepared = nil; recovery = nil }
 
     func inspect(root: URL, context: CleanupContext) throws -> CleanupInspection {
+        try inspect(root: root, context: context, progress: { _ in })
+    }
+    func inspect(root: URL, context: CleanupContext, progress: @escaping @Sendable (DirectoryScanProgress) -> Void) throws -> CleanupInspection {
         guard !busy else { throw CleanupFailure.busy }
         discardPlans(); inspection = nil
-        try requireContext(context)
-        let anchor = try InstallerDirectoryAnchor.open(root)
-        try CleanupFiles.validateRoot(anchor, environment: environment)
-        let catalog = try catalogSnapshot()
-        let protection = try protectedPaths(context, catalog: catalog)
-        let names = try CleanupFiles.names(anchor, limit: 512)
-        var candidates: [CleanupCandidate] = []
+        // Read-only discovery has its own scope and no-follow boundary. A
+        // mutation policy refusal must not hide already readable metadata.
+        let readRoot: AnchoredDirectory
+        do {
+            _ = try InstallerFileAccess.components(root)
+            let home = try AnchoredDirectory.selected(environment.home)
+            readRoot = try AnchoredDirectory.selected(root)
+            guard readRoot.url.pathComponents.starts(with: home.url.pathComponents), readRoot.url != home.url else {
+                throw CleanupFailure.refused(String(localized: "Choose a cache location inside your own home folder."))
+            }
+        } catch is CancellationError { throw CancellationError() }
+        catch let error as CleanupFailure { throw error }
+        catch { throw CleanupFailure.refused(ReadOnlyDiskInventory.issue(error, at: root)) }
+        let listing = try ReadOnlyDiskInventory.list(readRoot, limit: 512)
+        let sizeBudget = ReadOnlyDiskInventory.Budget()
+        var estimates: [String: DiskUsageEstimate] = [:], names: [String] = []
+        for (index, name) in listing.names.enumerated() {
+            try Task.checkCancellation()
+            progress(.init(phase: .sizing, finished: index, total: listing.names.count, currentPath: root.appendingPathComponent(name).path))
+            // Links and files are not directory-cleanup candidates. Inaccessible
+            // metadata stays visible instead of being silently omitted.
+            if let value = try? readRoot.status(name), value.st_mode & mode_t(S_IFMT) != mode_t(S_IFDIR) { continue }
+            names.append(name)
+            estimates[name] = try ReadOnlyDiskInventory.estimate(parent: readRoot, name: name, budget: sizeBudget)
+        }
+        var anchor: InstallerDirectoryAnchor?, catalog: InstallerCatalogSnapshot?, protection: [String] = []
+        var sharedBlocker: String?
+        var stage = String(localized: "Cleanup folder validation")
+        do {
+            try requireContext(context)
+            let strictRoot = try InstallerDirectoryAnchor.open(root)
+            try CleanupFiles.validateRoot(strictRoot, environment: environment)
+            stage = String(localized: "Project catalog protection")
+            let snapshot = try catalogSnapshot()
+            protection = try protectedPaths(context, catalog: snapshot)
+            anchor = strictRoot; catalog = snapshot
+        } catch is CancellationError { throw CancellationError() }
+        catch { sharedBlocker = CleanupFiles.inspectionMessage(error, stage: stage, url: root) }
         let deadline = Date().addingTimeInterval(45)
         var remainingEntries = CleanupFiles.maximumEntries
-        for name in names {
+        var candidates: [CleanupCandidate] = []
+        for (index, name) in names.enumerated() {
             try Task.checkCancellation()
             let url = root.appendingPathComponent(name)
+            progress(.init(phase: .checkingEligibility, finished: index, total: names.count, currentPath: url.path))
+            var evidence = "", manifest: CleanupManifest?, blocker = sharedBlocker
+            if let anchor, blocker == nil {
+                var stage = String(localized: "Protected-path validation")
+                do {
+                    guard remainingEntries > 0, Date() < deadline else { throw CleanupFailure.limit }
+                    try CleanupFiles.protect(url, paths: protection)
+                    stage = String(localized: "Cache folder validation")
+                    let directory = try anchor.child(name)
+                    evidence = try CleanupFiles.evidence(parent: anchor, candidate: directory, environment: environment)
+                    stage = String(localized: "Complete cleanup manifest")
+                    manifest = try CleanupFiles.manifest(directory, environment: environment, maximumEntries: remainingEntries, deadline: deadline)
+                    remainingEntries -= manifest?.itemCount ?? 0
+                } catch is CancellationError { throw CancellationError() }
+                catch { blocker = CleanupFiles.inspectionMessage(error, stage: stage, url: url) }
+            }
+            candidates.append(.init(url: url, evidence: evidence, manifest: manifest, blocker: blocker, sizeEstimate: estimates[name]))
+        }
+        if let anchor, let catalog {
             do {
-                guard remainingEntries > 0, Date() < deadline else { throw CleanupFailure.limit }
-                let identity = try InstallerFileAccess.snapshotAt(anchor.fd, name)
-                // No file or symlink-root candidate can authorize a tree move.
-                guard identity.mode & UInt32(S_IFMT) == UInt32(S_IFDIR) else { continue }
-                try CleanupFiles.protect(url, paths: protection)
-                let directory = try anchor.child(name)
-                let evidence = try CleanupFiles.evidence(parent: anchor, candidate: directory, environment: environment)
-                let manifest = try CleanupFiles.manifest(directory, environment: environment, maximumEntries: remainingEntries, deadline: deadline)
-                remainingEntries -= manifest.itemCount
-                candidates.append(.init(url: url, evidence: evidence, manifest: manifest, blocker: nil))
+                try anchor.validate()
+                guard try catalogSnapshot() == catalog else { throw CleanupFailure.changed }
             } catch is CancellationError { throw CancellationError() }
             catch {
-                candidates.append(.init(url: url, evidence: "", manifest: nil, blocker: Self.explanation(error)))
+                let reason = CleanupFiles.inspectionMessage(error, stage: String(localized: "Final protection validation"), url: root)
+                candidates = candidates.map { .init(url: $0.url, evidence: $0.evidence, manifest: nil, blocker: reason, sizeEstimate: $0.sizeEstimate) }
+                sharedBlocker = reason
             }
         }
-        try anchor.validate()
-        guard try catalogSnapshot() == catalog else { throw CleanupFailure.changed }
-        let display = CleanupInspection(id: UUID(), rootURL: root, candidates: candidates, context: context, observedAt: Date())
+        progress(.init(phase: .checkingEligibility, finished: names.count, total: names.count, currentPath: nil))
+        let display = CleanupInspection(id: UUID(), rootURL: root, candidates: candidates, context: context, observedAt: Date(),
+            listingIsComplete: listing.isComplete, issues: [listing.issue, sharedBlocker].compactMap { $0 })
         inspection = .init(display: display, root: anchor, catalog: catalog)
         return display
     }
     func prepare(inspectionID: UUID, selectedPaths: Set<String>, context: CleanupContext) throws -> CleanupPlan {
         guard !busy else { throw CleanupFailure.busy }
         discardPlans()
-        guard let inspection, inspection.display.id == inspectionID, inspection.display.context == context,
+        guard let inspection, let root = inspection.root, let catalog = inspection.catalog, inspection.display.id == inspectionID, inspection.display.context == context,
               !selectedPaths.isEmpty, selectedPaths.count <= CleanupFiles.maximumTargets else { throw CleanupFailure.expired }
         try requireContext(context)
-        try CleanupFiles.validateRoot(inspection.root, environment: environment)
-        guard try catalogSnapshot() == inspection.catalog else { throw CleanupFailure.changed }
+        try CleanupFiles.validateRoot(root, environment: environment)
+        guard try catalogSnapshot() == catalog else { throw CleanupFailure.changed }
         var targets: [CleanupTarget] = []
         for path in selectedPaths.sorted() {
             guard let candidate = inspection.display.candidates.first(where: { $0.url.path == path }),
                   candidate.isEligible, let expected = candidate.manifest else { throw CleanupFailure.changed }
-            try CleanupFiles.protect(candidate.url, paths: try protectedPaths(context, catalog: inspection.catalog))
-            let directory = try inspection.root.child(candidate.url.lastPathComponent)
-            let evidence = try CleanupFiles.evidence(parent: inspection.root, candidate: directory, environment: environment)
+            try CleanupFiles.protect(candidate.url, paths: try protectedPaths(context, catalog: catalog))
+            let directory = try root.child(candidate.url.lastPathComponent)
+            let evidence = try CleanupFiles.evidence(parent: root, candidate: directory, environment: environment)
             let actual = try CleanupFiles.manifest(directory, environment: environment)
             guard expected == actual, evidence == candidate.evidence else { throw CleanupFailure.changed }
             targets.append(.init(originalURL: candidate.url, evidence: evidence, manifest: actual))
@@ -101,7 +149,7 @@ actor NativeCleanupExecutor: CleanupExecuting {
         let now = Date()
         let display = CleanupPlan(id: UUID(), inspectionID: inspectionID, rootURL: inspection.display.rootURL,
             targets: targets, context: context, recoveryRoot: environment.recovery, preparedAt: now, expiresAt: now.addingTimeInterval(120))
-        prepared = .init(display: display, root: inspection.root, catalog: inspection.catalog)
+        prepared = .init(display: display, root: root, catalog: catalog)
         return display
     }
     func moveToTrash(planID: UUID, context: CleanupContext) throws -> CleanupOutcome {
@@ -408,6 +456,6 @@ actor NativeCleanupExecutor: CleanupExecuting {
     static func explanation(_ error: any Error) -> String {
         if error is CancellationError { return String(localized: "Cancelled before this item was changed.") }
         if let error = error as? CleanupFailure { return error.errorDescription! }
-        return String(localized: "This cache could not be fully verified. Git ancestry, ownership, links in containing folders, cloud metadata, active writes, or inaccessible contents may make it unsupported.")
+        return String(localized: "Cleanup validation could not be completed: \(error.localizedDescription)")
     }
 }

@@ -5,7 +5,7 @@ description: 把报告读清楚，不把大小误当成可清理容量。
 
 ## 实际分析一个文件夹
 
-在 Tools → Mole → Space 点击「使用 Mole 分析…」，依次选择已安装的直接分析器和一个本地文件夹，点击「复查分析计划…」。只有在确认范围、版本、临时文件与权限说明后点击「开始分析」，才会启动工具。
+在 Tools → Mole → Space 打开分析窗口，preview.12 会自动检查兼容安装。未找到时按 [准备指南](https://github.com/cosZone/MoeKit/blob/fa630c57dd87862597874d5ba459453beac95e60/Documentation/Mole-beginner-setup.md) 操作并重新检测，也可选择分析器文件。随后选择本地文件夹，复查并确认读取范围与临时写入后才会启动工具。
 
 - 首个适配器只接受 [Mole V1.57.0 官方发布](https://github.com/tw93/Mole/releases/tag/V1.57.0) 的原始分析器及精确校验和。官方脚本安装的常见路径是 `~/.config/mole/bin/analyze-go`
 - Homebrew、自行构建及其他版本暂不匹配该校验；找到文件不代表兼容。不会运行 `mo` 包装脚本、自动安装、更新、提权或移除隔离标记

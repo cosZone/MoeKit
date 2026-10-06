@@ -36,9 +36,9 @@ MoeKit 工作流直接读取上述三个名字，**不要求创建 `Prod` enviro
 - 无私有签名 secrets 的独立 job 运行 Release 配置单元测试（`ENABLE_TESTABILITY=YES`），随后从相同源码单独 archive universal Release；测试只运行 runner 的当前 CPU 架构
 - 归档 `.app` 同时包含 arm64、x86_64，Bundle ID 固定为 `com.yusixian.MoeKit`，最低 macOS 15.0
 - 签名 job 不编译源码、执行应用或运行第三方安装器；它只验证同次 run/attempt 的产物，用临时 keychain 内唯一的 Apple Development 身份重新签名，核对证书指纹、预期 Team ID、两种架构、bundle 信息与 provenance
-- Hardened Runtime 开启；无额外 entitlements、无 get-task-allow、无 App Sandbox、无 provisioning profile。当前后续源码允许三个显式列出的原创辅助程序 `Contents/MacOS/MoleAnalysisSupervisor`、`Contents/MacOS/GitObjectInspector` 和 `Contents/MacOS/GitRemoteTransport`，标识分别固定为 `com.yusixian.MoeKit.MoleAnalysisSupervisor`、`com.yusixian.MoeKit.GitObjectInspector` 和 `com.yusixian.MoeKit.GitRemoteTransport`；第三个 helper 不存在于已发布 preview.10 的八份代码对象中，新源码发布时须核对九份代码对象；另允许固定 Sparkle 2.10.0 框架及其四个精确嵌套 helper；仅允许官方 manifest 的精确相对链接。其他 helper/framework/XPC 与可执行资源一律拒绝
-- 先用同一个现有 Apple Development 身份显式逐个签名两个原创 helper、Sparkle 的四个嵌套 helper、Sparkle.framework，再签名父 App；不使用 `--deep` 签名或继承旧 entitlements。八份代码每个 arm64／x86_64 slice 均验证精确标识、Hardened Runtime、空 entitlements、Apple trust anchor、预期 Team ID 与导入证书指纹；ZIP 往返与 DMG 内再次逐个核验代码，全部文件内容（含 helper 与签名）必须相同
-- 这两个 helper 均由本仓库原创 C 源码构建。第三方 Mole 分析器和 Apple Git 不随 App 分发，不进入发布签名流程，也不会被重新签名；发布 allowlist 显式拒绝额外的 `Contents/MacOS/git`
+- Hardened Runtime 开启；无额外 entitlements、无 get-task-allow、无 App Sandbox、无 provisioning profile。preview.12 包含三个显式列出的原创辅助程序 `Contents/MacOS/MoleAnalysisSupervisor`、`Contents/MacOS/GitObjectInspector` 和 `Contents/MacOS/GitRemoteTransport`，标识分别固定为 `com.yusixian.MoeKit.MoleAnalysisSupervisor`、`com.yusixian.MoeKit.GitObjectInspector` 和 `com.yusixian.MoeKit.GitRemoteTransport`；第三个 helper 随 preview.12 交付，本版核对九份代码对象；preview.10／preview.11 的历史安装包仍为八份；另允许固定 Sparkle 2.10.0 框架及其四个精确嵌套 helper；仅允许官方 manifest 的精确相对链接。其他 helper/framework/XPC 与可执行资源一律拒绝
+- 先用同一个现有 Apple Development 身份显式逐个签名三个原创 helper、Sparkle 的四个嵌套 helper、Sparkle.framework，再签名父 App；不使用 `--deep` 签名或继承旧 entitlements。九份代码每个 arm64／x86_64 slice 均验证精确标识、Hardened Runtime、空 entitlements、Apple trust anchor、预期 Team ID 与导入证书指纹；ZIP 往返与 DMG 内再次逐个核验代码，全部文件内容（含 helper 与签名）必须相同
+- 这三个 helper 均由本仓库原创 C 源码构建。第三方 Mole 分析器和 Apple Git 不随 App 分发，不进入发布签名流程，也不会被重新签名；发布 allowlist 显式拒绝额外的 `Contents/MacOS/git`
 - 不使用公证或安全时间戳；证书过期／撤销可能影响后续校验。代码签名并不承诺长期分发可用性
 - Release 精确包含五个文件：`MoeKit-v<version>-macOS.dmg`、`MoeKit-v<version>-macOS.zip`、`SHA256SUMS.txt`、`BUILD_INFO.json`、已签名 `appcast.xml`。两种安装包均为 universal，包含 arm64 与 x86_64；不另发芯片专用包
 - ZIP 中是 `MoeKit.app`（如有 `ditto` 的 AppleDouble 元数据，只允许对应 App 的数据）；DMG 根目录严格只有 `MoeKit.app` 和指向 `/Applications` 的 `Applications` 快捷方式，不包含 App 之外的安装器或其他可执行文件；Sparkle 更新组件位于受审 App 内
@@ -56,7 +56,7 @@ MoeKit 工作流直接读取上述三个名字，**不要求创建 `Prod` enviro
 
 挂载点位于签名临时目录之外。正常、失败、部分挂载和超时路径均通过 `finally` 尝试 detach；工作流的 `always` 清理会再次检查。不会 force-detach；卸载失败会阻止发布并保留独立挂载目录供 runner 销毁，同时仍清除签名凭据。挂载点只允许 `rmdir`，绝不递归删除它或一个可能包含它的父目录。
 
-`Scripts/test-preview-release.py` 包含无需凭据的 macOS 集成测试：用 Xcode 编译八个合成的 universal code objects，按 helper → App 顺序 ad-hoc 签名后实际执行 ZIP／DMG 创建与只读校验，最后验证卸载；另检查 helper 标识错误、缺少 runtime、额外 entitlements、篡改、缺少架构和未签名均失败。**不执行这些程序**。它随 Native CI 与发布的无 secrets 测试阶段运行，Linux 上显式跳过。便携单元测试不能代替这项原生验证。
+`Scripts/test-preview-release.py` 包含无需凭据的 macOS 集成测试：用 Xcode 编译九个合成的 universal code objects，按 helper → App 顺序 ad-hoc 签名后实际执行 ZIP／DMG 创建与只读校验，最后验证卸载；另检查 helper 标识错误、缺少 runtime、额外 entitlements、篡改、缺少架构和未签名均失败。**不执行这些程序**。它随 Native CI 与发布的无 secrets 测试阶段运行，Linux 上显式跳过。便携单元测试不能代替这项原生验证。
 
 ### 版本说明的唯一来源
 
@@ -64,7 +64,9 @@ MoeKit 工作流直接读取上述三个名字，**不要求创建 `Prod` enviro
 
 发布成功并人工核实前保留 `unreleased`，不提前写入 `date`、`sourceCommit` 或 `releaseUrl`。成功之后可在独立文档变更中使用 `status: prerelease` 与核实后的日期、源码提交和 Release 链接；发布日期采用引号内 UTC `YYYY-MM-DD`，源码为 40 位小写 SHA，链接是本仓库该版本的 Release。发布脚本不自行修改或提交版本说明。
 
-GitHub 正文先展示该版本的 DMG／ZIP 直达下载链接，再显示去除 frontmatter 的中文 Markdown，末尾追加实际 source/run/attempt、校验和／构建信息与不可移除的开发签名、未公证及人工验收范围说明。不会凭版本号猜测 previous tag，也不会生成 PopClip；新增 appcast 受独立 Ed25519 签名与公钥校验约束。
+GitHub 正文只包含 DMG／ZIP 下载、原样保留的版本说明和精简的源码／构建／校验和链接。说明中已写明的 macOS 15+、Apple Development 与未公证提示不会重复追加；缺少时补一行共同限制。详细验证与人工验收边界放在构建信息和开发者记录中。appcast 仍使用原始受审说明及独立 Ed25519 签名，展示文案调整不改变发布、签名或资产校验。
+
+编辑已发布版本的展示说明时，先在 `website/release-records/<version>/` 保留签名时的原始 Markdown、最初生成的 GitHub 正文及哈希来源；展示说明不能冒用旧文件摘要。历史资产、tag 和已签名 feed 保持原样。
 
 ## 权限、清理与失败处理
 

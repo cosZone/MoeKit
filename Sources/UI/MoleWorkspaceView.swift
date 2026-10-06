@@ -2,12 +2,21 @@ import SwiftUI
 
 struct MoleWorkspaceView: View {
     @Environment(WorkspaceStore.self) private var store
+    @State private var cleanupCategory = 0
     @Environment(\.openWindow) private var openWindow
     var body: some View {
         if store.selectedCapability == .space {
             MoleSpaceView()
         } else if store.selectedCapability == .clean {
-            CleanupWorkspaceView()
+            VStack(spacing: 0) {
+                Picker(String(localized: "Cleanup category", table: "DockerCleanup"), selection: $cleanupCategory) {
+                    Text("Caches", tableName: "DockerCleanup").tag(0)
+                    Text("Docker").tag(2)
+                }.pickerStyle(.segmented).padding(12)
+                Divider()
+                if cleanupCategory == 0 { CleanupWorkspaceView() }
+                else { DockerCleanupView() }
+            }
         } else {
             VStack(spacing: 0) {
                 HStack {

@@ -23,6 +23,13 @@ The first source milestone implements navigation, explicit demo fixtures, bounde
 - Permanent removal exists only in CleanupPermanentRemoval.swift: immutable manifest, fresh private per-entry capture and identity checks, separate action-time UI confirmation, no whole-Trash clearing. No automatic retry after partial or uncertain outcomes.
 - Test mutations only in unique marker/identity-owned fixtures. Actual native Trash fixtures require hosted-runner opt-in, production path/volume guards and affirmative exact-head evidence. Never test against real user caches.
 
+## Confirmed local Docker cleanup
+
+- Sources/DockerCleanup is a separate original Engine API adapter. It connects only after an explicit user request to one fixed local Unix socket; it does not read CLI contexts/configuration/credentials, run Docker CLI/plugins, start daemons or change permissions.
+- Exact image/container ID operations require a fresh one-use confirmation and fresh daemon, socket and all-container reference evidence. Images referenced by stopped containers stay protected; no force, parent pruning, implicit image selection, or volume deletion is allowed.
+- Whole-unused-build-cache pruning is a separately labelled daemon-wide category action with a distinct acknowledgement, not selected-row deletion. Never substitute system prune or broaden it to another builder/context.
+- Test actual Docker mutations only on the independently started marker-owned CI fixture daemon, never the default/user daemon. Ordinary macOS tests use in-memory or unique local socket fixtures. Preserve cancellation/partial/unknown results and report only verified outcomes.
+
 ## Verification and publishing
 
 Use Scripts/verify-source.py for structural checks, then the documented macOS build/test workflow. Python checks are not Swift compilation. Report failing, unrun and passed stages separately. CI may build an ad-hoc preview artifact; public releases and signing use separately reviewed workflows. Never commit credentials, P12 data, passwords, Team IDs, personal signing identities or keychains. No secrets in pull-request jobs; no pull_request_target execution of an untrusted head. A signature is not Apple notarization.

@@ -1,0 +1,45 @@
+name: Docker cleanup fixture
+
+on:
+  pull_request:
+    paths:
+      - 'Sources/DockerCleanup/**'
+      - 'Sources/UI/DockerCleanupView.swift'
+      - 'Tests/DockerCleanupTests.swift'
+      - 'Scripts/Fixtures/DockerCleanup/**'
+      - 'Scripts/run-docker-cleanup-fixture.py'
+      - '.github/workflows/docker-cleanup.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'Sources/DockerCleanup/**'
+      - 'Scripts/Fixtures/DockerCleanup/**'
+      - 'Scripts/run-docker-cleanup-fixture.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-docker:
+    name: Real selected Docker deletion in isolated daemon
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      MOEKIT_DOCKER_FIXTURE: '1'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Compile production adapter and verify real owned-object deletion
+        run: python3 Scripts/run-docker-cleanup-fixture.py
+      - name: Preserve source-bound evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: docker-cleanup-${{ env.SOURCE_SHA }}
+          path: DockerFixtureEvidence/
+          if-no-files-found: error
+          retention-days: 14

@@ -1,0 +1,756 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "Docker cleanup": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Docker 清理"
+          }
+        }
+      }
+    },
+    "Stop further operations": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "停止后续操作"
+          }
+        }
+      }
+    },
+    "Docker is unavailable in Demo. No daemon connection is made.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "示例模式下不能操作 Docker，也不会连接 daemon。"
+          }
+        }
+      }
+    },
+    "Review selected operations…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复查所选操作…"
+          }
+        }
+      }
+    },
+    "Choose a local daemon, then read its inventory. MoeKit ignores the active Docker CLI context and never reads Docker credentials or starts Docker.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "先选择本地 daemon，再主动读取清单。MoeKit 不使用 Docker CLI 当前 context，不读取 Docker 凭据，也不会启动 Docker。"
+          }
+        }
+      }
+    },
+    "Local endpoint": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本地连接"
+          }
+        }
+      }
+    },
+    "Local Docker Engine": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本地 Docker Engine"
+          }
+        }
+      }
+    },
+    "Connect and refresh inventory": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "连接并刷新清单"
+          }
+        }
+      }
+    },
+    "Only local Unix sockets are supported. Remote contexts, automatic installation, permission changes and network pulls are unavailable.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅支持本地 Unix socket。不支持远端 context、自动安装、权限修改或联网拉取镜像。"
+          }
+        }
+      }
+    },
+    "Connected daemon": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已连接的 daemon"
+          }
+        }
+      }
+    },
+    "Rootless daemon": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rootless daemon"
+          }
+        }
+      }
+    },
+    "Rootless mode not reported by daemon": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Daemon 未报告 rootless 模式"
+          }
+        }
+      }
+    },
+    "Images": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "镜像"
+          }
+        }
+      }
+    },
+    "An image is selectable only when no container references it, including stopped containers. Shared layers are not added together; sizes below are estimates, not promised disk savings.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "镜像只有在任何容器（包括已停止容器）均未引用时才能选择。共享层不重复相加；以下大小是估计值，不承诺实际释放空间。"
+          }
+        }
+      }
+    },
+    "Dangling image": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "悬空镜像"
+          }
+        }
+      }
+    },
+    "Tagged image; all listed tags belong to this image ID": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "带标签镜像；列出的所有标签均属于此镜像 ID"
+          }
+        }
+      }
+    },
+    "Protected: referenced by a container or usage is unknown": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "受保护：被容器引用或使用情况未知"
+          }
+        }
+      }
+    },
+    "Unique estimate": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "独占大小估计"
+          }
+        }
+      }
+    },
+    "Unknown": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未知"
+          }
+        }
+      }
+    },
+    "No images": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有镜像"
+          }
+        }
+      }
+    },
+    "Containers": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "容器"
+          }
+        }
+      }
+    },
+    "Only explicitly selected created or exited containers can be removed. Their writable layers are permanently deleted. Running, paused, restarting, dead and unknown states stay protected. Volumes are retained.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "只能删除明确选中的已创建或已退出容器，其可写层会永久删除。运行中、暂停、重启中、dead 或未知状态容器保持受保护。所有卷保留。"
+          }
+        }
+      }
+    },
+    "No containers": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有容器"
+          }
+        }
+      }
+    },
+    "Build cache": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "构建缓存"
+          }
+        }
+      }
+    },
+    "Remove all unused build cache on this daemon": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除此 daemon 的全部未使用构建缓存"
+          }
+        }
+      }
+    },
+    "This separate operation covers the entire local daemon’s unused build cache, including internal/frontend cache. It is not an exact-row deletion. Builds may take longer afterward. In-use cache is protected by Docker; other builders and remote contexts are not accessed.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这项独立操作覆盖整个本地 daemon 的未使用构建缓存，包含 internal/frontend 缓存，并非精确删除所选行。后续构建可能变慢。Docker 会保护正在使用的缓存；不会访问其他 builder 或远端 context。"
+          }
+        }
+      }
+    },
+    "In use · protected": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用中 · 受保护"
+          }
+        }
+      }
+    },
+    "Unused": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未使用"
+          }
+        }
+      }
+    },
+    "Shared": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "共享"
+          }
+        }
+      }
+    },
+    "Unshared": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "非共享"
+          }
+        }
+      }
+    },
+    "No build cache": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有构建缓存"
+          }
+        }
+      }
+    },
+    "Volumes · always protected": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "卷 · 始终受保护"
+          }
+        }
+      }
+    },
+    "Named and anonymous volumes are listed for visibility only. No volume prune, deletion or filesystem traversal is performed.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "命名卷和匿名卷仅供查看，不执行卷清理、删除或文件系统遍历。"
+          }
+        }
+      }
+    },
+    "No volumes": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有卷"
+          }
+        }
+      }
+    },
+    "Confirm permanent Docker cleanup": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "确认永久删除 Docker 数据"
+          }
+        }
+      }
+    },
+    "Remove container": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除容器"
+          }
+        }
+      }
+    },
+    "Remove image": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除镜像"
+          }
+        }
+      }
+    },
+    "These Docker deletions cannot be undone by MoeKit. Images may need to be rebuilt or pulled manually. Stopped-container writable data is lost. Volumes and running containers are preserved. No network pull is performed.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MoeKit 无法撤销这些 Docker 删除操作。镜像可能需要重新构建或手动拉取，已停止容器的可写数据会丢失。所有卷和运行中的容器保留，不会联网拉取镜像。"
+          }
+        }
+      }
+    },
+    "I understand this permanently removes the listed Docker objects": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "我理解这会永久删除列出的 Docker 对象"
+          }
+        }
+      }
+    },
+    "I also approve the entire daemon-wide unused build-cache scope": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "我同时确认覆盖整个 daemon 的全部未使用构建缓存"
+          }
+        }
+      }
+    },
+    "The confirmation expires after 60 seconds. Docker identity and object usage are checked again before execution.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "确认在 60 秒后过期，执行前会重新检查 Docker 身份和对象使用情况。"
+          }
+        }
+      }
+    },
+    "Cancel": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消"
+          }
+        }
+      }
+    },
+    "Permanently remove": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "永久删除"
+          }
+        }
+      }
+    },
+    "Verified results": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "验证结果"
+          }
+        }
+      }
+    },
+    "Cancelled. Already-sent Docker operations may still complete; cancellation does not undo them.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已取消。已经发送给 Docker 的操作仍可能完成，取消不会撤销它们。"
+          }
+        }
+      }
+    },
+    "Some results remain uncertain. Refresh the inventory before making a new selection.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "部分结果仍不确定。请刷新清单后重新选择。"
+          }
+        }
+      }
+    },
+    "Docker-reported cache bytes reclaimed": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Docker 报告的已回收缓存字节数"
+          }
+        }
+      }
+    },
+    "Engine-reported reclamation does not guarantee the same physical space is returned to macOS or Docker Desktop’s disk image.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Engine 报告的回收量不保证 macOS 或 Docker Desktop 磁盘映像立即释放等量物理空间。"
+          }
+        }
+      }
+    },
+    "removed": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已确认移除"
+          }
+        }
+      }
+    },
+    "retained": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仍然保留"
+          }
+        }
+      }
+    },
+    "failed": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "失败"
+          }
+        }
+      }
+    },
+    "uncertain": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "结果不确定"
+          }
+        }
+      }
+    },
+    "skipped": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未执行"
+          }
+        }
+      }
+    },
+    "Local Docker socket unavailable. Start Docker yourself, then retry.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本地 Docker socket 不可用，请自行启动 Docker 后重试。"
+          }
+        }
+      }
+    },
+    "The selected local socket is unavailable, unsafe, or changed.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所选本地 socket 不可用、不安全或已变化。"
+          }
+        }
+      }
+    },
+    "Docker returned an incomplete or unsupported response.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Docker 返回了不完整或不支持的响应。"
+          }
+        }
+      }
+    },
+    "Docker inventory exceeded the bounded response limit.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Docker 清单超过响应大小限制。"
+          }
+        }
+      }
+    },
+    "Docker timed out. A sent operation may still complete; refresh before retrying.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Docker 响应超时。已发送的操作仍可能完成，请刷新后再决定是否重试。"
+          }
+        }
+      }
+    },
+    "Cancelled. An operation already sent to Docker may still complete.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已取消。已发送给 Docker 的操作仍可能完成。"
+          }
+        }
+      }
+    },
+    "This Docker daemon or API version is unsupported.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不支持此 Docker daemon 或 API 版本。"
+          }
+        }
+      }
+    },
+    "Docker identity or selected objects changed. Refresh and review again.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Docker 身份或所选对象已变化，请刷新并重新复查。"
+          }
+        }
+      }
+    },
+    "The selection includes an in-use, protected, or unknown object.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所选内容包含使用中、受保护或未知的对象。"
+          }
+        }
+      }
+    },
+    "This confirmation expired. Review a fresh inventory.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "确认已过期，请重新读取并复查清单。"
+          }
+        }
+      }
+    },
+    "This confirmation has already been used or dismissed.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此确认已使用或已关闭。"
+          }
+        }
+      }
+    },
+    "Docker refused removal because the object is in use or has multiple tags. Refresh and review it.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Docker 拒绝删除：对象仍在使用或有多个标签。请刷新后复查。"
+          }
+        }
+      }
+    },
+    "Docker refused the request. Refresh and review the result.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Docker 拒绝了请求，请刷新并复查结果。"
+          }
+        }
+      }
+    },
+    "Not sent to Docker.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未发送给 Docker。"
+          }
+        }
+      }
+    },
+    "Docker accepted the operation; verification pending.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Docker 已接受操作，等待验证。"
+          }
+        }
+      }
+    },
+    "Docker operation could not be verified.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法验证 Docker 操作结果。"
+          }
+        }
+      }
+    },
+    "Image ID is absent from the refreshed inventory.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刷新后的清单中已不存在此镜像 ID。"
+          }
+        }
+      }
+    },
+    "Container ID is absent. Its volumes were not requested for removal.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此容器 ID 已不存在，未请求删除其卷。"
+          }
+        }
+      }
+    },
+    "Build-cache pruning finished. The refreshed inventory shows which records remain; shared or newly in-use cache may be retained.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "构建缓存清理已结束，刷新后的清单显示仍保留的记录。共享或刚开始使用的缓存可能保留。"
+          }
+        }
+      }
+    },
+    "Object is still present. No automatic retry was made.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "对象仍然存在，没有自动重试。"
+          }
+        }
+      }
+    },
+    "Cleanup category": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清理类别"
+          }
+        }
+      }
+    },
+    "Caches": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缓存"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

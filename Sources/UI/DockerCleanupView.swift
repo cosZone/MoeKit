@@ -1,0 +1,227 @@
+import SwiftUI
+
+/// Self-contained cleanup category. Opening the view never connects to Docker.
+@MainActor
+struct DockerCleanupView: View {
+    @Environment(WorkspaceStore.self) private var workspace
+    @State private var store: DockerCleanupStore
+    @State private var acknowledgeIrreversible = false
+    @State private var acknowledgeCacheScope = false
+    init(store: DockerCleanupStore? = nil) { _store = State(initialValue: store ?? DockerCleanupStore()) }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Label(d("Docker cleanup"), systemImage: "shippingbox").fontWeight(.semibold)
+                Spacer()
+                if store.isBusy {
+                    ProgressView().controlSize(.small)
+                    Button(d("Stop further operations")) { store.cancel() }
+                }
+            }.padding(14)
+            Divider()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    connection
+                    if store.isDemoEnabled {
+                        Text(d("Docker is unavailable in Demo. No daemon connection is made.")).foregroundStyle(.secondary)
+                    }
+                    if let error = store.errorMessage { Label(d(error), systemImage: "exclamationmark.triangle").foregroundStyle(.orange) }
+                    if let inventory = store.inventory {
+                        identity(inventory.daemon)
+                        inventoryRows(inventory)
+                        Button(d("Review selected operations…")) { store.prepare() }.disabled(!store.canPrepare)
+                            .accessibilityIdentifier("docker.review")
+                    }
+                    if let result = store.result { results(result) }
+                }.padding(18)
+            }
+        }
+        .onAppear { store.bindContext { workspace.isDemoEnabled } }
+        .onChange(of: workspace.isDemoEnabled) { _, value in store.updateDemo(value) }
+        .onDisappear { store.leave() }
+        .sheet(item: Binding(get: { store.plan }, set: { if $0 == nil { store.dismissPlan() } })) { plan in
+            confirmation(plan)
+        }
+    }
+
+    private var connection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(d("Choose a local daemon, then read its inventory. MoeKit ignores the active Docker CLI context and never reads Docker credentials or starts Docker."))
+                .foregroundStyle(.secondary)
+            HStack {
+                Picker(d("Local endpoint"), selection: Binding(get: { store.endpoint == .desktop ? 0 : 1 }, set: {
+                    store.chooseEndpoint($0 == 0 ? .desktop : .engine)
+                })) {
+                    Text("Docker Desktop").tag(0)
+                    Text(d("Local Docker Engine")).tag(1)
+                }.frame(maxWidth: 330).disabled(!store.canInspect)
+                Button(d("Connect and refresh inventory")) { store.inspect() }.disabled(!store.canInspect)
+                    .accessibilityIdentifier("docker.connect")
+            }
+            Text(store.endpoint.socketPath).font(.system(.caption, design: .monospaced)).textSelection(.enabled)
+            Text(d("Only local Unix sockets are supported. Remote contexts, automatic installation, permission changes and network pulls are unavailable."))
+                .font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    private func identity(_ daemon: DockerDaemonIdentity) -> some View {
+        GroupBox(d("Connected daemon")) {
+            VStack(alignment: .leading, spacing: 5) {
+                Text("\(safe(daemon.name)) · Docker \(safe(daemon.version)) · \(safe(daemon.operatingSystem))")
+                Text("ID: \(safe(daemon.id))").textSelection(.enabled)
+                Text(daemon.socket.path).textSelection(.enabled)
+                Text(daemon.rootless ? d("Rootless daemon") : d("Rootless mode not reported by daemon"))
+            }.font(.caption).frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func inventoryRows(_ inventory: DockerInventory) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(d("Images")).font(.headline)
+            Text(d("An image is selectable only when no container references it, including stopped containers. Shared layers are not added together; sizes below are estimates, not promised disk savings."))
+                .font(.caption).foregroundStyle(.secondary)
+            ForEach(inventory.images) { image in
+                HStack(alignment: .top) {
+                    Toggle(isOn: imageBinding(image.id)) { EmptyView() }.labelsHidden()
+                        .disabled(store.isBusy || !inventory.imageIsEligible(image))
+                        .accessibilityLabel(safe(image.title))
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(safe(image.title)).lineLimit(2)
+                        Text(image.id).font(.system(.caption2, design: .monospaced)).textSelection(.enabled)
+                        Text(image.dangling ? d("Dangling image") : d("Tagged image; all listed tags belong to this image ID"))
+                            .font(.caption).foregroundStyle(.secondary)
+                        projectLabels(image.labels)
+                        if !inventory.imageIsEligible(image) {
+                            Text(d("Protected: referenced by a container or usage is unknown")).font(.caption).foregroundStyle(.orange)
+                            ForEach(inventory.references(to: image)) { reference in
+                                Text("↳ \(safe(reference.title)) · \(safe(reference.state))").font(.caption)
+                            }
+                        }
+                    }
+                    Spacer()
+                    VStack(alignment: .trailing) {
+                        Text(size(image.size))
+                        Text(d("Unique estimate") + ": " + (image.uniqueBytes.map(size) ?? d("Unknown"))).font(.caption)
+                    }.foregroundStyle(.secondary)
+                }.padding(.vertical, 4)
+                Divider()
+            }
+            if inventory.images.isEmpty { Text(d("No images")).foregroundStyle(.secondary) }
+            Text(d("Containers")).font(.headline)
+            Text(d("Only explicitly selected created or exited containers can be removed. Their writable layers are permanently deleted. Running, paused, restarting, dead and unknown states stay protected. Volumes are retained."))
+                .font(.caption).foregroundStyle(.secondary)
+            ForEach(inventory.containers) { container in
+                HStack(alignment: .top) {
+                    Toggle(isOn: containerBinding(container.id)) { EmptyView() }.labelsHidden()
+                        .disabled(store.isBusy || !container.isStopped).accessibilityLabel(safe(container.title))
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(safe(container.title))
+                        Text(container.id).font(.system(.caption2, design: .monospaced)).textSelection(.enabled)
+                        Text(safe(container.state) + " · " + container.imageID).font(.caption).foregroundStyle(.secondary)
+                        projectLabels(container.labels)
+                    }
+                }
+            }
+            if inventory.containers.isEmpty { Text(d("No containers")).foregroundStyle(.secondary) }
+            Text(d("Build cache")).font(.headline)
+            Toggle(d("Remove all unused build cache on this daemon"), isOn: Binding(get: { store.selection.allUnusedBuildCache }, set: {
+                var value = store.selection; value.allUnusedBuildCache = $0; store.select(value)
+            })).disabled(store.isBusy || !inventory.buildCache.contains { !$0.inUse })
+            Text(d("This separate operation covers the entire local daemon’s unused build cache, including internal/frontend cache. It is not an exact-row deletion. Builds may take longer afterward. In-use cache is protected by Docker; other builders and remote contexts are not accessed."))
+                .font(.caption).foregroundStyle(.secondary)
+            ForEach(inventory.buildCache) { cache in
+                HStack {
+                    Text(safe(cache.id)).font(.system(.caption, design: .monospaced))
+                    Spacer()
+                    Text(cache.inUse ? d("In use · protected") : d("Unused"))
+                    Text(cache.shared ? d("Shared") : d("Unshared"))
+                    Text(size(cache.size))
+                }.font(.caption)
+            }
+            if inventory.buildCache.isEmpty { Text(d("No build cache")).foregroundStyle(.secondary) }
+            Text(d("Volumes · always protected")).font(.headline)
+            Text(d("Named and anonymous volumes are listed for visibility only. No volume prune, deletion or filesystem traversal is performed."))
+                .font(.caption).foregroundStyle(.secondary)
+            ForEach(inventory.volumes) { volume in
+                Label("\(safe(volume.name)) · \(safe(volume.driver))", systemImage: "lock.fill").font(.caption)
+            }
+            if inventory.volumes.isEmpty { Text(d("No volumes")).foregroundStyle(.secondary) }
+        }
+    }
+
+    private func confirmation(_ plan: DockerCleanupPlan) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text(d("Confirm permanent Docker cleanup")).font(.title2.bold())
+            identity(plan.inventory.daemon)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(plan.selection.containerIDs.sorted(), id: \.self) { id in
+                        Text(d("Remove container") + ": " + id).textSelection(.enabled)
+                        if let item = plan.inventory.containers.first(where: { $0.id == id }) { Text(safe(item.title)).font(.caption) }
+                    }
+                    ForEach(plan.selection.imageIDs.sorted(), id: \.self) { id in
+                        Text(d("Remove image") + ": " + id).textSelection(.enabled)
+                        if let item = plan.inventory.images.first(where: { $0.id == id }) { Text(safe(item.tags.joined(separator: ", "))).font(.caption) }
+                    }
+                    if plan.selection.allUnusedBuildCache { Text(d("Remove all unused build cache on this daemon")).fontWeight(.semibold) }
+                }.frame(maxWidth: .infinity, alignment: .leading)
+            }.frame(maxHeight: 220)
+            Text(d("These Docker deletions cannot be undone by MoeKit. Images may need to be rebuilt or pulled manually. Stopped-container writable data is lost. Volumes and running containers are preserved. No network pull is performed."))
+            Toggle(d("I understand this permanently removes the listed Docker objects"), isOn: $acknowledgeIrreversible)
+            if plan.selection.allUnusedBuildCache {
+                Toggle(d("I also approve the entire daemon-wide unused build-cache scope"), isOn: $acknowledgeCacheScope)
+            }
+            Text(d("The confirmation expires after 60 seconds. Docker identity and object usage are checked again before execution."))
+                .font(.caption).foregroundStyle(.secondary)
+            HStack {
+                Spacer()
+                Button(d("Cancel")) { store.dismissPlan() }.keyboardShortcut(.cancelAction)
+                Button(d("Permanently remove"), role: .destructive) { store.confirm(planID: plan.id) }
+                    .disabled(!acknowledgeIrreversible || (plan.selection.allUnusedBuildCache && !acknowledgeCacheScope))
+                    .accessibilityIdentifier("docker.confirm")
+            }
+        }.padding(24).frame(width: 680)
+            .onAppear { acknowledgeIrreversible = false; acknowledgeCacheScope = false }
+    }
+
+    private func results(_ result: DockerCleanupResult) -> some View {
+        GroupBox(d("Verified results")) {
+            VStack(alignment: .leading, spacing: 8) {
+                if result.cancelled { Text(d("Cancelled. Already-sent Docker operations may still complete; cancellation does not undo them.")) }
+                if result.hasUncertainty { Text(d("Some results remain uncertain. Refresh the inventory before making a new selection.")).foregroundStyle(.orange) }
+                ForEach(result.items) { item in
+                    Text("\(d(item.state.rawValue)) · \(item.id)").fontWeight(.medium)
+                    Text(d(item.detail)).font(.caption).foregroundStyle(.secondary)
+                }
+                if let reclaimed = result.reclaimedCacheBytes {
+                    Text(d("Docker-reported cache bytes reclaimed") + ": \(reclaimed)")
+                }
+                Text(d("Engine-reported reclamation does not guarantee the same physical space is returned to macOS or Docker Desktop’s disk image."))
+                    .font(.caption).foregroundStyle(.secondary)
+            }.frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+    private func projectLabels(_ labels: [String: String]) -> some View {
+        ForEach(labels.keys.sorted(), id: \.self) { key in
+            Text("\(key): \(safe(labels[key] ?? ""))").font(.caption).foregroundStyle(.secondary)
+        }
+    }
+    private func imageBinding(_ id: String) -> Binding<Bool> {
+        Binding(get: { store.selection.imageIDs.contains(id) }, set: { selected in
+            var value = store.selection
+            if selected { value.imageIDs.insert(id) } else { value.imageIDs.remove(id) }
+            store.select(value)
+        })
+    }
+    private func containerBinding(_ id: String) -> Binding<Bool> {
+        Binding(get: { store.selection.containerIDs.contains(id) }, set: { selected in
+            var value = store.selection
+            if selected { value.containerIDs.insert(id) } else { value.containerIDs.remove(id) }
+            store.select(value)
+        })
+    }
+    private func d(_ key: String) -> String { String(localized: String.LocalizationValue(key), table: "DockerCleanup") }
+    private func safe(_ text: String) -> String { DockerValidation.safeDisplay(text) }
+    private func size(_ value: Int64) -> String { value < 0 ? d("Unknown") : ByteCountFormatter.string(fromByteCount: value, countStyle: .file) }
+}

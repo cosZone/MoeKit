@@ -12,11 +12,12 @@
 #import <string.h>
 #import <stdlib.h>
 #import <limits.h>
+#import "probe_policy.h"
 
 // POSIX physical paths are identity inputs; Foundation standardization may
 // intentionally remove /private and must not be used for identity comparisons.
 static NSString *physicalPath(NSString *path) {
-    if (![path hasPrefix:@"/"] || [path lengthOfBytesUsingEncoding:NSUTF8StringEncoding] >= PATH_MAX) return nil;
+    if (![path hasPrefix:@"/"] || [path lengthOfBytesUsingEncoding:NSUTF8StringEncoding] >= PATH_MAX) { errno = EINVAL; return nil; }
     char resolved[PATH_MAX];
     return realpath(path.fileSystemRepresentation, resolved) ? [NSString stringWithUTF8String:resolved] : nil;
 }
@@ -32,9 +33,104 @@ static BOOL sameRoot(struct stat a, struct stat b) {
     return a.st_dev == b.st_dev && a.st_ino == b.st_ino && S_ISDIR(a.st_mode) && S_ISDIR(b.st_mode) &&
         a.st_uid == geteuid() && b.st_uid == geteuid() && (a.st_mode & 0777) == 0700 && (b.st_mode & 0777) == 0700;
 }
-static BOOL sameProcess(struct proc_bsdinfo a, struct proc_bsdinfo b) {
-    return a.pbi_pid == b.pbi_pid && a.pbi_uid == b.pbi_uid && a.pbi_ruid == b.pbi_ruid &&
-        a.pbi_start_tvsec == b.pbi_start_tvsec && a.pbi_start_tvusec == b.pbi_start_tvusec;
+static struct FixtureProcess processValue(struct proc_bsdinfo value) {
+    return (struct FixtureProcess){ .pid = value.pbi_pid, .euid = value.pbi_uid, .ruid = value.pbi_ruid,
+        .seconds = value.pbi_start_tvsec, .microseconds = value.pbi_start_tvusec, .zombie = value.pbi_status == SZOMB };
+}
+static enum FixtureLookup lookupProcess(pid_t pid, struct FixtureProcess *value, int *error) {
+    struct proc_bsdinfo info = {0}; errno = 0;
+    int size = proc_pidinfo(pid, PROC_PIDTBSDINFO, 1, &info, sizeof(info));
+    *error = errno;
+    if (size == (int)sizeof(info) && info.pbi_pid == (uint32_t)pid) { *value = processValue(info); return FixtureLookupPresent; }
+    return size <= 0 && *error == ESRCH ? FixtureLookupGone : FixtureLookupUnknown;
+}
+static struct FixtureProcess entryValue(NSDictionary *entry) {
+    return (struct FixtureProcess){ .pid = [entry[@"pid"] unsignedIntValue], .euid = [entry[@"uid"] unsignedIntValue],
+        .ruid = [entry[@"uid"] unsignedIntValue], .seconds = [entry[@"start_seconds"] unsignedLongLongValue],
+        .microseconds = [entry[@"start_microseconds"] unsignedLongLongValue], .zombie = false };
+}
+static NSString *identityKey(struct FixtureProcess value) {
+    return [NSString stringWithFormat:@"%u:%llu:%llu", value.pid,
+            (unsigned long long)value.seconds, (unsigned long long)value.microseconds];
+}
+static NSDictionary *knownEntry(NSDictionary *known, struct FixtureProcess first, struct FixtureProcess second,
+                                enum FixtureLookup firstLookup, enum FixtureLookup secondLookup) {
+    NSDictionary *entry = firstLookup == FixtureLookupPresent ? known[identityKey(first)] : nil;
+    return entry ?: (secondLookup == FixtureLookupPresent ? known[identityKey(second)] : nil);
+}
+static enum FixtureScope executableScope(pid_t pid, NSString *root, NSString *cache,
+                                         NSString **physical, int *error) {
+    char path[PROC_PIDPATHINFO_MAXSIZE] = {0}; errno = 0;
+    int length = proc_pidpath(pid, path, sizeof(path));
+    *error = errno;
+    if (length <= 0 || length >= (int)sizeof(path)) return FixtureScopeUnknown;
+    NSString *executable = [NSString stringWithUTF8String:path];
+    errno = 0;
+    *physical = physicalPath(executable);
+    int resolutionError = errno;
+    if (*physical) return FixturePathScope((*physical).fileSystemRepresentation, root.fileSystemRepresentation, cache.fileSystemRepresentation);
+    *error = resolutionError;
+    // An unrelated executable can disappear between the kernel's vnode path
+    // read and realpath. Resolve its immediate parent and require the leaf to
+    // be absent. This is outside-scope evidence only, never a way to admit an
+    // unresolved owned helper or to turn an unreadable path into absence.
+    enum FixtureScope namedScope = executable ? FixturePathScope(executable.fileSystemRepresentation,
+        root.fileSystemRepresentation, cache.fileSystemRepresentation) : FixtureScopeUnknown;
+    NSString *systemAlias = [executable hasPrefix:@"/var/"] ? [@"/private" stringByAppendingString:executable] : executable;
+    enum FixtureScope aliasScope = systemAlias ? FixturePathScope(systemAlias.fileSystemRepresentation,
+        root.fileSystemRepresentation, cache.fileSystemRepresentation) : FixtureScopeUnknown;
+    if (resolutionError == ENOENT && namedScope == FixtureScopeOutside && aliasScope == FixtureScopeOutside) {
+        NSString *parent = physicalPath(executable.stringByDeletingLastPathComponent);
+        NSString *candidate = parent ? [parent stringByAppendingPathComponent:executable.lastPathComponent] : nil;
+        struct stat info; errno = 0;
+        if (candidate && lstat(executable.fileSystemRepresentation, &info) == -1 && errno == ENOENT &&
+            FixturePathScope(candidate.fileSystemRepresentation, root.fileSystemRepresentation, cache.fileSystemRepresentation) == FixtureScopeOutside)
+            return FixtureScopeOutside;
+    }
+    return FixtureScopeUnknown;
+}
+static void processDiagnostic(const char *phase, enum FixtureDecision decision,
+                              struct FixtureProcess first, struct FixtureProcess second,
+                              enum FixtureLookup firstLookup, enum FixtureLookup secondLookup,
+                              enum FixtureScope firstScope, enum FixtureScope secondScope,
+                              BOOL known, int firstError, int secondError, int firstPathError, int secondPathError) {
+    // Fixed categories and booleans only: no ambient PID, executable, arguments
+    // or environment values are printed.
+    fprintf(stderr, "Fixture process observation: phase=%s decision=%d lookup=%d,%d scope=%d,%d known=%d identity_equal=%d uid_equal=%d,%d errno=%d,%d path_errno=%d,%d\n",
+        phase, decision, firstLookup, secondLookup, firstScope, secondScope, known,
+        FixtureSameIdentity(first, second), first.euid == geteuid() && first.ruid == getuid(),
+        second.euid == geteuid() && second.ruid == getuid(), firstError, secondError, firstPathError, secondPathError);
+}
+static enum FixtureDecision observeProcess(pid_t pid, NSDictionary *known, NSString *root, NSString *cache,
+                                           NSDictionary **entry, struct FixtureProcess *classified) {
+    struct FixtureProcess first = {0}, second = {0};
+    int firstError = 0, secondError = 0, firstPathError = 0, secondPathError = 0;
+    enum FixtureLookup firstLookup = lookupProcess(pid, &first, &firstError);
+    NSString *firstPath = nil, *secondPath = nil;
+    enum FixtureScope firstScope = FixtureScopeUnknown, secondScope = FixtureScopeUnknown;
+    if (firstLookup == FixtureLookupPresent && !first.zombie) {
+        firstScope = executableScope(pid, root, cache, &firstPath, &firstPathError);
+        secondScope = executableScope(pid, root, cache, &secondPath, &secondPathError);
+    }
+    enum FixtureLookup secondLookup = lookupProcess(pid, &second, &secondError);
+    *classified = second;
+    NSDictionary *previous = knownEntry(known, first, second, firstLookup, secondLookup);
+    struct FixtureProcess expected = previous ? entryValue(previous) : (struct FixtureProcess){0};
+    enum FixtureDecision decision = FixtureClassify(first, second, firstLookup, secondLookup, firstScope, secondScope,
+                                                     geteuid(), previous ? &expected : NULL);
+    if (decision == FixtureDecisionOwned) {
+        NSString *path = secondPath ?: firstPath;
+        NSString *role = previous ? previous[@"role"] :
+            [path hasSuffix:@"/Sparkle.framework/Versions/B/Autoupdate"] ? @"installer" :
+            [path hasSuffix:@"/Updater.app/Contents/MacOS/Updater"] ? @"progress-agent" : @"fixture-process";
+        *entry = @{@"pid": @(second.pid), @"uid": @(second.euid), @"start_seconds": @(second.seconds),
+            @"start_microseconds": @(second.microseconds), @"role": role,
+            @"scope": previous ? @"tracked-identity" : [path hasPrefix:[root stringByAppendingString:@"/"]] ? @"owned-root" : @"exact-fixture-cache"};
+    } else if (decision == FixtureDecisionUnknown || decision == FixtureDecisionChanged) {
+        processDiagnostic("scan", decision, first, second, firstLookup, secondLookup, firstScope, secondScope,
+                          previous != nil, firstError, secondError, firstPathError, secondPathError);
+    }
+    return decision;
 }
 static int fail(NSString *reason) {
     fprintf(stderr, "Fixture lifetime probe unknown: %s\n", reason.UTF8String);
@@ -42,7 +138,7 @@ static int fail(NSString *reason) {
 }
 int main(int argc, const char *argv[]) {
     @autoreleasepool {
-        if (argc != 7 || geteuid() == 0 || ![NSProcessInfo.processInfo.environment[@"GITHUB_ACTIONS"] isEqualToString:@"true"] ||
+        if (argc != 7 || !FixtureNormalUser(getuid(), geteuid()) || ![NSProcessInfo.processInfo.environment[@"GITHUB_ACTIONS"] isEqualToString:@"true"] ||
             ![NSProcessInfo.processInfo.environment[@"RUNNER_ENVIRONMENT"] isEqualToString:@"github-hosted"]) return fail(@"CI gate");
         NSString *namedRoot = [NSString stringWithUTF8String:argv[1]], *identifier = [NSString stringWithUTF8String:argv[2]];
         NSString *marker = [NSString stringWithUTF8String:argv[3]];
@@ -74,11 +170,11 @@ int main(int argc, const char *argv[]) {
             [marker isEqualToString:[[NSString alloc] initWithBytes:markerBytes length:32 encoding:NSUTF8StringEncoding]];
         if (markerFD >= 0) close(markerFD);
         if (!markerValid) return fail(@"owner marker");
-        NSString *prefix = [root stringByAppendingString:@"/"];
-        NSString *cacheParent = physicalPath([NSHomeDirectory() stringByAppendingPathComponent:@"Library/Caches"]);
+        NSURL *cacheURL = [NSFileManager.defaultManager URLForDirectory:NSCachesDirectory inDomain:NSUserDomainMask
+            appropriateForURL:nil create:NO error:NULL];
+        NSString *cacheParent = physicalPath(cacheURL.path);
         if (!cacheParent) return fail(@"cache parent physical path");
         NSString *cache = [cacheParent stringByAppendingPathComponent:identifier];
-        NSString *cachePrefix = [cache stringByAppendingString:@"/"];
         NSData *trackedData = [[NSString stringWithUTF8String:argv[6]] dataUsingEncoding:NSUTF8StringEncoding];
         NSArray *tracked = [NSJSONSerialization JSONObjectWithData:trackedData options:0 error:NULL];
         if (![tracked isKindOfClass:NSArray.class] || tracked.count > 32) return fail(@"tracked identity input");
@@ -88,71 +184,63 @@ int main(int argc, const char *argv[]) {
                 ![entry[@"start_seconds"] isKindOfClass:NSNumber.class] || ![entry[@"start_microseconds"] isKindOfClass:NSNumber.class] ||
                 ![entry[@"role"] isKindOfClass:NSString.class]) return fail(@"tracked identity shape");
         }
-        NSMutableArray *processes = [NSMutableArray array];
+        NSMutableDictionary<NSString *, NSDictionary *> *observed = [NSMutableDictionary dictionary];
+        for (NSDictionary *entry in tracked) observed[identityKey(entryValue(entry))] = entry;
+        NSMutableDictionary<NSNumber *, NSValue *> *finalInventory = [NSMutableDictionary dictionary];
+        NSDictionary<NSString *, NSDictionary *> *previousPass = @{};
+        NSDictionary<NSString *, NSDictionary *> *lastPass = @{};
         pid_t pids[16384];
-        NSMutableSet<NSNumber *> *lastInventory = [NSMutableSet set];
-        for (int pass = 0; pass < 2; pass++) {
-        [lastInventory removeAllObjects];
-        int bytes = proc_listpids(PROC_UID_ONLY, getuid(), pids, sizeof(pids));
-        if (bytes <= 0 || bytes >= (int)sizeof(pids) || bytes % (int)sizeof(pid_t)) return fail(@"process enumeration");
-        for (int i = 0; i < bytes / (int)sizeof(pid_t); i++) {
-            if (pids[i] <= 0 || pids[i] == getpid()) continue;
-            [lastInventory addObject:@(pids[i])];
-            struct proc_bsdinfo first = {0}, second = {0};
-            errno = 0;
-            if (proc_pidinfo(pids[i], PROC_PIDTBSDINFO, 1, &first, sizeof(first)) != (int)sizeof(first)) {
-                if (errno == ESRCH) continue;
-                return fail(@"process identity unavailable");
+        // Each pass classifies ownership before imposing fixture credentials.
+        // New outside processes are harmless; an owned birth in the final pass
+        // is inconclusive. No first-pass-only role can authorize installation.
+        for (int pass = 0; pass < 3; pass++) {
+            [finalInventory removeAllObjects];
+            int bytes = proc_listpids(PROC_UID_ONLY, geteuid(), pids, sizeof(pids));
+            if (bytes <= 0 || bytes >= (int)sizeof(pids) || bytes % (int)sizeof(pid_t)) return fail(@"process enumeration");
+            NSMutableDictionary *current = [NSMutableDictionary dictionary];
+            for (int i = 0; i < bytes / (int)sizeof(pid_t); i++) {
+                if (pids[i] <= 0 || pids[i] == getpid()) continue;
+                NSDictionary *entry = nil;
+                struct FixtureProcess classified = {0};
+                enum FixtureDecision decision = observeProcess(pids[i], observed, root, cache, &entry, &classified);
+                if (decision == FixtureDecisionUnknown) return fail(@"process ownership or identity unknown");
+                if (decision == FixtureDecisionChanged) return 3;
+                if (classified.pid > 0) finalInventory[@(classified.pid)] = [NSValue valueWithBytes:&classified objCType:@encode(struct FixtureProcess)];
+                if (decision == FixtureDecisionOwned) {
+                    NSString *key = identityKey(entryValue(entry));
+                    if (pass == 2 && !previousPass[key]) {
+                        fprintf(stderr, "Fixture owned identity appeared during final inventory\n"); return 3;
+                    }
+                    current[key] = entry;
+                    observed[key] = entry;
+                    if (observed.count > 32) return fail(@"owned identity budget");
+                }
             }
-            if (first.pbi_ruid != getuid() || first.pbi_uid != geteuid()) return fail(@"process user changed");
-            char path[PROC_PIDPATHINFO_MAXSIZE] = {0};
-            int pathLength = proc_pidpath(pids[i], path, sizeof(path));
-            errno = 0;
-            if (proc_pidinfo(pids[i], PROC_PIDTBSDINFO, 1, &second, sizeof(second)) != (int)sizeof(second)) {
-                if (errno == ESRCH) continue;
-                return fail(@"process recheck unavailable");
-            }
-            if (!sameProcess(first, second)) return fail(@"process identity changed");
-            // A stable zombie cannot execute or launch more fixture helpers.
-            // The Python owner separately reaps its original direct child.
-            if (second.pbi_status == SZOMB) continue;
-            NSDictionary *known = nil;
-            for (NSDictionary *entry in tracked) {
-                if ([entry[@"pid"] intValue] == pids[i] && [entry[@"uid"] unsignedIntValue] == first.pbi_uid &&
-                    [entry[@"start_seconds"] unsignedLongLongValue] == first.pbi_start_tvsec &&
-                    [entry[@"start_microseconds"] unsignedLongLongValue] == first.pbi_start_tvusec) { known = entry; break; }
-            }
-            NSString *executable = pathLength > 0 && pathLength < (int)sizeof(path) ? [NSString stringWithUTF8String:path] : nil;
-            if (!executable && !known) return fail(@"process executable unavailable");
-            // Keep known identities alive even after replacement unlinks or
-            // relocates the old executable. Canonicalization never erases them.
-            NSString *physicalExecutable = physicalPath(executable);
-            if (!physicalExecutable && !known) return fail(@"executable physical path unavailable");
-            if ([physicalExecutable hasPrefix:prefix] || [physicalExecutable hasPrefix:cachePrefix] || known) {
-                NSString *role = known ? known[@"role"] :
-                    [physicalExecutable hasSuffix:@"/Sparkle.framework/Versions/B/Autoupdate"] ? @"installer" :
-                    [physicalExecutable hasSuffix:@"/Updater.app/Contents/MacOS/Updater"] ? @"progress-agent" : @"fixture-process";
-                [processes addObject:@{@"pid": @(pids[i]), @"uid": @(first.pbi_uid),
-                    @"start_seconds": @(first.pbi_start_tvsec), @"start_microseconds": @(first.pbi_start_tvusec),
-                    @"role": role, @"scope": known ? @"tracked-identity" : [physicalExecutable hasPrefix:prefix] ? @"owned-root" : @"exact-fixture-cache"}];
-            }
+            previousPass = current;
+            lastPass = current;
         }
-        }
-        // Refuse an inventory gap, including a tracked process changing user.
-        int finalBytes = proc_listpids(PROC_UID_ONLY, getuid(), pids, sizeof(pids));
-        if (finalBytes <= 0 || finalBytes >= (int)sizeof(pids) || finalBytes % (int)sizeof(pid_t)) return fail(@"process inventory recheck");
-        for (int i = 0; i < finalBytes / (int)sizeof(pid_t); i++)
-            if (pids[i] > 0 && pids[i] != getpid() && ![lastInventory containsObject:@(pids[i])]) { fprintf(stderr, "Fixture lifetime snapshot changed during enumeration\n"); return 3; }
-        for (NSDictionary *entry in tracked) {
-            struct proc_bsdinfo current = {0}; errno = 0;
-            if (proc_pidinfo([entry[@"pid"] intValue], PROC_PIDTBSDINFO, 1, &current, sizeof(current)) != (int)sizeof(current)) {
-                if (errno == ESRCH) continue;
-                return fail(@"tracked process recheck unavailable");
-            }
-            if (current.pbi_start_tvsec == [entry[@"start_seconds"] unsignedLongLongValue] &&
-                current.pbi_start_tvusec == [entry[@"start_microseconds"] unsignedLongLongValue] && current.pbi_status != SZOMB &&
-                (current.pbi_uid != geteuid() || current.pbi_ruid != getuid() || ![lastInventory containsObject:entry[@"pid"]]))
+        NSMutableArray *processes = [NSMutableArray array];
+        for (NSDictionary *entry in observed.allValues) {
+            struct FixtureProcess expected = entryValue(entry), first = {0}, second = {0};
+            int firstError = 0, secondError = 0;
+            enum FixtureLookup firstLookup = lookupProcess((pid_t)expected.pid, &first, &firstError);
+            enum FixtureLookup secondLookup = lookupProcess((pid_t)expected.pid, &second, &secondError);
+            struct FixtureProcess classified = {0};
+            NSValue *finalValue = finalInventory[@(expected.pid)];
+            if (finalValue) [finalValue getValue:&classified size:sizeof(classified)];
+            enum FixtureDecision decision = FixtureRecheck(expected, first, second, firstLookup, secondLookup,
+                geteuid(), finalValue ? &classified : NULL);
+            if (decision == FixtureDecisionUnknown || decision == FixtureDecisionChanged) {
+                processDiagnostic("final-owned", decision, first, second, firstLookup, secondLookup,
+                    FixtureScopeOwned, FixtureScopeOwned, YES, firstError, secondError, 0, 0);
+                if (decision == FixtureDecisionChanged) return 3;
                 return fail(@"tracked process inventory changed");
+            }
+            if (decision == FixtureDecisionOwned) {
+                NSDictionary *last = lastPass[identityKey(expected)];
+                if (!last) return fail(@"owned identity absent from final classification");
+                [processes addObject:last];
+            }
         }
         NSArray<NSRunningApplication *> *applications = [NSRunningApplication runningApplicationsWithBundleIdentifier:identifier];
         NSUInteger liveApps = 0;

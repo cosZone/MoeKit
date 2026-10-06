@@ -41,12 +41,13 @@ def require(condition, message):
         raise RuntimeError(message)
 
 
-def run(args, *, timeout=90, transient_exit=None):
+def run(args, *, timeout=90, transient_exit=None, separate_stderr=False):
     result = subprocess.run([str(x) for x in args], stdin=subprocess.DEVNULL,
-                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=timeout, check=False)
-    require(len(result.stdout) <= 2_000_000, "Command diagnostics exceeded fixture budget")
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE if separate_stderr else subprocess.STDOUT, timeout=timeout, check=False)
+    stderr = result.stderr or b""
+    require(len(result.stdout) + len(stderr) <= 2_000_000, "Command diagnostics exceeded fixture budget")
     if transient_exit is not None and result.returncode == transient_exit: return None
-    require(result.returncode == 0, f"Fixture tool failed ({Path(str(args[0])).name}): {result.stdout.decode(errors='replace')[-12000:]}")
+    require(result.returncode == 0, f"Fixture tool failed ({Path(str(args[0])).name}): {(result.stdout + stderr).decode(errors='replace')[-12000:]}")
     return result.stdout.decode().strip()
 
 
@@ -269,7 +270,7 @@ class Lifetime:
                 self.tracked[identity] = {key: event[key] for key in ("pid", "uid", "start_seconds", "start_microseconds")}
                 self.tracked[identity]["role"] = "fixture-host"
         output = run([self.probe, self.owned.path, self.bundle_id, self.owned.marker,
-                      str(self.owned.identity.st_dev), str(self.owned.identity.st_ino), json.dumps(list(self.tracked.values()), separators=(",", ":"))], timeout=5, transient_exit=3)
+                      str(self.owned.identity.st_dev), str(self.owned.identity.st_ino), json.dumps(list(self.tracked.values()), separators=(",", ":"))], timeout=5, transient_exit=3, separate_stderr=True)
         self.owned.verify()
         if output is None:
             # Process births during enumeration do not establish either
@@ -297,16 +298,16 @@ def preflight_probe(owned, probe):
     arguments = [identifier, owned.marker, str(owned.identity.st_dev), str(owned.identity.st_ino), "[]"]
     paths = [owned.path]
     physical = str(owned.path)
-    if physical.startswith("/private/"):
+    if physical.startswith("/private/var/"):
         alias = Path(physical[len("/private"):])
         require(alias.is_dir() and os.path.samefile(alias, owned.path), "System alias did not resolve to owned root")
         paths.append(alias)
-    require(len(paths) == 2, "macOS private-path alias regression was not exercised")
+    require(len(paths) == 2, "Native alias preflight requires an owned temporary root under /private/var with a /var alias")
     for path in paths:
         owned.verify()
         deadline = time.monotonic() + 5
         while time.monotonic() < deadline:
-            result = run([probe, path, *arguments], timeout=5, transient_exit=3)
+            result = run([probe, path, *arguments], timeout=5, transient_exit=3, separate_stderr=True)
             owned.verify()
             if result is not None: break
         else: raise RuntimeError("Native alias preflight inventory did not settle")
@@ -496,8 +497,8 @@ def scenario(name, owned, server, binary, framework, signer, test_key, other_key
 
 
 def main():
-    require(platform.system() == "Darwin" and os.geteuid() != 0 and os.environ.get("GITHUB_ACTIONS") == "true"
-            and os.environ.get("RUNNER_ENVIRONMENT") == "github-hosted", "Native Sparkle fixture runs only on non-root GitHub-hosted macOS")
+    require(platform.system() == "Darwin" and os.getuid() == os.geteuid() and os.geteuid() != 0 and os.environ.get("GITHUB_ACTIONS") == "true"
+            and os.environ.get("RUNNER_ENVIRONMENT") == "github-hosted", "Native Sparkle fixture runs only on equal real/effective non-root UIDs on GitHub-hosted macOS")
     sha = os.environ.get("SOURCE_SHA", "")
     require(re.fullmatch(r"[0-9a-f]{40}", sha) and run(["/usr/bin/git", "-C", ROOT, "rev-parse", "HEAD"]) == sha,
             "Exact checked-out source SHA is required")

@@ -244,7 +244,7 @@ int main(void) {
         // LaunchServices relaunch need not inherit the CI environment. The Python
         // entrypoint gates hosted CI; this host instead requires its signed,
         // generated fixture configuration and pinned private namespace.
-        if (geteuid() == 0 || ![identifier hasPrefix:@"org.moekit.CIFixture."] ||
+        if (getuid() != geteuid() || geteuid() == 0 || ![identifier hasPrefix:@"org.moekit.CIFixture."] ||
             ![caseName isKindOfClass:NSString.class] || ![configuration[@"FixtureCI"] boolValue] ||
             ![[configuration[@"FixtureRoot"] lastPathComponent] hasPrefix:@"moekit-sparkle-"]) return 80;
         NSString *root = configuration[@"FixtureRoot"];

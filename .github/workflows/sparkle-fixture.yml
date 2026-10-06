@@ -27,7 +27,9 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
       - name: Exercise verified download, installation, relaunch and rejection in owned synthetic apps
-        run: python3 Scripts/run-sparkle-fixture.py
+        run: |
+          python3 Scripts/Fixtures/SparkleUpdateFixture/test_harness.py
+          python3 Scripts/run-sparkle-fixture.py
       - name: Preserve exact-source native updater evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

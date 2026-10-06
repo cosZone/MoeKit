@@ -5,6 +5,10 @@ import json
 import time
 from pathlib import Path
 import sys
+import os
+import shutil
+import subprocess
+import tempfile
 import unittest
 from unittest import mock
 from types import SimpleNamespace
@@ -237,14 +241,74 @@ class HarnessBoundaryTests(unittest.TestCase):
         self.assertIn("[physicalApp isEqualToString:expectedApp]", source)
         self.assertNotIn("[application.bundleURL.path hasPrefix:prefix]", source)
 
-    def test_tracked_native_identity_is_not_discarded_when_old_path_is_gone(self):
+    def test_native_probe_uses_shared_policy_and_final_live_roles(self):
         source = (Path(__file__).parent / "probe.m").read_text()
-        self.assertIn('if (!executable && !known) return fail(@"process executable unavailable")', source)
-        self.assertLess(source.index("NSDictionary *known = nil"), source.index("if (!executable && !known)"))
-        self.assertIn('if (!physicalExecutable && !known) return fail(@"executable physical path unavailable")', source)
-        self.assertIn('[physicalExecutable hasPrefix:cachePrefix] || known)', source)
-        self.assertIn('NSString *role = known ? known[@"role"]', source)
-        self.assertIn('known ? @"tracked-identity"', source)
+        self.assertIn('#import "probe_policy.h"', source)
+        self.assertIn("FixtureNormalUser(getuid(), geteuid())", source)
+        self.assertIn("proc_listpids(PROC_UID_ONLY, geteuid()", source)
+        self.assertNotIn("proc_listpids(PROC_UID_ONLY, getuid()", source)
+        self.assertIn("FixtureClassify(first, second", source)
+        self.assertIn("FixtureRecheck(expected, first, second", source)
+        self.assertIn("finalValue ? &classified : NULL", source)
+        self.assertIn("lastPass[identityKey(expected)]", source)
+        self.assertIn("if (pass == 2 && !previousPass[key])", source)
+        self.assertIn("return entry ?: (secondLookup", source)
+        self.assertIn("URLForDirectory:NSCachesDirectory inDomain:NSUserDomainMask", source)
+        self.assertIn("appropriateForURL:nil create:NO", source)
+        self.assertNotIn("NSHomeDirectory()", source)
+        self.assertIn("namedScope == FixtureScopeOutside && aliasScope == FixtureScopeOutside", source)
+
+    def test_shared_native_process_policy_compiles_and_runs_injected_cases(self):
+        compiler = shutil.which("cc")
+        self.assertIsNotNone(compiler, "Portable native policy tests require the platform C compiler")
+        with tempfile.TemporaryDirectory(prefix="moekit-probe-policy-") as directory:
+            binary = Path(directory) / "probe-policy-tests"
+            build = subprocess.run([compiler, "-std=c11", "-Wall", "-Wextra", "-Werror", "-pedantic",
+                                    str(Path(__file__).parent / "test_probe_policy.c"), "-o", str(binary)],
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=30)
+            self.assertEqual(build.returncode, 0, build.stdout + build.stderr)
+            result = subprocess.run([str(binary)], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=10)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("passed", result.stdout.lower())
+            print(result.stdout.strip())
+
+    def test_probe_json_ignores_separate_stderr_warning(self):
+        command = [sys.executable, "-c", 'import sys; print(\'{"idle":true}\'); print("framework warning", file=sys.stderr)']
+        self.assertEqual(json.loads(fixture.run(command, separate_stderr=True)), {"idle": True})
+
+    def test_probe_stderr_refusal_remains_visible(self):
+        command = [sys.executable, "-c", 'import sys; print("owned identity unknown", file=sys.stderr); sys.exit(2)']
+        with self.assertRaisesRegex(RuntimeError, "owned identity unknown"):
+            fixture.run(command, separate_stderr=True)
+
+    def test_probe_stderr_transient_never_returns_idle(self):
+        command = [sys.executable, "-c", 'import sys; print(\'{"idle":true}\'); print("changing", file=sys.stderr); sys.exit(3)']
+        self.assertIsNone(fixture.run(command, transient_exit=3, separate_stderr=True))
+
+    def test_probe_both_output_streams_have_one_combined_budget(self):
+        result = SimpleNamespace(returncode=0, stdout=b"x" * 1_000_001, stderr=b"y" * 1_000_000)
+        with mock.patch.object(fixture.subprocess, "run", return_value=result):
+            with self.assertRaisesRegex(RuntimeError, "budget"):
+                fixture.run(["not-executed"], separate_stderr=True)
+
+    def test_mixed_caller_uid_refuses_before_creating_fixture_output(self):
+        with mock.patch.object(fixture.platform, "system", return_value="Darwin"), \
+             mock.patch.object(fixture.os, "getuid", return_value=0), \
+             mock.patch.object(fixture.os, "geteuid", return_value=501), \
+             mock.patch.dict(fixture.os.environ, {"GITHUB_ACTIONS": "true", "RUNNER_ENVIRONMENT": "github-hosted"}), \
+             mock.patch.object(fixture, "OwnedRoot") as owned, mock.patch.object(fixture, "run") as command:
+            with self.assertRaisesRegex(RuntimeError, "equal real/effective"):
+                fixture.main()
+            owned.assert_not_called()
+            command.assert_not_called()
+
+    def test_alias_preflight_requires_exact_private_var_relationship(self):
+        root = SimpleNamespace(path=Path("/private/elsewhere/moekit-sparkle-fixture"), marker="c" * 32,
+                               identity=SimpleNamespace(st_dev=7, st_ino=19), verify=mock.Mock())
+        with mock.patch.object(fixture, "run") as native:
+            with self.assertRaisesRegex(RuntimeError, "under /private/var"):
+                fixture.preflight_probe(root, "/not-executed")
+            native.assert_not_called()
 
     def test_native_source_uses_real_cancel_and_install_checkpoint(self):
         source = (Path(__file__).parent / "main.m").read_text()
@@ -258,7 +322,7 @@ class HarnessBoundaryTests(unittest.TestCase):
 
     def test_native_probe_retains_exact_services_and_process_identity(self):
         source = (Path(__file__).parent / "probe.m").read_text()
-        for name in ('@"-spki"', '@"-spks"', '@"-spkp"', "BOOTSTRAP_UNKNOWN_SERVICE", "pbi_start_tvsec", "pbi_start_tvusec", "sameProcess"):
+        for name in ('@"-spki"', '@"-spks"', '@"-spkp"', "BOOTSTRAP_UNKNOWN_SERVICE", "pbi_start_tvsec", "pbi_start_tvusec", "FixtureRecheck"):
             self.assertIn(name, source)
         self.assertNotIn("kill(", source)
         self.assertNotIn("terminate]", source)

@@ -31,7 +31,7 @@ class MenuBarEvidenceTests(unittest.TestCase):
             for appearance in ("light", "dark"):
                 name = f"menubar-panel-{state}-{language}-{appearance}-328x304"
                 add(name, ".png", png(328, 304))
-                scope = f"Content size: 328 × 304 points\nBundle language: {language}\nReady title: {'就绪' if language == 'zh-Hans' else 'Ready'}\nOpen title: {'打开 MoeKit' if language == 'zh-Hans' else 'Open MoeKit'}\nno scan, user data, network or screen capture\nreduced motion enabled"
+                scope = f"Content size: 328 × 304 points\nBundle language: {language}\nReady title: {'就绪' if language == 'zh-Hans' else 'Ready'}\nOpen title: {'打开 MoeKit' if language == 'zh-Hans' else 'Open MoeKit'}\nno scan, user data, network or screen capture\nanimations disabled for static capture"
                 add(name + "-scope", ".txt", scope.encode())
         if language == "en":
             for appearance in ("light", "dark"):

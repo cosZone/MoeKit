@@ -23,7 +23,7 @@ final class MenuBarRenderTests: XCTestCase {
                 let root = MenuBarPanelView(presentation: presentation, openWorkspace: {}, openSettings: {}, checkUpdates: {}, quit: {}, close: {})
                     .environment(\.colorScheme, dark ? .dark : .light)
                     .environment(\.locale, Locale.current)
-                    .environment(\.accessibilityReduceMotion, true)
+                    .transaction { $0.animation = nil }
                     .background(Color(nsColor: .windowBackgroundColor))
                 let hosting = NSHostingView(rootView: root)
                 hosting.sizingOptions = []
@@ -49,7 +49,7 @@ final class MenuBarRenderTests: XCTestCase {
                 Ready title: \(MenuBarText.localized("Ready"))
                 Open title: \(MenuBarText.localized("Open MoeKit"))
                 Scope: original owned menu-bar panel with synthetic status only; no scan, user data, network or screen capture.
-                State: \(kind.rawValue); reduced motion enabled. No real system menu bar or focus interaction was captured.
+                State: \(kind.rawValue); animations disabled for static capture. Reduce Motion is tested separately through the controller. No real system menu bar or focus interaction was captured.
                 These renders require visual review; they are not pixel baselines or accessibility acceptance.
                 """)
                 metadata.name = name + "-scope.txt"; metadata.lifetime = .keepAlways; add(metadata)

@@ -48,7 +48,7 @@ def verify(directory: Path, language: str) -> int:
         required = ("Content size: 328 × 304 points", f"Bundle language: {language}",
                     "Ready title: " + ("就绪" if language == "zh-Hans" else "Ready"),
                     "Open title: " + ("打开 MoeKit" if language == "zh-Hans" else "Open MoeKit"),
-                    "no scan, user data, network or screen capture", "reduced motion enabled")
+                    "no scan, user data, network or screen capture", "animations disabled for static capture")
         if any(text not in scope for text in required):
             raise ValueError("Wrong language or scope evidence")
     return len(images)

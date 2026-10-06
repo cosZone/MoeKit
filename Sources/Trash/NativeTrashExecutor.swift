@@ -160,11 +160,9 @@ actor NativeTrashExecutor: TrashExecuting {
             try validate(root); try journal.storage.validate()
             guard actual == (try CleanupFiles.manifest(parent: operation, name: "payload", environment: environment.files)) else { throw TrashFailure.changed }
             started = true
-            try CleanupPermanentRemoval.remove(manifest: actual, parent: operation, name: "payload", environment: environment.files, isolation: self) { point in
-                try self.checkpoint(point)
-                try self.validate(root)
-                try journal.storage.validate()
-            }
+            let boundary = CleanupRemovalBoundary(root: root, storage: journal.storage, environment: environment.files)
+            try CleanupPermanentRemoval.remove(manifest: actual, parent: operation, name: "payload",
+                environment: environment.files, boundary: boundary, checkpoint: checkpoint)
             try checkpoint(.afterPermanentDelete)
             record = record.advancing(.deleted); try journal.append(record, operation: operation)
             return .init(originalURL: item.url, status: .deleted,

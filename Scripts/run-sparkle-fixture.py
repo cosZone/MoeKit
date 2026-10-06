@@ -7,6 +7,7 @@ or relaxed OS security setting. Temporary fixtures are deliberately retained.
 """
 from __future__ import annotations
 import base64
+from contextlib import contextmanager
 import hashlib
 import http.server
 import json
@@ -249,6 +250,36 @@ def read_events(path, expected=None):
     return [json.loads(line) for line in data.split(b"\n")[:-1] if line]
 
 
+ABORTED_EVENT_OUTPUT_BUDGET = 1_000_000
+
+
+@contextmanager
+def retain_aborted_events(namespace, output_path):
+    """Best-effort diagnostics only; never settle, retry, or replace the abort."""
+    try:
+        yield
+    except BaseException:
+        try:
+            evidence = {"schema": 1, "aborted": True, "settled": False}
+            try:
+                # One fresh guarded read, including the existing 200,000-byte
+                # input limit. Never fall back to stale or replacement bytes.
+                events = namespace.read()
+            except Exception:
+                evidence["event_retention"] = "pinned_namespace_unreadable"
+            else:
+                evidence.update(event_retention="verified_complete_records", events=events)
+            payload = json.dumps(evidence, separators=(",", ":")).encode()
+            if len(payload) > ABORTED_EVENT_OUTPUT_BUDGET:
+                payload = b'{"schema":1,"aborted":true,"settled":false,"event_retention":"artifact_budget_exceeded"}'
+            write_new(output_path, payload)
+        except BaseException:
+            # A collision or any diagnostic failure must leave the original
+            # exception and its traceback intact; no alternate output/retry.
+            pass
+        raise
+
+
 def process_identity(value):
     return tuple(value[key] for key in ("pid", "uid", "start_seconds", "start_microseconds"))
 
@@ -443,42 +474,43 @@ def scenario(name, owned, server, binary, framework, signer, test_key, other_key
     log_path = output / f"{name}.log"
     log_fd = os.open(log_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
     started = time.monotonic()
-    with os.fdopen(log_fd, "wb") as log:
-        process = subprocess.Popen([str(old / "Contents/MacOS/SparkleFixture")], stdin=subprocess.DEVNULL, stdout=log, stderr=log)
-        # The host self-expires. Never signal it or descendants. Unknown
-        # lifetimes/namespace changes abort the batch instead of being skipped.
-        terminal = None
-        acknowledged = False
-        while time.monotonic() - started < 105:
+    with retain_aborted_events(namespace, output / f"{name}.aborted-events.json"):
+        with os.fdopen(log_fd, "wb") as log:
+            process = subprocess.Popen([str(old / "Contents/MacOS/SparkleFixture")], stdin=subprocess.DEVNULL, stdout=log, stderr=log)
+            # The host self-expires. Never signal it or descendants. Unknown
+            # lifetimes/namespace changes abort the batch instead of being skipped.
+            terminal = None
+            acknowledged = False
+            while time.monotonic() - started < 105:
+                events = namespace.read()
+                snapshot = lifetime.sample(events)
+                if snapshot is not None and not acknowledged and any(e["event"] == "ready_to_install" for e in events):
+                    roles = {entry["role"] for entry in snapshot["owned_processes"]}
+                    if {"installer", "progress-agent"}.issubset(roles):
+                        namespace.verify()
+                        write_new(case / "install-ack", owned.marker.encode())
+                        acknowledged = True
+                terminal = next((e for e in events if e["event"] in ("relaunched", "error", "not_found", "cancelled", "start_error", "preference_setup_error")), None)
+                if terminal: break
+                if process.poll() is not None and name not in ("valid", "preview-allowed"): break
+                time.sleep(0.1)
+            process.wait(timeout=15)  # independent native 110-second self-expiry
+        # Require exact app/helper identities and ALL pinned Sparkle services gone.
+        # Track captured identities even if Sparkle moved their executable paths.
+        deadline, empty_since = time.monotonic() + 25, None
+        while time.monotonic() < deadline:
             events = namespace.read()
             snapshot = lifetime.sample(events)
-            if snapshot is not None and not acknowledged and any(e["event"] == "ready_to_install" for e in events):
-                roles = {entry["role"] for entry in snapshot["owned_processes"]}
-                if {"installer", "progress-agent"}.issubset(roles):
-                    namespace.verify()
-                    write_new(case / "install-ack", owned.marker.encode())
-                    acknowledged = True
-            terminal = next((e for e in events if e["event"] in ("relaunched", "error", "not_found", "cancelled", "start_error", "preference_setup_error")), None)
-            if terminal: break
-            if process.poll() is not None and name not in ("valid", "preview-allowed"): break
-            time.sleep(0.1)
-        process.wait(timeout=15)  # independent native 110-second self-expiry
-    # Require exact app/helper identities and ALL pinned Sparkle services gone.
-    # Track captured identities even if Sparkle moved their executable paths.
-    deadline, empty_since = time.monotonic() + 25, None
-    while time.monotonic() < deadline:
+            with server.lock: serving = any(path.startswith(route + "/") and count > 0 for path, count in server.active_responses.items())
+            if snapshot is not None and snapshot["idle"] and not serving:
+                if empty_since is None: empty_since = time.monotonic()
+                if time.monotonic() - empty_since >= 1.0: break
+            else: empty_since = None
+            time.sleep(0.2)
+        else: raise RuntimeError(f"{name}: owned app/installer/server lifetime did not settle")
+        namespace.verify()
         events = namespace.read()
-        snapshot = lifetime.sample(events)
-        with server.lock: serving = any(path.startswith(route + "/") and count > 0 for path, count in server.active_responses.items())
-        if snapshot is not None and snapshot["idle"] and not serving:
-            if empty_since is None: empty_since = time.monotonic()
-            if time.monotonic() - empty_since >= 1.0: break
-        else: empty_since = None
-        time.sleep(0.2)
-    else: raise RuntimeError(f"{name}: owned app/installer/server lifetime did not settle")
-    namespace.verify()
-    events = namespace.read()
-    write_new(output / f"{name}.events.json", json.dumps(events, indent=2).encode())
+        write_new(output / f"{name}.events.json", json.dumps(events, indent=2).encode())
     terminal = next((e for e in events if e["event"] in ("relaunched", "error", "not_found", "cancelled", "start_error", "preference_setup_error")), {"event": "missing"})
     offered = any(e["event"] == "found" for e in events)
     prepared = any(e["event"] == "ready_to_install" for e in events)

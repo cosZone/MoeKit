@@ -31,7 +31,9 @@ final class AppVisibilityPreferences {
 @MainActor
 final class AppEntryPointController: NSObject, NSMenuDelegate {
     let preferences: AppVisibilityPreferences
-    private(set) var statusItem: NSStatusItem?
+    var statusItem: NSStatusItem? { menuBar?.statusItem }
+    private(set) var menuBar: MoeMenuBarController?
+    private weak var workspace: WorkspaceStore?
     private(set) var isInstalled = false
     private var openWorkspace: (() -> Void)?
     private var openSettings: (() -> Void)?
@@ -75,24 +77,33 @@ final class AppEntryPointController: NSObject, NSMenuDelegate {
         applyDock(preferences.showDockIcon)
         if managesStatusItem {
             if preferences.showMenuBarIcon && statusItem == nil {
-                let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-                item.button?.image = NSImage(systemSymbolName: "shippingbox", accessibilityDescription: "MoeKit")
-                item.button?.image?.isTemplate = true
-                item.button?.toolTip = "MoeKit"
-                item.menu = makeMenu()
-                statusItem = item
-            } else if !preferences.showMenuBarIcon, let item = statusItem {
-                NSStatusBar.system.removeStatusItem(item)
-                statusItem = nil
+                let controller = MoeMenuBarController(
+                    openWorkspace: { [weak self] in self?.showWorkspace() },
+                    openSettings: { [weak self] in self?.showSettings() },
+                    checkUpdates: { [weak self] in self?.showUpdates() },
+                    quit: { [weak self] in self?.quitApp() },
+                    makeMenu: { [weak self] in self?.makeMenu() ?? NSMenu() },
+                    canCheckUpdates: { [weak self] in self?.canCheckUpdates() ?? false })
+                menuBar = controller
+                if let workspace { controller.bind(to: workspace) }
+            } else if !preferences.showMenuBarIcon {
+                menuBar?.uninstall()
+                menuBar = nil
             }
         }
         // Keep the settings window usable when switching to an accessory app.
         activate()
     }
 
+    func bindWorkspace(_ store: WorkspaceStore) {
+        guard workspace !== store else { return }
+        workspace = store
+        menuBar?.bind(to: store)
+    }
+
     func uninstall() {
-        if let item = statusItem { NSStatusBar.system.removeStatusItem(item) }
-        statusItem = nil
+        menuBar?.uninstall()
+        menuBar = nil
         isInstalled = false
     }
 
@@ -120,12 +131,13 @@ final class AppEntryPointController: NSObject, NSMenuDelegate {
 
     @objc func showWorkspace() {
         guard let openWorkspace else { pendingReopen = true; return }
+        menuBar?.closePanel()
         openWorkspace()
         activate()
     }
-    @objc func showSettings() { openSettings?(); activate() }
-    @objc func showUpdates() { guard canCheckUpdates() else { return }; checkUpdates?(); activate() }
-    @objc func quitApp() { quit() }
+    @objc func showSettings() { menuBar?.closePanel(); openSettings?(); activate() }
+    @objc func showUpdates() { guard canCheckUpdates() else { return }; menuBar?.closePanel(); checkUpdates?(); activate() }
+    @objc func quitApp() { menuBar?.closePanel(); quit() }
 }
 
 @MainActor

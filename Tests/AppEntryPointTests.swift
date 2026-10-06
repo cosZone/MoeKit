@@ -96,7 +96,9 @@ struct AppEntryPointTests {
         let controller = AppEntryPointController(preferences: preferences, applyDock: { _ in }, activate: {}, quit: {})
         defer { controller.uninstall() }
         controller.install(openWorkspace: {}, openSettings: {}, checkUpdates: {})
-        #expect(controller.statusItem?.menu?.items.count == 5)
+        #expect(controller.statusItem?.menu == nil)
+        #expect(controller.statusItem?.button?.target === controller.menuBar)
+        #expect(controller.statusItem?.button?.image?.isTemplate == true)
         let first = controller.statusItem
         controller.install(openWorkspace: {}, openSettings: {}, checkUpdates: {})
         #expect(controller.statusItem === first)

@@ -14,7 +14,9 @@ struct MoeKitApp: App {
             WorkspaceView()
                 .environment(store)
                 .frame(minWidth: 960, minHeight: 620)
+                .background(WorkspaceWindowPlacement())
                 .onAppear {
+                    appDelegate.entryPoints.bindWorkspace(store)
                     appDelegate.entryPoints.install(
                         openWorkspace: { openWindow(id: "workspace", value: "main") },
                         openSettings: { openSettings() },

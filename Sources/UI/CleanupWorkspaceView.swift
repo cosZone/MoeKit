@@ -5,9 +5,10 @@ import SwiftUI
 @MainActor
 struct CleanupWorkspaceView: View {
     @Environment(WorkspaceStore.self) private var workspace
-    @State private var store: CleanupStore
+    @State private var suppliedStore: CleanupStore?
+    private var store: CleanupStore { suppliedStore ?? workspace.cleanup }
 
-    init(store: CleanupStore? = nil) { _store = State(initialValue: store ?? CleanupStore()) }
+    init(store: CleanupStore? = nil) { _suppliedStore = State(initialValue: store) }
 
     private var workspaceContext: CleanupWorkspaceContext {
         Self.context(workspace)
@@ -48,8 +49,11 @@ struct CleanupWorkspaceView: View {
             StatusBar(leading: String(localized: "Logical sizes are not a physical-space recovery estimate"), trailing: "MoeKit · Native")
         }
         .onAppear {
-            store.bindContext { Self.context(workspace) }
-            store.onMutationOutcome = { workspace.moleAnalysis.invalidateLiveResult() }
+            store.bindContext { [weak workspace] in
+                guard let workspace else { return .init(isDemoEnabled: true, modeGeneration: UUID(), protectedPaths: [], catalogIsKnown: false) }
+                return Self.context(workspace)
+            }
+            store.onMutationOutcome = { [weak workspace] in workspace?.moleAnalysis.invalidateLiveResult() }
         }
         .onChange(of: workspaceContext) { _, value in store.updateContext(value) }
         .onDisappear { store.cancel() }

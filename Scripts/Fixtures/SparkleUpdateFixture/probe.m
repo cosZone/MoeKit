@@ -307,12 +307,53 @@ int main(int argc, const char *argv[]) {
         for (NSRunningApplication *application in applications) {
             if (application.terminated) continue;
             NSString *expectedApp = [root stringByAppendingPathComponent:[caseName stringByAppendingPathComponent:@"Installed/SparkleFixture.app"]];
-            NSString *physicalApp = application.bundleURL ? physicalPath(application.bundleURL.path) : nil;
-            struct stat appInfo;
-            if (!physicalApp || ![physicalApp isEqualToString:expectedApp] ||
-                ![physicalPath(expectedApp) isEqualToString:expectedApp] || lstat(expectedApp.fileSystemRepresentation, &appInfo) ||
-                !S_ISDIR(appInfo.st_mode) || appInfo.st_uid != geteuid() ||
-                ![application.bundleIdentifier isEqualToString:identifier]) return fail(@"app identity mismatch");
+            // Read AppKit metadata once. These properties may be unavailable;
+            // their absence is distinct from a present contradictory value,
+            // but neither condition proves that a fixture application is gone.
+            NSURL *bundleURL = application.bundleURL;
+            NSString *bundleIdentifier = application.bundleIdentifier;
+            errno = 0;
+            NSString *physicalApp = bundleURL ? physicalPath(bundleURL.path) : nil;
+            int bundlePathError = physicalApp || !bundleURL ? 0 : errno;
+            errno = 0;
+            NSString *physicalExpectedApp = physicalPath(expectedApp);
+            int expectedPathError = physicalExpectedApp ? 0 : errno;
+            struct stat appInfo = {0}; errno = 0;
+            int appStatResult = lstat(expectedApp.fileSystemRepresentation, &appInfo);
+            int appStatError = appStatResult == 0 ? 0 : errno;
+            BOOL appPathMatches = physicalApp && [physicalApp isEqualToString:expectedApp];
+            BOOL expectedPathMatches = physicalExpectedApp && [physicalExpectedApp isEqualToString:expectedApp];
+            BOOL appIsDirectory = appStatResult == 0 && S_ISDIR(appInfo.st_mode);
+            BOOL appOwnerMatches = appStatResult == 0 && appInfo.st_uid == geteuid();
+            BOOL bundleIdentifierMatches = [bundleIdentifier isEqualToString:identifier];
+            if (!physicalApp || !appPathMatches || !expectedPathMatches || appStatResult ||
+                !appIsDirectory || !appOwnerMatches || !bundleIdentifierMatches) {
+                // Diagnostics only: do not use cached launch/termination flags
+                // or a later BSD lookup to turn this refusal into absence.
+                pid_t appPID = application.processIdentifier;
+                struct FixtureProcess first = {0}, second = {0}, classified = {0};
+                int firstError = 0, secondError = 0;
+                enum FixtureLookup firstLookup = FixtureLookupUnknown, secondLookup = FixtureLookupUnknown;
+                if (appPID > 0) {
+                    firstLookup = lookupProcess(appPID, &first, &firstError);
+                    secondLookup = lookupProcess(appPID, &second, &secondError);
+                }
+                NSValue *finalValue = appPID > 0 ? finalInventory[@(appPID)] : nil;
+                if (finalValue) [finalValue getValue:&classified size:sizeof(classified)];
+                BOOL bothPresent = firstLookup == FixtureLookupPresent && secondLookup == FixtureLookupPresent;
+                BOOL classifiedMatch = bothPresent && finalValue && FixtureSameIdentity(classified, first) && FixtureSameIdentity(classified, second);
+                BOOL knownMatch = knownEntry(observed, first, second, firstLookup, secondLookup) != nil;
+                fprintf(stderr, "Fixture app identity diagnostic: bundle_url=%d bundle_physical=%d bundle_path_match=%d bundle_path_errno=%d "
+                    "expected_physical=%d expected_path_match=%d expected_path_errno=%d stat_ok=%d stat_errno=%d directory=%d owner_match=%d "
+                    "bundle_id_present=%d bundle_id_match=%d cached_terminated=%d cached_finished_launching=%d pid_available=%d "
+                    "lookup=%d,%d lookup_errno=%d,%d identity_equal=%d uid_equal=%d,%d zombie=%d,%d known_match_either=%d classified_match=%d\n",
+                    bundleURL != nil, physicalApp != nil, appPathMatches, bundlePathError,
+                    physicalExpectedApp != nil, expectedPathMatches, expectedPathError, appStatResult == 0, appStatError, appIsDirectory, appOwnerMatches,
+                    bundleIdentifier != nil, bundleIdentifierMatches, application.terminated, application.finishedLaunching, appPID > 0,
+                    firstLookup, secondLookup, firstError, secondError, bothPresent && FixtureSameIdentity(first, second),
+                    FixtureExpectedUser(first, geteuid()), FixtureExpectedUser(second, geteuid()), first.zombie, second.zombie, knownMatch, classifiedMatch);
+                return fail(@"app identity mismatch");
+            }
             liveApps++;
         }
         NSMutableDictionary *services = [NSMutableDictionary dictionary];

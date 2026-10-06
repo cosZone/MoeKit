@@ -11,9 +11,9 @@ description: 先核对来源和版本，再了解 macOS 的安全提示。
 
 ## 获取可用产物
 
-当前已交付 [0.1.0-preview.10 开发签名预览](https://github.com/cosZone/MoeKit/releases/tag/v0.1.0-preview.10)：[下载 DMG](https://github.com/cosZone/MoeKit/releases/download/v0.1.0-preview.10/MoeKit-v0.1.0-preview.10-macOS.dmg) · [下载 ZIP](https://github.com/cosZone/MoeKit/releases/download/v0.1.0-preview.10/MoeKit-v0.1.0-preview.10-macOS.zip)。包内是同一份 universal Release App，并附校验和、构建信息与已签名 appcast。本版首次接入 Sparkle 签名更新，保留此前 Git、Mole、缓存、精确进程与 Downloads 磁盘映像工作流。使用 Apple Development 签名，未公证。精确测试与公开下载验证见 [版本记录](/changelog/0.1.0-preview.10)；文档网站独立构建，不是安装包组件。
+当前版本：[preview.11](https://github.com/cosZone/MoeKit/releases/tag/v0.1.0-preview.11) · [下载 DMG](https://github.com/cosZone/MoeKit/releases/download/v0.1.0-preview.11/MoeKit-v0.1.0-preview.11-macOS.dmg) · [ZIP](https://github.com/cosZone/MoeKit/releases/download/v0.1.0-preview.11/MoeKit-v0.1.0-preview.11-macOS.zip)。新增个人废纸篓与 Docker 清理，兼容 Apple Silicon / Intel。使用 Apple Development 签名、未公证，macOS 可能阻止运行。完整改动见 [更新记录](/changelog/0.1.0-preview.11)。
 
-[preview.11](/changelog/0.1.0-preview.11) 的个人废纸篓与 Docker 清理已合入源码，正在准备发布；当前上述 preview.10 下载不含这两项新增功能。准备中的记录不是可下载产物。
+Mole 新手准备与 AI worktree 收尾等后续功能见 [尚未发布](/changelog/unreleased)，不包含在本版中。
 
 **preview.9 及更早版本仍需手动下载并安装本版一次。** 旧版没有自动安装器，不能自行安装 Sparkle；请先完成当前操作并退出旧应用，再按下述正常安装步骤替换应用。
 
@@ -28,7 +28,7 @@ description: 先核对来源和版本，再了解 macOS 的安全提示。
 只下载 DMG 时，在文件所在目录执行，并将结果与 `SHA256SUMS.txt` 中的同名条目对照：
 
 ```sh
-shasum -a 256 MoeKit-v0.1.0-preview.10-macOS.dmg
+shasum -a 256 MoeKit-v0.1.0-preview.11-macOS.dmg
 ```
 
 如果 DMG、ZIP、`BUILD_INFO.json`、`appcast.xml` 和校验和五个文件全部已下载到同一目录，可一次检查全部：

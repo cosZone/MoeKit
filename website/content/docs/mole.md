@@ -64,9 +64,9 @@ Git 准备页仍提供其官方 Homebrew 指引。Demo 不检查真实工具。�
 
 移入废纸篓不释放占用存储；永久删除也不保证立即等量回收物理空间，因为打开文件、硬链接、APFS 快照／克隆可能保留物理块。此工作流面向已停止相关工作负载的合作式本地使用，不是 OS 沙箱，也不保证抵御恶意同用户进程竞争。完整实现与限制见 [原生缓存清理设计](https://github.com/cosZone/MoeKit/blob/b0bdd59ff672efe16a23a20b422e0e433179be11/Documentation/Native-cache-cleanup.md)。
 
-## preview.11：个人废纸篓与 Docker（尚未发布）
+## preview.11：个人废纸篓与 Docker
 
-源码中的 Cleanup 已分为 **Caches / Trash / Docker**。以下新增能力正在准备 [preview.11](/changelog/0.1.0-preview.11)，不包含在当前公开 preview.10 安装包中，也不改变上述 Downloads／缓存凭据的操作边界。
+[preview.11](/changelog/0.1.0-preview.11) 的 Cleanup 提供 **Caches / Trash / Docker** 三个分类，各自独立确认；Downloads／缓存凭据仍保留原来的操作边界。
 
 ### Trash：个人废纸篓
 

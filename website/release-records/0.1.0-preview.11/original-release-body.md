@@ -1,0 +1,71 @@
+[下载 DMG（推荐）](https://github.com/cosZone/MoeKit/releases/download/v0.1.0-preview.11/MoeKit-v0.1.0-preview.11-macOS.dmg) · [下载 ZIP](https://github.com/cosZone/MoeKit/releases/download/v0.1.0-preview.11/MoeKit-v0.1.0-preview.11-macOS.zip)
+
+macOS 15+ · 通用版本（Apple Silicon / Intel）
+
+## Cleanup：缓存、废纸篓与 Docker
+
+本版在 Tools → Mole → Cleanup 中提供 **Caches / Trash / Docker** 三个分类。原有缓存移入废纸篓与凭记录恢复继续保留；新增的废纸篓永久删除和 Docker 清理使用各自的原生适配器与独立确认，不运行 Mole 的广域 clean／purge，也不从空间报告直接授权删除。
+
+正常启动、进入分类或切换选择不会自动扫描或清理。先主动读取实际清单，再选择目标、复查完整范围并确认；Demo 不能操作真实数据。项目整理、精确进程停止、Mole 分析和单个 Downloads 磁盘映像操作仍保留原有边界。
+
+## 个人废纸篓：删除所选，或确认清空本次快照
+
+在 **Trash** 中主动扫描当前用户的 `~/.Trash`，查看名称、逻辑大小和最后修改时间，再选择受支持的文件、目录或链接。原始位置和进入废纸篓的日期明确显示不可用；修改时间不冒充删除时间，也不解析 Finder 私有元数据。
+
+- **删除所选项目**：复查所有目标及完整后代路径，确认相关工作负载已停止，并明确接受不可恢复的永久删除
+- **清空本次快照**：另行复查完整且全部可验证的扫描快照，准确输入 `EMPTY` 后才可执行。筛选不会缩小此清空范围；开始前出现新项目会使计划失效，执行开始后的新到达项目不会被加入或删除
+- 计划有效期 120 秒且仅使用一次。选择变化、重扫、取消、离开页面或切换模式会撤销旧计划；执行前再次核对整批内容与身份
+- 符号链接作为叶节点，不跟随目标。只删除已确认的条目；内容或命名空间变化、部分失败和不确定结果会保留相关数据并停止后续项目，不自动重试、覆盖或回滚
+
+**仅支持当前非 root 用户自己的个人废纸篓，且须位于本地内置、可写的 APFS 卷。** 外置卷、其他用户的废纸篓、网络／云卷及任意自选目录未接入。根目录须为当前用户所有、0700 且无 ACL；不修改已有权限。凭据／保险库／恢复控制名称、Git 元数据、其他 UID、特殊文件、云属性及不安全权限等保持保护。超出 256 个顶层项目、25,000 个清单条目等预算时，不把未知内容当成空，也不能清空不完整快照。
+
+操作记录保存在 MoeKit 的私有 `TrashRemovalRecords` 目录，含原废纸篓路径、已确认清单和阶段信息。中断可能留下 payload、私有删除槽与记录，可主动读取记录并在 Finder 中检查整个操作目录。记录不是重新删除的授权，也不是已删除数据的备份；本模块没有通用“放回原处”。已永久删除的对象不能通过原有缓存／磁盘映像凭据恢复。
+
+完整使用方式、预算与保留数据说明见 [废纸篓管理](https://github.com/cosZone/MoeKit/blob/70e1bc6c2c008fb3cc926f3653276b51da054d01/Documentation/Trash-management.md)。
+
+## 本地 Docker：精确对象与单独的整类缓存确认
+
+在 **Docker** 中选择固定的本机 Docker Desktop 或 Local Docker Engine Unix socket，再点击连接并刷新清单。界面显示解析后的 socket、daemon 标识、版本和内核对端身份；不会读取 Docker CLI context／配置／凭据，不运行 Docker CLI 或插件，不自动安装、启动 daemon、拉取镜像或修改权限。Docker 未启动时，需要用户自行启动。
+
+- **镜像**：按完整 image ID 明确选择。只要任意容器仍引用它，包括已停止容器，就保持保护；不会因为选择了容器而隐式选中其镜像
+- **容器**：只有明确选择的 created／exited 容器可删除。停止容器的可写层会永久丢失；running、paused、restarting、dead 与未知状态不可选
+- **卷**：命名卷与匿名卷只展示，始终保留，没有卷删除或 volume prune
+- **构建缓存**：独立选项覆盖这个 daemon 的全部未使用构建缓存，包括 internal／frontend cache。缓存行仅用于查看，不伪装成精确逐行删除；确认页另有一个整类范围复选项。其他 builder／远端 context 不会被访问，之后构建可能更慢
+
+复查实际 daemon、完整对象 ID、标签与影响，接受不可恢复删除后才提交一次性 60 秒计划。每次修改前重新检查 socket、内核对端、daemon 与完整容器引用；固定 API 禁止 force、父镜像连带清理和卷删除。Docker Desktop 绑定的是本机代理进程身份，不是 Linux VM 的进程，也不冒充 Docker 厂商签名证明。
+
+执行后重新读取清单区分已移除、保留、拒绝、未尝试和不确定结果。超时、断连或取消后，已经发送的请求仍可能稍后完成；暂时仍看到对象不能证明删除已停止。真实操作报告在本次应用会话中保留，切换分类、Demo 或刷新不会抹去它；Demo 隐藏真实报告，返回真实模式可再查看。没有自动重试或回滚。
+
+完整范围与连接限制见 [Docker 清理](https://github.com/cosZone/MoeKit/blob/70e1bc6c2c008fb3cc926f3653276b51da054d01/Documentation/Docker-cleanup.md)。
+
+## 不把删除结果当成磁盘空间承诺
+
+移入废纸篓本身不释放空间。永久删除的逻辑大小也不保证立即等量回收物理块：打开文件、硬链接、APFS 快照／克隆可能继续占用存储。Docker 共享层不能简单相加，Engine 报告的回收字节也不等于 Docker Desktop 磁盘映像立即缩小。应用不显示虚构的回收成功。
+
+这些适配器不是 OS 沙箱，不证明所有程序均未使用文件，也不保证抵御恶意同 UID 程序竞争。请先停止使用目标数据的工作负载；不支持或证据不完整时保留数据。
+
+## 沿用 Sparkle 更新与开发签名边界
+
+本版完整版本为 `0.1.0-preview.11`，内部 `CFBundleVersion` 为 `2.0.11`。沿用固定 Sparkle 2.10.0、固定 feed 与受审公钥，要求 feed 和更新 ZIP 签名有效；自动下载安装仍默认关闭。Trash／Docker 操作及其验证繁忙时，会阻止更新器为安装而退出应用。
+
+已安装 preview.10 的用户沿用应用内检查更新入口；preview.9 及更早版本没有安装器，仍须先手动安装支持 Sparkle 的版本。应用替换保留包外项目清单、偏好与私有记录；Docker 会话报告和其他会话数据不承诺跨应用重启保存。更新不会自动执行任何清理。
+
+交付继续使用 **Apple Development 开发签名，未经过 Apple 公证**，不是 Developer ID 正式分发。Gatekeeper 仍可能阻止首次安装或后续运行；不要关闭安全检查、移除 quarantine 或重签应用绕过提示。DMG 与 ZIP 的实际来源、源码、校验和及签名以经过验证的发布资产为准。详见 [自动更新说明](https://github.com/cosZone/MoeKit/blob/70e1bc6c2c008fb3cc926f3653276b51da054d01/Documentation/Automatic-updates.md)。
+
+## 验证范围
+
+废纸篓自动测试使用唯一自有临时目录，覆盖文件／非空树／链接、快照新到达项目、身份替换、ACL、取消、部分结果、过期确认与中断记录。Docker 自动测试覆盖精确选择、停止容器引用保护、内核对端拒绝、迟到结果与会话保留；独立 CI daemon 实际执行镜像／停止容器删除和未使用构建缓存 prune，并核对运行容器、未选镜像与卷保留。测试不会接触默认或用户 Docker daemon。
+
+原生测试另行渲染英语／简体中文、浅／深色的自有视图和确认页。双架构 Sparkle fixture 验证合成应用的安装、重启、偏好保留及失败拒绝；其测试密钥与 ad-hoc 签名不能替代真实用户安装的生产 App 更新验收。完整窗口、键盘、VoiceOver、真实隐私授权、Docker Desktop 实机和生产签名更新仍需手动验收。开发与自动测试没有清理真实用户数据。
+
+[preview.10 历史记录](https://github.com/cosZone/MoeKit/blob/70e1bc6c2c008fb3cc926f3653276b51da054d01/website/content/changelog/0.1.0-preview.10.md) 及更早版本说明、标签与资产保持原样。AI worktree 完工流程、AI 专用无头浏览器归属清理、广域 Mole 清理、卸载、维护、任意项目删除及任意 CLI 执行不包含在本版。
+
+---
+
+源码：[6b23cb267bdb](https://github.com/cosZone/MoeKit/commit/6b23cb267bdb140fa8f2834638658dbc60dadf90) · [构建与测试](https://github.com/cosZone/MoeKit/actions/runs/37491185118)（attempt 1）
+
+[SHA256SUMS.txt](https://github.com/cosZone/MoeKit/releases/download/v0.1.0-preview.11/SHA256SUMS.txt) 覆盖 DMG、ZIP 与 [BUILD_INFO.json](https://github.com/cosZone/MoeKit/releases/download/v0.1.0-preview.11/BUILD_INFO.json)；两种包内 App 的文件内容、签名与构建来源已核对一致。
+
+Apple Development 开发签名；不是 Developer ID 分发签名，未经过 Apple 公证。Gatekeeper 仍可能阻止打开，DMG 不改变这一限制。
+
+Release 配置单元测试在 runner 架构通过；通用归档从同一源码单独构建。原生 UI、VoiceOver、双架构实机运行与隐私授权沿用仍需手动验收。

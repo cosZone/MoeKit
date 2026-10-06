@@ -2,7 +2,7 @@
 
 # 分阶段范围与验收
 
-状态：历史专项规划，不是当前交付清单。当前 [preview.10](../website/content/changelog/0.1.0-preview.10.md) 已发布受限原生工作流与首个 Sparkle 签名更新器；旧版仍需先手动安装一次，真实生产安装的后续更新及完整原生交互仍待验收。以下阶段保留早期规划语义，不能据此认定所有能力都已实现。
+状态：历史专项规划，不是当前交付清单。当前 [preview.11](../website/content/changelog/0.1.0-preview.11.md) 已交付个人废纸篓、本地 Docker 清理与此前的受限原生工作流。最新进度见 [统一 Roadmap #40](https://github.com/cosZone/MoeKit/issues/40)；真实生产安装更新及完整原生交互仍待验收。以下阶段保留早期规划语义，不能据此认定所有能力都已实现。
 
 ## MVP 范围
 

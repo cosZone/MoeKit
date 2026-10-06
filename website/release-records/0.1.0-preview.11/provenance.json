@@ -1,0 +1,58 @@
+{
+  "schema": 1,
+  "version": "0.1.0-preview.11",
+  "sourceCommit": "6b23cb267bdb140fa8f2834638658dbc60dadf90",
+  "publishedAt": "2026-10-06T16:06:41Z",
+  "releaseUrl": "https://github.com/cosZone/MoeKit/releases/tag/v0.1.0-preview.11",
+  "run": {
+    "id": 37491185118,
+    "number": 16,
+    "attempt": 1
+  },
+  "buildNumber": "2.0.11",
+  "signedNotes": {
+    "path": "signed-notes.md",
+    "sha256": "53726a8d188d325725f445adbcb183d703f66606f320fb1a2fc40c58848fddaf",
+    "sourcePath": "website/content/changelog/0.1.0-preview.11.md"
+  },
+  "originalReleaseBody": {
+    "path": "original-release-body.md",
+    "sha256": "15b40ac22057f3110caa6ce49f0c28f72e7a3d68ac6842eb300724a27659b6c5"
+  },
+  "displayNotes": {
+    "path": "content/changelog/0.1.0-preview.11.md",
+    "presentationOnly": true
+  },
+  "assets": [
+    {
+      "name": "appcast.xml",
+      "bytes": 9621,
+      "sha256": "f396042e0e85b92aa06dc56acc3e3f5ec483cc1b741f3b1045cc25adf3ddb5bb"
+    },
+    {
+      "name": "BUILD_INFO.json",
+      "bytes": 5300,
+      "sha256": "055155595223db7075b1a3ca8ea68f80642a811756c8defce4f7e1e971aa31f8"
+    },
+    {
+      "name": "MoeKit-v0.1.0-preview.11-macOS.dmg",
+      "bytes": 6526983,
+      "sha256": "df632038952cbfeb100366a1855389625990690045fe19a7a9d246a23531f257"
+    },
+    {
+      "name": "MoeKit-v0.1.0-preview.11-macOS.zip",
+      "bytes": 6142254,
+      "sha256": "04fecae6579a7a1e9beac4870bb35aa526097b7a108e1132e02fccb391bb8d6a"
+    },
+    {
+      "name": "SHA256SUMS.txt",
+      "bytes": 362,
+      "sha256": "126817b585cc1607b470fb1a5278a93d4dd8bf493512b5866730e1ab77d7fc47"
+    }
+  ],
+  "feed": {
+    "commit": "6b78f80326e5f3ba7f8a632f983b88f406722a9f",
+    "parent": "010ba2fe0c941ec422a9a7aead92be8cfca94c4b",
+    "blob": "fe677ea1a134e675a5db49f33b2ed0213facfcd7"
+  }
+}

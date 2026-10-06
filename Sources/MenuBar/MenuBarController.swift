@@ -174,20 +174,11 @@ final class MoeMenuBarController: NSObject, NSPopoverDelegate {
     /// gestures stay entirely with the system, including menu-bar rearranging.
     private func installSystemObservers() {
         clickMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .keyDown]) { [weak self] event in
-            MainActor.assumeIsolated {
-                guard let self, self.isInstalled else { return event }
-                if event.type == .keyDown {
-                    if self.popover.isShown, event.window === self.popover.contentViewController?.view.window,
-                       event.keyCode == 53 { self.closePanel(); return nil }
-                    return event
-                }
-                guard !event.modifierFlags.contains(.command),
-                      let button = self.statusItem.button, event.window === button.window,
-                      button.bounds.contains(button.convert(event.locationInWindow, from: nil)) else { return event }
-                if event.modifierFlags.contains(.control) { self.showContextMenu() }
-                else { self.togglePanel(animate: true) }
-                return nil
-            }
+            // NSEvent must never cross an isolation boundary as the result.
+            // AppKit delivers local monitors on the main thread; return only
+            // the Sendable decision and keep the event in this callback.
+            let consumed = MainActor.assumeIsolated { self?.consumeOwnedEvent(event) ?? false }
+            return consumed ? nil : event
         }
         listen(NSWorkspace.shared.notificationCenter, NSWorkspace.accessibilityDisplayOptionsDidChangeNotification) { [weak self] in
             self?.refreshAppearance()
@@ -195,6 +186,21 @@ final class MoeMenuBarController: NSObject, NSPopoverDelegate {
         listen(NSWorkspace.shared.notificationCenter, NSWorkspace.willSleepNotification) { [weak self] in self?.closePanel() }
         listen(.default, NSApplication.didChangeScreenParametersNotification) { [weak self] in self?.closePanel() }
         listen(.default, NSApplication.didResignActiveNotification) { [weak self] in self?.closePanel() }
+    }
+
+    private func consumeOwnedEvent(_ event: NSEvent) -> Bool {
+        guard isInstalled else { return false }
+        if event.type == .keyDown {
+            if popover.isShown, event.window === popover.contentViewController?.view.window,
+               event.keyCode == 53 { closePanel(); return true }
+            return false
+        }
+        guard !event.modifierFlags.contains(.command),
+              let button = statusItem.button, event.window === button.window,
+              button.bounds.contains(button.convert(event.locationInWindow, from: nil)) else { return false }
+        if event.modifierFlags.contains(.control) { showContextMenu() }
+        else { togglePanel(animate: true) }
+        return true
     }
 
     private func listen(_ center: NotificationCenter, _ name: Notification.Name, action: @escaping @MainActor () -> Void) {

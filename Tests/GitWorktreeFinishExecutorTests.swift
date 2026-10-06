@@ -47,7 +47,7 @@ struct GitWorktreeFinishExecutorTests {
         let plan = try await executor.prepare(request(fixture))
         #expect(plan.canMerge && plan.uniqueCommitCount == 1)
         #expect(plan.sourceStatus.clean && plan.targetStatus?.clean == true)
-        #expect(plan.targetWorktree == fixture.main)
+        #expect(plan.targetWorktree?.path == fixture.main.path)
         let result = try await executor.merge(plan.id, permit: GitCleanupPermit())
         #expect(result.verifiedOID == oid)
         #expect(try fixture.git(["rev-parse", "HEAD"], at: fixture.main).trimmingCharacters(in: .newlines) == oid)

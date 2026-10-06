@@ -12,7 +12,7 @@ The main invariant is no user-target mutation or deletion. The audited ordinary 
 
 ## Reviewed invocation and provenance
 
-- The user chooses the direct installed analyzer binary and one directory. Neither selection starts execution. The `mo` shell wrapper is rejected without executing it. No version/help probe runs.
+- Opening the analysis sheet performs bounded, read-only discovery at fixed installation locations and auto-selects only an exact verified analyzer. Missing or incompatible installations receive a copy-only pinned download guide and recheck. Manual analyzer selection remains an advanced option; the user chooses one directory. See [beginner setup](Mole-beginner-setup.md). Neither selection starts execution. The `mo` shell wrapper is rejected without executing it. No version/help probe runs.
 - Only these official upstream release assets are admissible, as published at <https://github.com/tw93/Mole/releases/tag/V1.57.0>:
   - arm64: `analyze-darwin-arm64`, 3,827,474 bytes; SHA-256 `62c6b5076349081a34e60256a1471979f600d74d8f4990745a37d30d6faa00e1`
   - x86_64: `analyze-darwin-amd64`, 4,022,992 bytes; SHA-256 `cff7d9da8bd18cb3364d566186944b5b14b01e21e5bb4a3d61579f553ea39ad7`

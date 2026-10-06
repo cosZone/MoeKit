@@ -9267,6 +9267,146 @@
         }
       }
     },
+    "Official analyzer location": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "官方分析器位置"
+          }
+        }
+      }
+    },
+    "Homebrew installation": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Homebrew 安装"
+          }
+        }
+      }
+    },
+    "Mole command location": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mole 命令位置"
+          }
+        }
+      }
+    },
+    "This location could not be safely checked.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法安全检查此位置。"
+          }
+        }
+      }
+    },
+    "No analyzer was found at this location. Custom locations have not been searched.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此位置未找到分析器；尚未搜索自定义安装位置。"
+          }
+        }
+      }
+    },
+    "This location could not be read. That does not mean Mole is missing.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法读取此位置，不代表未安装 Mole。"
+          }
+        }
+      }
+    },
+    "A Mole command is present. Commands and shell wrappers are never run during setup, so this does not verify an analyzer.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "找到了 Mole 命令。检测不会运行命令或 Shell 包装脚本，因此尚未验证分析器。"
+          }
+        }
+      }
+    },
+    "This analyzer path is a link or is not a regular file. It was not followed or run.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此分析器路径是链接或不是普通文件，未跟随链接，也未运行。"
+          }
+        }
+      }
+    },
+    "The Homebrew link points outside the expected Mole installation. It was not accepted.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Homebrew 链接指向了预期 Mole 安装位置之外，未接受此文件。"
+          }
+        }
+      }
+    },
+    "The analyzer matches the reviewed official release for this app. It will be checked again before analysis.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分析器与本应用已审查的官方发布文件一致，开始分析前还会再次验证。"
+          }
+        }
+      }
+    },
+    "This file does not match the supported official release. Homebrew builds, custom builds, other versions and another architecture can differ. Nothing was run.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此文件与受支持的官方发布文件不一致，可能是 Homebrew 编译版、自行构建、其他版本或其他架构。未运行任何工具。"
+          }
+        }
+      }
+    },
+    "macOS quarantine is present. MoeKit will not remove it or bypass Gatekeeper. Review the system warning before continuing.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件带有 macOS 隔离标记。MoeKit 不会移除标记或绕过 Gatekeeper；请先处理系统安全提示。"
+          }
+        }
+      }
+    },
+    "The analyzer could not be verified or changed during the check. Recheck before continuing.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法验证分析器，或文件在检测期间发生变化。请重新检测后再继续。"
+          }
+        }
+      }
+    },
+    "The installation check did not finish. Recheck to try again. No tool was run.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "安装检测未完成，请点击重新检测重试。未运行任何工具。"
+          }
+        }
+      }
+    },
     "1. Inspect source and target": {
       "localizations": {
         "zh-Hans": {

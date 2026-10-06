@@ -8,7 +8,7 @@ Swift 6 · SwiftUI / AppKit · macOS 15+ · Tuist 4.148.3 · SPM
 
 已经写入源码；其中下述 preview.11 废纸篓／Docker 功能尚未发布，当前公开安装包仍为 preview.10：
 - **Projects**：原生表格、搜索与排序、项目详情 inspector、置顶项目、Finder 定位；多根目录只读发现 Git 项目，复查筛选后导入/刷新；验证 worktree 关系后分组，展示带时间的分支/锁元数据；preview.9 新增单独确认的干净 linked worktree 退役与已合并 loose 本地分支移除
-- **Tools**：Mole 的 Space / Clean / Apps / Maintenance / Status 工作区；Space 可导入 Mole analyze JSON，也可选择已安装的官方 V1.57.0 直接分析器与单个文件夹，复查确认后实际分析；Processes & Ports 可由用户主动读取当前用户进程和 TCP 监听端口，按工作目录展示项目关联
+- **Tools**：Mole 的 Space / Clean / Apps / Maintenance / Status 工作区；Space 可导入 Mole analyze JSON，也可自动检测兼容的官方 V1.57.0 分析器，按新手步骤准备后选择单个文件夹，复查确认后实际分析；Processes & Ports 可由用户主动读取当前用户进程和 TCP 监听端口，按工作目录展示项目关联
 - **下载磁盘映像**：从本机 Downloads 当前真实 Mole 分析中选择一个常规 `.dmg`，独立复查路径、大小和影响，确认已结束使用后移到 macOS 原生废纸篓；私有凭据支持另行确认的原路径恢复，不覆盖已有目标、不清空废纸篓
 - **Processes & Ports**：原生密集表格、身份与关联证据、部分读取提示、项目相关进程入口，以及逐次确认的精确选择停止；先发送 SIGTERM，仍在运行的同一身份才可另行确认 SIGKILL；浏览器/应用/共享服务/系统/自身及祖先进程受保护，不读取参数或环境变量，不自动扫描或停止
 - **工具准备**：从 Settings 或 Mole 打开，主动检查固定常见位置或自选文件的元数据，区分未检查、该路径未找到、找到但未验证、不支持与无法读取；提供官方安装说明和复制命令，不安装、不探测版本、不运行 CLI
@@ -21,7 +21,7 @@ Swift 6 · SwiftUI / AppKit · macOS 15+ · Tuist 4.148.3 · SPM
 
 尚未实现：任意 CLI 执行、AI 专用无头浏览器归属与清理、广域 Mole 清理、卸载、维护、实时系统指标、提权、第三方插件加载及持久任务历史。导入报告不运行 Mole，报告数值不等于可回收空间。
 
-**实际 Mole 分析的边界：** 目前只支持匹配精确 SHA-256 的 V1.57.0 官方发布分析器，常见官方脚本安装位置为 `~/.config/mole/bin/analyze-go`；Homebrew 与自编译版本暂不匹配该校验。工具准备页提供精确受支持文件的手动下载链接与复制命令，校验大小和 SHA-256 后才添加执行权限；详见 [工具准备](Documentation/Tool-preparation.md)。每次分析前显示范围及私有临时副本/缓存写入并要求确认，可取消，失败或未知覆盖不冒充成功。工具以普通用户权限运行，没有 OS 沙箱；没有自动安装、更新、提权；Mole 分析本身不执行目标清理。详见 [执行设计与验证](Documentation/Mole-analysis-execution-design.md)。本节描述当前源码，具体构建/测试以对应提交 CI 为准。
+**实际 Mole 分析的边界：** 目前只支持匹配精确 SHA-256 的 V1.57.0 官方发布分析器，常见官方脚本安装位置为 `~/.config/mole/bin/analyze-go`；Homebrew 与自编译版本暂不匹配该校验。分析窗口自动检查固定官方/Homebrew 位置，区分可用、未找到、不兼容和未验证；同一窗口提供分步下载与重新检测，手动选文件收进高级选项。指引核对大小和 SHA-256 后才添加执行权限，不覆盖已有安装；详见 [Mole 新手设置](Documentation/Mole-beginner-setup.md)。每次分析前显示范围及私有临时副本/缓存写入并要求确认，可取消，失败或未知覆盖不冒充成功。工具以普通用户权限运行，没有 OS 沙箱；没有自动安装、更新、提权；Mole 分析本身不执行目标清理。详见 [执行设计与验证](Documentation/Mole-analysis-execution-design.md)。本节描述当前源码，具体构建/测试以对应提交 CI 为准。
 
 **下载磁盘映像操作的边界：** 仅支持本地内置 APFS 上、Downloads 直属的单个常规 `.dmg`；导入 JSON、Demo、`.pkg`、链接、云占位、项目与 worktree 不能授权。必须取得完整且为空的磁盘映像清单；只可自行推出自己打开的映像，不要触碰系统管理的映像，系统映像仍存在时此操作不可用。当前用户文件描述符／fileport 检查不等于全局未使用证明，无法覆盖所有内存映射、系统服务和其他用户。每次操作及恢复都重新复查并确认，移入废纸篓不会释放占用空间；不确定结果保留数据并停止。详见 [设计与恢复边界](Documentation/Installer-trash-design.md)。
 

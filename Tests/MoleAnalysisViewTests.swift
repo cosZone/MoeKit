@@ -7,15 +7,17 @@ import XCTest
 final class MoleAnalysisViewTests: XCTestCase {
     @MainActor
     func testAnalysisSheetRenders() async throws {
-        for scenario in ["initial", "confirmation", "partial", "failure"] {
+        for scenario in ["initial", "ready", "missing", "incompatible", "unverified", "advanced", "guide", "confirmation", "partial", "failure"] {
             for dark in [false, true] {
-                for size in [NSSize(width: 720, height: 560), NSSize(width: 900, height: 800)] {
+                for size in (scenario == "guide" ? [NSSize(width: 720, height: 1400)] : [NSSize(width: 720, height: 560), NSSize(width: 900, height: 800)]) {
                     let directory = FileManager.default.temporaryDirectory.appendingPathComponent("MoeKit-analysis-render-\(UUID())")
                     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
                     defer { try? FileManager.default.removeItem(at: directory) }
-                    let analysis = MoleAnalysisStore(executor: RenderMoleAnalyzer(failure: scenario == "failure"))
+                    let discovery = RenderMoleDiscovery(hold: scenario == "initial", state: scenario == "ready" ? .usable :
+                        (scenario == "incompatible" ? .incompatible : (scenario == "unverified" || scenario == "advanced" ? .unverified : .missing)))
+                    let analysis = MoleAnalysisStore(executor: RenderMoleAnalyzer(failure: scenario == "failure"), discovery: discovery)
                     let workspace = WorkspaceStore(isDemoEnabled: false, persistence: CatalogPersistence(directory: directory), moleAnalysis: analysis)
-                    if scenario != "initial" {
+                    if ["confirmation", "partial", "failure"].contains(scenario) {
                         analysis.selectExecutable(URL(fileURLWithPath: "/Synthetic/OfficialMole/bin/analyze-go"), ticket: try XCTUnwrap(analysis.selectionTicket()))
                         analysis.selectDirectory(URL(fileURLWithPath: "/Synthetic/Projects/Selected project with a long directory name"), ticket: try XCTUnwrap(analysis.selectionTicket()))
                         analysis.prepare()
@@ -27,12 +29,21 @@ final class MoleAnalysisViewTests: XCTestCase {
                             XCTAssertFalse(analysis.isBusy)
                         }
                     }
+                    if !["initial", "confirmation", "partial", "failure"].contains(scenario) {
+                        analysis.discoverIfNeeded()
+                        for _ in 0..<1000 { if !analysis.isBusy { break }; await Task.yield() }
+                        XCTAssertFalse(analysis.isBusy)
+                    }
                     let language = try XCTUnwrap(Bundle.main.preferredLocalizations.first)
                     XCTAssertTrue(["en", "zh-Hans"].contains(language))
                     let name = "mole-analysis-\(scenario)-\(language)-\(dark ? "dark" : "light")-\(Int(size.width))x\(Int(size.height))"
                     _ = NSApplication.shared
                     let appearance = try XCTUnwrap(NSAppearance(named: dark ? .darkAqua : .aqua))
-                    let root = MoleAnalysisView().environment(workspace)
+                    let content: AnyView = scenario == "guide"
+                        ? AnyView(MoleInstallationGuidanceView(onRecheck: {}).padding(20))
+                        : AnyView(MoleAnalysisView(showsAdvanced: scenario == "advanced").environment(workspace))
+                    XCTAssertEqual(MoleSetupText.localized("Ready to analyze"), language == "zh-Hans" ? "可以开始分析" : "Ready to analyze")
+                    let root = content
                         .environment(\.colorScheme, dark ? .dark : .light)
                         .environment(\.locale, Locale.current)
                         .frame(width: size.width, height: size.height)
@@ -61,6 +72,7 @@ final class MoleAnalysisViewTests: XCTestCase {
                     Bundle language: \(language)
                     Projects title: \(WorkspaceSection.projects.title)
                     Partial-result title: \(TaskStatus.partial.title)
+                    Setup ready title: \(MoleSetupText.localized("Ready to analyze"))
                     Scope: owned analysis sheet with synthetic paths and reports only.
                     Scenario: \(scenario). No real analyzer, installation, network, or user path access.
                     The sheet has a vertical scroll container so confirmation controls remain reachable at minimum size.
@@ -68,6 +80,11 @@ final class MoleAnalysisViewTests: XCTestCase {
                     """)
                     metadata.name = name + "-scope.txt"; metadata.lifetime = .keepAlways; add(metadata)
                     XCTAssertGreaterThan(png.count, 1000)
+                    if scenario == "initial" {
+                        XCTAssertTrue(analysis.isDiscovering)
+                        analysis.cancel()
+                        for _ in 0..<1000 { if !analysis.isBusy { break }; await Task.yield() }
+                    }
                     XCTAssertFalse(analysis.isBusy)
                 }
             }
@@ -91,5 +108,22 @@ private struct RenderMoleAnalyzer: MoleAnalysisExecuting {
         return MoleAnalysisResult(report: try JSONDecoder().decode(MoleAnalyzeReport.self, from: data), directory: plan.directory,
                                   release: plan.release, startedAt: Date(timeIntervalSince1970: 1_791_100_800),
                                   finishedAt: Date(timeIntervalSince1970: 1_791_100_801))
+    }
+}
+
+private struct RenderMoleDiscovery: MoleInstallationDiscovering {
+    let hold: Bool
+    let state: MoleInstallationState
+    func discover() async throws -> MoleInstallationReport {
+        if hold { try await Task.sleep(for: .seconds(30)) }
+        return MoleInstallationReport(candidates: [MoleInstallationCandidate(
+            path: "/Synthetic/OfficialMole/bin/analyze-go", state: state,
+            source: String(localized: "Official analyzer location"),
+            explanation: state == .unverified
+                ? String(localized: "macOS quarantine is present. MoeKit will not remove it or bypass Gatekeeper. Review the system warning before continuing.")
+                : (state == .missing ? String(localized: "No analyzer was found at this location. Custom locations have not been searched.")
+                   : (state == .incompatible ? String(localized: "This file does not match the supported official release. Homebrew builds, custom builds, other versions and another architecture can differ. Nothing was run.")
+                      : String(localized: "The analyzer matches the reviewed official release for this app. It will be checked again before analysis."))))],
+            inspectedAt: Date(timeIntervalSince1970: 1_791_100_800))
     }
 }

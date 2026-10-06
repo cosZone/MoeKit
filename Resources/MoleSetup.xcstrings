@@ -1,0 +1,941 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "See what is taking up space in one folder. First check Mole, then choose a folder and review the analysis.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "See what is taking up space in one folder. First check Mole, then choose a folder and review the analysis."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看一个文件夹中的空间占用。先检查 Mole，再选择文件夹并复查分析范围。"
+          }
+        }
+      }
+    },
+    "Step-by-step installation": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Step-by-step installation"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分步安装指引"
+          }
+        }
+      }
+    },
+    "Downloaded disk image actions and recovery": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Downloaded disk image actions and recovery"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下载磁盘映像操作与恢复"
+          }
+        }
+      }
+    },
+    "1. Check Mole": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1. Check Mole"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1. 检查 Mole"
+          }
+        }
+      }
+    },
+    "Recheck": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recheck"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重新检查"
+          }
+        }
+      }
+    },
+    "Last checked": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Last checked"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上次检查"
+          }
+        }
+      }
+    },
+    "2. Choose a folder": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2. Choose a folder"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2. 选择文件夹"
+          }
+        }
+      }
+    },
+    "Choose Downloads or another folder you want to inspect. Nothing runs until you review the plan and confirm.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose Downloads or another folder you want to inspect. Nothing runs until you review the plan and confirm."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择“下载”或其他想检查的文件夹。只有复查方案并确认后，才会开始分析。"
+          }
+        }
+      }
+    },
+    "Choose folder…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose folder…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择文件夹…"
+          }
+        }
+      }
+    },
+    "Change folder…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Change folder…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更换文件夹…"
+          }
+        }
+      }
+    },
+    "Set up a compatible analyzer above to enable analysis.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set up a compatible analyzer above to enable analysis."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "先按上方指引准备兼容的分析器，才能进行分析。"
+          }
+        }
+      }
+    },
+    "Choose a folder to enable Review analysis.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose a folder to enable Review analysis."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择文件夹后，即可复查分析方案。"
+          }
+        }
+      }
+    },
+    "Advanced: analyzer file and check details": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Advanced: analyzer file and check details"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "高级：分析器文件与检查详情"
+          }
+        }
+      }
+    },
+    "Use this if you installed the official analyzer somewhere else. Choosing a file does not verify it; Review analysis checks it before offering a confirmation.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use this if you installed the official analyzer somewhere else. Choosing a file does not verify it; Review analysis checks it before offering a confirmation."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "如果官方分析器安装在其他位置，可以在此选择。选择文件不代表验证通过；点击“复查分析…”后会先验证文件，再显示确认方案。"
+          }
+        }
+      }
+    },
+    "Choose analyzer file…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose analyzer file…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择分析器文件…"
+          }
+        }
+      }
+    },
+    "Checked locations": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checked locations"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已检查的位置"
+          }
+        }
+      }
+    },
+    "Only fixed installation locations are checked. No folder scan, shell, version command or analyzer process is started.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Only fixed installation locations are checked. No folder scan, shell, version command or analyzer process is started."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "只检查固定的安装位置，不扫描文件夹，不启动 Shell、版本命令或分析器进程。"
+          }
+        }
+      }
+    },
+    "Setup is unavailable in Demo": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Setup is unavailable in Demo"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "示例模式下不能准备分析器"
+          }
+        }
+      }
+    },
+    "Checking for Mole…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checking for Mole…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在检查 Mole…"
+          }
+        }
+      }
+    },
+    "Selected manually · unverified": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selected manually · unverified"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已手动选择 · 未验证"
+          }
+        }
+      }
+    },
+    "Analyzer verified for this review": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Analyzer verified for this review"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分析器已通过本次复查验证"
+          }
+        }
+      }
+    },
+    "Installation not checked": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Installation not checked"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚未检查安装状态"
+          }
+        }
+      }
+    },
+    "Leave Demo to check your installation and analyze a real folder. No installation is inspected in Demo.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leave Demo to check your installation and analyze a real folder. No installation is inspected in Demo."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "退出示例模式后，才能检查安装状态并分析真实文件夹。示例模式不会检查本机安装。"
+          }
+        }
+      }
+    },
+    "Checking a small set of installation locations and the official analyzer's exact file contents. Mole is not being run.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checking a small set of installation locations and the official analyzer's exact file contents. Mole is not being run."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在检查少量固定安装位置，并核对官方分析器的完整文件内容。不会运行 Mole。"
+          }
+        }
+      }
+    },
+    "A file was selected manually. Choose a folder, then use Review analysis to verify that file.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A file was selected manually. Choose a folder, then use Review analysis to verify that file."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已手动选择文件。请选择文件夹，再点击“复查分析…”验证该文件。"
+          }
+        }
+      }
+    },
+    "Read the confirmation below. The analyzer is checked again when you start the analysis.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Read the confirmation below. The analyzer is checked again when you start the analysis."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请阅读下方确认方案。开始分析时还会再次验证分析器。"
+          }
+        }
+      }
+    },
+    "Choose Recheck to look for a supported analyzer. This check does not run Mole or install anything.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose Recheck to look for a supported analyzer. This check does not run Mole or install anything."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点击“重新检查”查找受支持的分析器。检查不会运行 Mole，也不会安装任何内容。"
+          }
+        }
+      }
+    },
+    "The official V1.57.0 analyzer was verified for this app. Choose a folder below; it will be checked again before each analysis.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The official V1.57.0 analyzer was verified for this app. Choose a folder below; it will be checked again before each analysis."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已验证与本应用匹配的官方 V1.57.0 分析器。请在下方选择文件夹；每次分析前都会再次验证分析器。"
+          }
+        }
+      }
+    },
+    "No analyzer was found in the checked locations. Follow the steps below, or use Advanced if yours is installed elsewhere.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No analyzer was found in the checked locations. Follow the steps below, or use Advanced if yours is installed elsewhere."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在已检查的位置未找到分析器。请按下方步骤操作；如果安装在其他位置，可使用“高级”选项。"
+          }
+        }
+      }
+    },
+    "An installed file does not match the supported official V1.57.0 analyzer. Homebrew builds, custom builds and other versions are not supported; use the guide below.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "An installed file does not match the supported official V1.57.0 analyzer. Homebrew builds, custom builds and other versions are not supported; use the guide below."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发现的文件与受支持的官方 V1.57.0 分析器不匹配。暂不支持 Homebrew、自编译或其他版本，请参阅下方指引。"
+          }
+        }
+      }
+    },
+    "MoeKit could not verify a compatible analyzer. It may be unreadable, a command wrapper or blocked by macOS. Review Advanced for the reason before continuing.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MoeKit could not verify a compatible analyzer. It may be unreadable, a command wrapper or blocked by macOS. Review Advanced for the reason before continuing."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MoeKit 无法验证兼容的分析器。文件可能无法读取、只是命令包装脚本，或被 macOS 阻止。请先在“高级”中查看原因。"
+          }
+        }
+      }
+    },
+    "Stopping the current operation…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stopping the current operation…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在停止当前操作…"
+          }
+        }
+      }
+    },
+    "Checking installation…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checking installation…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在检查安装状态…"
+          }
+        }
+      }
+    },
+    "Ready to analyze": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ready to analyze"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可以开始分析"
+          }
+        }
+      }
+    },
+    "Analyzer not found": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Analyzer not found"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未找到分析器"
+          }
+        }
+      }
+    },
+    "Analyzer is incompatible": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Analyzer is incompatible"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分析器不兼容"
+          }
+        }
+      }
+    },
+    "Analyzer not verified": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Analyzer not verified"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分析器未通过验证"
+          }
+        }
+      }
+    },
+    "Analyzer verification details": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Analyzer verification details"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分析器验证详情"
+          }
+        }
+      }
+    },
+    "Install the supported Mole analyzer": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Install the supported Mole analyzer"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "安装受支持的 Mole 分析器"
+          }
+        }
+      }
+    },
+    "You only need the official V1.57.0 analyzer for this Mac. Homebrew and source-built versions do not match this app's compatibility check.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You only need the official V1.57.0 analyzer for this Mac. Homebrew and source-built versions do not match this app's compatibility check."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "只需安装适用于这台 Mac 的官方 V1.57.0 分析器。Homebrew 和自行编译的版本不符合本应用的兼容性校验。"
+          }
+        }
+      }
+    },
+    "Review the official download": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review the official download"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看官方下载说明"
+          }
+        }
+      }
+    },
+    "Read the release notes and review the command in step 3. The command downloads one official file, checks it, and makes it ready for MoeKit. It does not run Mole or ask for an administrator password.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Read the release notes and review the command in step 3. The command downloads one official file, checks it, and makes it ready for MoeKit. It does not run Mole or ask for an administrator password."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "阅读发布说明，并检查第 3 步中的命令。该命令会下载并校验一个官方文件，为 MoeKit 准备分析器；不会运行 Mole，也不需要管理员密码。"
+          }
+        }
+      }
+    },
+    "Open Terminal": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Terminal"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开终端"
+          }
+        }
+      }
+    },
+    "Press ⌘ Space to open Spotlight, type Terminal, then press Return.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Press ⌘ Space to open Spotlight, type Terminal, then press Return."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按 ⌘ 空格打开聚焦搜索，输入“终端”（Terminal），然后按回车。"
+          }
+        }
+      }
+    },
+    "Copy, paste and run the command": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy, paste and run the command"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复制、粘贴并运行命令"
+          }
+        }
+      }
+    },
+    "Copying only changes the clipboard. In Terminal, press ⌘V to paste the reviewed command, then press Return. Running it downloads from GitHub and writes new folders in your home directory; it never overwrites an existing installation.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copying only changes the clipboard. In Terminal, press ⌘V to paste the reviewed command, then press Return. Running it downloads from GitHub and writes new folders in your home directory; it never overwrites an existing installation."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复制只会更新剪贴板。在终端中按 ⌘V 粘贴已检查的命令，再按回车。运行后会从 GitHub 下载文件，并在个人主目录中新建文件夹，不会覆盖已有安装。"
+          }
+        }
+      }
+    },
+    "Wait for this success message before continuing:": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wait for this success message before continuing:"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "看到以下成功提示后再继续："
+          }
+        }
+      }
+    },
+    "If Terminal reports an error or an existing folder, stop and read the message. Existing files and the temporary download folder are kept. Try Recheck before changing anything.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "If Terminal reports an error or an existing folder, stop and read the message. Existing files and the temporary download folder are kept. Try Recheck before changing anything."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "如果终端提示错误或文件夹已存在，请先停下来阅读提示。已有文件与临时下载文件夹都会保留。修改任何内容前，先试试“重新检查”。"
+          }
+        }
+      }
+    },
+    "Return to MoeKit and recheck": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Return to MoeKit and recheck"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "返回 MoeKit 并重新检查"
+          }
+        }
+      }
+    },
+    "Open Mole → Space → Analyze with Mole…, then choose Recheck. When Ready to analyze appears, choose a folder and review the analysis.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Mole → Space → Analyze with Mole…, then choose Recheck. When Ready to analyze appears, choose a folder and review the analysis."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开 Mole → 空间 → 使用 Mole 分析…，点击“重新检查”。显示“可以开始分析”后，选择文件夹并复查分析方案。"
+          }
+        }
+      }
+    },
+    "Return here and choose Recheck. When Ready to analyze appears, choose a folder below and review the analysis.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Return here and choose Recheck. When Ready to analyze appears, choose a folder below and review the analysis."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "返回此处并点击“重新检查”。显示“可以开始分析”后，在下方选择文件夹并复查分析方案。"
+          }
+        }
+      }
+    },
+    "Advanced download details": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Advanced download details"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "高级下载详情"
+          }
+        }
+      }
+    },
+    "The guided download is detected at:": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The guided download is detected at:"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本指引下载的分析器会在以下位置被识别："
+          }
+        }
+      }
+    },
+    "The official Mole script's usual analyzer location is also checked:": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The official Mole script's usual analyzer location is also checked:"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "也会检查 Mole 官方脚本常用的分析器位置："
+          }
+        }
+      }
+    },
+    "A matching path alone is not enough. MoeKit verifies the file again before every analysis.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A matching path alone is not enough. MoeKit verifies the file again before every analysis."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "路径匹配不代表验证通过。每次分析前，MoeKit 都会重新验证文件。"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

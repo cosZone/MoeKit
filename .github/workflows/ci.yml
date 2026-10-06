@@ -301,6 +301,14 @@ jobs:
           path: ChineseUIRenderArtifacts/
           if-no-files-found: ignore
           retention-days: 14
+      - name: Preserve exact-head Git finish lifecycle evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: git-finish-evidence-debug-${{ env.SOURCE_SHA }}
+          path: InstallerFixtureEvidence/git-finish-native.json
+          if-no-files-found: ignore
+          retention-days: 14
       - name: Preserve test results
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -381,6 +389,8 @@ jobs:
                         -only-testing:MoeKitTests/MoleAnalysisModelsTests
                         -only-testing:MoeKitTests/MoleAnalysisFilesTests
                         -only-testing:MoeKitTests/MoleAnalysisStoreTests
+                        -only-testing:MoeKitTests/MoleInstallationDiscoveryTests
+                        -only-testing:MoeKitTests/MoleSetupStoreTests
                         -only-testing:MoeKitTests/InstallerFileAccessTests
                         -only-testing:MoeKitTests/InstallerTrashExecutorTests
                         -only-testing:MoeKitTests/InstallerUseEvidenceTests
@@ -445,6 +455,7 @@ jobs:
                       "CatalogWriteCoordinatorTests", "WorkspaceOperationPrivacyTests",
                       "ToolPreparationTests", "ToolPreparationStoreTests",
                       "MoleAnalysisModelsTests", "MoleAnalysisFilesTests", "MoleAnalysisStoreTests",
+                      "MoleInstallationDiscoveryTests", "MoleSetupStoreTests",
                       "InstallerFileAccessTests", "InstallerTrashExecutorTests", "InstallerUseEvidenceTests", "InstallerTrashStoreTests",
                       "GitPlainIndexTests", "GitCleanupInspectionTests", "GitCleanupAuthorityTests", "GitCleanupStoreTests", "GitCleanupExecutorTests", "GitWorktreeFinishAuthorityTests", "GitWorktreeFinishExecutorTests", "GitWorktreeFinishStoreTests", "GitRemotePushStoreTests", "GitRemotePushValidationTests",
                       "CleanupExecutorTests", "CleanupStoreTests", "ProcessTerminationTests", "ProcessTerminationStoreTests", "NativeProcessTerminationTests",
@@ -462,6 +473,14 @@ jobs:
           configuration=release
           if [ "$INSTRUMENTATION" = address-sanitizer ]; then configuration=asan; fi
           python3 Scripts/test-catalog-concurrency.py --configuration "$configuration" | tee CatalogConcurrencyResults.txt
+      - name: Preserve exact-head optimized Git finish lifecycle evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: git-finish-evidence-${{ matrix.instrumentation }}-${{ env.SOURCE_SHA }}
+          path: InstallerFixtureEvidence/git-finish-native.json
+          if-no-files-found: ignore
+          retention-days: 14
       - name: Preserve optimized test results and build settings
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

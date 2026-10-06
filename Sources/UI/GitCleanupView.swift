@@ -32,7 +32,7 @@ struct GitCleanupView: View {
 
     private var cleanupBody: some View {
         let state = workspace.gitCleanup
-        VStack(alignment: .leading, spacing: 14) {
+        return VStack(alignment: .leading, spacing: 14) {
             Label("Git cleanup", systemImage: "arrow.triangle.branch").font(.title2).fontWeight(.semibold)
             Text(project.path).font(.caption).textSelection(.enabled)
             ScrollView {

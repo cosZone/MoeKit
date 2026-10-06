@@ -1,0 +1,34 @@
+name: Git inspection sandbox prototype
+
+on:
+  pull_request:
+    paths: ['Prototypes/GitInspectionSandbox/**', '.github/workflows/git-inspection-prototype.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sandbox-gate:
+    runs-on: macos-15
+    timeout-minutes: 10
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Probe actual read-only sandbox grants in owned fixtures
+        run: |
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          python3 Prototypes/GitInspectionSandbox/run.py GitSandboxEvidence
+      - name: Preserve native evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: git-sandbox-prototype-${{ env.SOURCE_SHA }}
+          path: GitSandboxEvidence/
+          if-no-files-found: ignore
+          retention-days: 14

@@ -163,7 +163,7 @@ enum CleanupFiles {
             // Never delete repository objects, worktree metadata, or a copied
             // credential file merely because a parent says it is a cache.
             let sensitive = [".git", ".hg", ".svn", ".ssh", ".gnupg", ".aws", ".kube", ".env", "id_rsa", "id_ed25519"]
-            guard !childNames.contains(where: { sensitive.contains($0.lowercased()) }),
+            guard !childNames.contains(where: { sensitive.contains($0.lowercased()) || isProtectedSecretName($0) }),
                   !Set(["head", "objects", "refs"]).isSubset(of: Set(childNames.map { $0.lowercased() })) else {
                 throw CleanupFailure.refused(String(localized: "Git metadata or a protected credential/configuration name was found inside this candidate."))
             }
@@ -214,12 +214,54 @@ enum CleanupFiles {
         try walk(directory, path: "", depth: 0)
         return .init(entries: entries, logicalBytes: bytes)
     }
+    /// A Trash item may also be a file or a symbolic link. Reuses the same
+    /// ownership, no-follow and ACL policy as directory manifest leaves.
+    static func manifest(parent: InstallerDirectoryAnchor, name: String, environment: CleanupEnvironment,
+                         maximumEntries: Int = CleanupFiles.maximumEntries, deadline: Date = Date().addingTimeInterval(30)) throws -> CleanupManifest {
+        try Task.checkCancellation()
+        guard maximumEntries > 0, Date() < deadline else { throw CleanupFailure.limit }
+        try parent.validate()
+        let identity = try InstallerFileAccess.snapshotAt(parent.fd, name)
+        if identity.mode & UInt32(S_IFMT) == UInt32(S_IFDIR) {
+            let directory = try parent.child(name)
+            guard identity == (try InstallerFileAccess.snapshot(directory.fd)) else { throw CleanupFailure.changed }
+            return try manifest(directory, environment: environment, maximumEntries: maximumEntries, deadline: deadline)
+        }
+        let kind: CleanupEntry.Kind
+        var destination: Data?
+        switch identity.mode & UInt32(S_IFMT) {
+        case UInt32(S_IFREG):
+            kind = .file
+            try validateObject(identity, expectedDevice: parent.identity.device, kind: kind)
+            let file = try InstallerFileDescriptor(parent: parent, name: name)
+            guard identity == (try InstallerFileAccess.snapshot(file.fd)) else { throw CleanupFailure.changed }
+            try InstallerFileAccess.rejectMutationGrantingACL(file.fd)
+            try InstallerFileAccess.rejectCloudAttributes(file.fd)
+        case UInt32(S_IFLNK):
+            kind = .symbolicLink
+            try validateObject(identity, expectedDevice: parent.identity.device, kind: kind)
+            var bytes = [UInt8](repeating: 0, count: 4097)
+            let capacity = bytes.count
+            let count = bytes.withUnsafeMutableBytes { readlinkat(parent.fd, name, $0.baseAddress, capacity) }
+            guard count >= 0, count < capacity else { throw CleanupFailure.changed }
+            destination = Data(bytes.prefix(count))
+        default: throw CleanupFailure.refused(String(localized: "A socket, device, pipe, or unsupported entry is present. Close the owning app and inspect again."))
+        }
+        guard identity == (try InstallerFileAccess.snapshotAt(parent.fd, name)) else { throw CleanupFailure.changed }
+        try parent.validate()
+        return .init(entries: [.init(relativePath: "", kind: kind, identity: identity, linkDestination: destination)],
+                     logicalBytes: kind == .file ? identity.bytes : 0)
+    }
     static func matchesAfterMove(_ expected: CleanupManifest, _ actual: CleanupManifest) -> Bool {
         guard expected.logicalBytes == actual.logicalBytes, expected.entries.count == actual.entries.count else { return false }
         return zip(expected.entries, actual.entries).allSatisfy { a, b in
             a.relativePath == b.relativePath && a.kind == b.kind && a.linkDestination == b.linkDestination
                 && (a.relativePath.isEmpty ? a.identity.matchesCaptured(b.identity) : a.identity == b.identity)
         }
+    }
+    static func isProtectedSecretName(_ name: String) -> Bool {
+        let value = name.folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: Locale(identifier: "en_US_POSIX"))
+        return value.hasPrefix(".env.") || ["vault", "keychain", "1password", "bitwarden"].contains(where: { value.contains($0) })
     }
     private static func validateObject(_ value: InstallerFileSnapshot, expectedDevice: UInt64, kind: CleanupEntry.Kind) throws {
         guard geteuid() != 0, value.uid == geteuid(), value.device == expectedDevice,

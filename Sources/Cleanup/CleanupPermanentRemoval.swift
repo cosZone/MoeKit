@@ -17,7 +17,7 @@ enum CleanupPermanentRemoval {
     }
     static func remove(manifest: CleanupManifest, directory: InstallerDirectoryAnchor,
                        parent: InstallerDirectoryAnchor, name: String, environment: CleanupEnvironment,
-                       checkpoint: @Sendable (CleanupCheckpoint) throws -> Void = { _ in }) throws {
+                       checkpoint: (CleanupCheckpoint) throws -> Void = { _ in }) throws {
         try preflight(manifest)
         try InstallerFileAccess.validatePrivate(parent.fd, directory: true)
         try CleanupFiles.validateNamespace(parent, environment: environment)
@@ -94,6 +94,43 @@ enum CleanupPermanentRemoval {
         try CleanupFiles.validateNamespace(parent, environment: environment)
         guard capturedRoot == (try InstallerFileAccess.snapshotAt(parent.fd, rootSlot)),
               unlinkat(parent.fd, rootSlot, AT_REMOVEDIR) == 0 else { throw CleanupFailure.changed }
+    }
+    /// File/link-root variant, used only after a new Trash removal confirmation
+    /// and durable capture into an operation-owned private directory.
+    static func remove(manifest: CleanupManifest, parent: InstallerDirectoryAnchor, name: String,
+                       environment: CleanupEnvironment,
+                       checkpoint: (CleanupCheckpoint) throws -> Void = { _ in }) throws {
+        guard let entry = manifest.entries.first, entry.relativePath.isEmpty else { throw CleanupFailure.changed }
+        if entry.kind == .directory {
+            try remove(manifest: manifest, directory: parent.child(name), parent: parent,
+                       name: name, environment: environment, checkpoint: checkpoint)
+            return
+        }
+        guard manifest.entries.count == 1 else { throw CleanupFailure.changed }
+        try Task.checkCancellation()
+        try CleanupFiles.validateNamespace(parent, environment: environment)
+        try InstallerFileAccess.validatePrivate(parent.fd, directory: true)
+        guard entry.identity == (try InstallerFileAccess.snapshotAt(parent.fd, name)) else { throw CleanupFailure.changed }
+        try checkLink(entry, parent: parent, name: name)
+        try checkpoint(.beforeLeafCapture); try Task.checkCancellation()
+        let slot = "delete-entry-000000"
+        try InstallerFileAccess.exclusiveMove(from: parent, name: name, to: parent, destinationName: slot)
+        try checkpoint(.afterLeafCapture)
+        let captured = try InstallerFileAccess.snapshotAt(parent.fd, slot)
+        guard entry.identity.matchesCaptured(captured) else { throw CleanupFailure.changed }
+        try checkLink(entry, parent: parent, name: slot)
+        if entry.kind == .file {
+            let file = try InstallerFileDescriptor(parent: parent, name: slot)
+            guard captured == (try InstallerFileAccess.snapshot(file.fd)) else { throw CleanupFailure.changed }
+            try InstallerFileAccess.rejectMutationGrantingACL(file.fd)
+            try InstallerFileAccess.rejectCloudAttributes(file.fd)
+        }
+        try Task.checkCancellation()
+        try CleanupFiles.validateNamespace(parent, environment: environment)
+        try InstallerFileAccess.validatePrivate(parent.fd, directory: true)
+        guard captured == (try InstallerFileAccess.snapshotAt(parent.fd, slot)),
+              unlinkat(parent.fd, slot, 0) == 0 else { throw CleanupFailure.changed }
+        guard fsync(parent.fd) == 0 else { throw CleanupFailure.journal }
     }
     private static func checkLink(_ entry: CleanupEntry, parent: InstallerDirectoryAnchor, name: String) throws {
         guard entry.kind == .symbolicLink else { return }

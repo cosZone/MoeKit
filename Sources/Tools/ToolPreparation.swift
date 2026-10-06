@@ -17,6 +17,8 @@ enum PreparedTool: String, CaseIterable, Identifiable, Sendable {
         if url.deletingLastPathComponent().path == home.appendingPathComponent(".local/bin").path {
             return "~/.local/bin/" + url.lastPathComponent
         }
+        let guided = MoleAnalyzerRelease.native.installationDirectoryName + "/analyze-go"
+        if self == .mole, url == home.appendingPathComponent(guided) { return "~/" + guided }
         if url == home.appendingPathComponent(".config/mole/bin/analyze-go") {
             return "~/.config/mole/bin/analyze-go"
         }
@@ -31,7 +33,10 @@ enum PreparedTool: String, CaseIterable, Identifiable, Sendable {
                         home.appendingPathComponent(".local/bin", isDirectory: true)]
         var result = prefixes.flatMap { prefix in names.map { prefix.appendingPathComponent($0) } }
         if self == .git { result.append(URL(fileURLWithPath: "/usr/bin/git")) }
-        if self == .mole { result.insert(home.appendingPathComponent(".config/mole/bin/analyze-go"), at: 0) }
+        if self == .mole {
+            result.insert(home.appendingPathComponent(".config/mole/bin/analyze-go"), at: 0)
+            result.insert(home.appendingPathComponent(MoleAnalyzerRelease.native.installationDirectoryName + "/analyze-go"), at: 0)
+        }
         return result
     }
 }
@@ -42,18 +47,26 @@ extension MoleAnalyzerRelease {
     var releaseURL: URL { URL(string: "https://github.com/tw93/Mole/releases/tag/\(version)")! }
     var assetName: String { "analyze-darwin-" + (architecture == "arm64" ? "arm64" : "amd64") }
     var assetURL: URL { URL(string: "https://github.com/tw93/Mole/releases/download/\(version)/\(assetName)")! }
+    var installationDirectoryName: String { "MoeKit-Mole-\(version)-\(architecture)" }
     var manualDownloadCommand: String {
         """
         (
           umask 077 &&
-          mole_dir=$(/usr/bin/mktemp -d "$HOME/MoeKit-Mole-\(version).XXXXXX") &&
-          printf 'Download folder: %s\\n' "$mole_dir" &&
+          mole_dir="$HOME/\(installationDirectoryName)" &&
+          if test -e "$mole_dir" || test -L "$mole_dir"; then
+            printf 'Existing folder left unchanged: %s\\nReturn to MoeKit and recheck. If it is not ready, move this folder aside in Finder before trying again.\\n' "$mole_dir"
+            exit 1
+          fi &&
+          mole_download=$(/usr/bin/mktemp -d "$HOME/MoeKit-Mole-download.XXXXXX") &&
+          printf 'Download folder: %s\\n' "$mole_download" &&
           /usr/bin/curl -q --fail --location --show-error --proto '=https' --proto-redir '=https' --connect-timeout 15 --max-time 120 --max-filesize \(byteCount) \\
-            '\(assetURL.absoluteString)' -o "$mole_dir/analyze-go" &&
-          test "$(/usr/bin/stat -f %z "$mole_dir/analyze-go")" -eq \(byteCount) &&
-          printf '%s  %s\\n' '\(sha256)' "$mole_dir/analyze-go" | /usr/bin/shasum -a 256 -c - &&
-          /bin/chmod 700 "$mole_dir/analyze-go" &&
-          printf '\\nAnalyzer path: %s\\n' "$mole_dir/analyze-go"
+            '\(assetURL.absoluteString)' -o "$mole_download/analyze-go" &&
+          test "$(/usr/bin/stat -f %z "$mole_download/analyze-go")" -eq \(byteCount) &&
+          printf '%s  %s\\n' '\(sha256)' "$mole_download/analyze-go" | /usr/bin/shasum -a 256 -c - &&
+          /bin/chmod 700 "$mole_download/analyze-go" &&
+          /bin/mkdir -m 700 "$mole_dir" &&
+          /bin/ln "$mole_download/analyze-go" "$mole_dir/analyze-go" &&
+          printf '\\nMole analyzer ready\\nAnalyzer path: %s\\nReturn to MoeKit and click Recheck.\\n' "$mole_dir/analyze-go"
         )
         """
     }

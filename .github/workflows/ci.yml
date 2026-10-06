@@ -375,6 +375,8 @@ jobs:
                         -only-testing:MoeKitTests/MoleAnalysisModelsTests
                         -only-testing:MoeKitTests/MoleAnalysisFilesTests
                         -only-testing:MoeKitTests/MoleAnalysisStoreTests
+                        -only-testing:MoeKitTests/MoleInstallationDiscoveryTests
+                        -only-testing:MoeKitTests/MoleSetupStoreTests
                         -only-testing:MoeKitTests/InstallerFileAccessTests
                         -only-testing:MoeKitTests/InstallerTrashExecutorTests
                         -only-testing:MoeKitTests/InstallerUseEvidenceTests
@@ -433,6 +435,7 @@ jobs:
                       "CatalogWriteCoordinatorTests", "WorkspaceOperationPrivacyTests",
                       "ToolPreparationTests", "ToolPreparationStoreTests",
                       "MoleAnalysisModelsTests", "MoleAnalysisFilesTests", "MoleAnalysisStoreTests",
+                      "MoleInstallationDiscoveryTests", "MoleSetupStoreTests",
                       "InstallerFileAccessTests", "InstallerTrashExecutorTests", "InstallerUseEvidenceTests", "InstallerTrashStoreTests",
                       "GitPlainIndexTests", "GitCleanupInspectionTests", "GitCleanupAuthorityTests", "GitCleanupStoreTests", "GitCleanupExecutorTests",
                       "CleanupExecutorTests", "CleanupStoreTests", "ProcessTerminationTests", "ProcessTerminationStoreTests", "NativeProcessTerminationTests",

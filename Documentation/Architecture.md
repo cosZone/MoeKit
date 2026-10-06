@@ -77,7 +77,7 @@ Swift Testing 测试覆盖扫描边界、取消、异常元数据、模块注册
 
 ## 独立 Cleanup 分类：Trash 与 Docker
 
-以下能力已合入源码，正在准备 preview.11，尚未进入公开 preview.10 安装包。`WorkspaceStore` 长期拥有 `TrashStore` 与 `DockerCleanupStore`，Cleanup 分类切换不重新创建正在提交操作的 session。初始化保持惰性；读取与修改均从显式用户操作开始。
+以下能力已随 preview.11 交付。`WorkspaceStore` 长期拥有 `TrashStore` 与 `DockerCleanupStore`，Cleanup 分类切换不重新创建正在提交操作的 session。初始化保持惰性；读取与修改均从显式用户操作开始。
 
 `NativeTrashExecutor` 仅接受当前非 root 用户的固定个人 `.Trash`，要求本地内置可写 APFS、私有根与受支持权限。所选删除和完整快照清空各有一次性 120 秒计划，后者还需输入 `EMPTY`。复用既有 descriptor-relative 捕获与唯一不可逆 sink，保留中断数据／操作记录，不解析 Finder 私有恢复元数据、不自动重试。[支持范围](Trash-management.md)。
 

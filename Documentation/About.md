@@ -9,7 +9,7 @@
 ## Public links
 
 - **Feedback** opens <https://github.com/cosZone/MoeKit/issues>.
-- **Give a Star** opens <https://github.com/cosZone/MoeKit>. Starring remains an explicit action on GitHub; MoeKit never signs in, stars automatically, reads star status or submits a feedback report.
+- **Star on GitHub** opens <https://github.com/cosZone/MoeKit>. Starring remains an explicit action on GitHub; MoeKit never signs in, stars automatically, reads star status or submits a feedback report.
 - Neither URL includes diagnostic data, project paths, app metadata or query parameters. Links use the default browser. No updater, license claim, Discussions link or unpublished documentation domain is advertised.
 - English and Simplified Chinese copy is included in the string catalog.
 
@@ -32,7 +32,7 @@ The following native acceptance checks are still manual, not claimed as passed b
 - [ ] Open About repeatedly: one dedicated window, brought forward; close with Escape, Command-W and the close control; reopen and relaunch without unwanted restoration
 - [ ] Switch General/About repeatedly: preview setting and workspace state unchanged; General form remains scrollable and all existing sections remain reachable
 - [ ] English and Simplified Chinese; light/dark mode; increased contrast; no clipped labels, icon, version or copyright
-- [ ] Keyboard focus, Tab/Shift-Tab and VoiceOver read Feedback and Give a Star by name
-- [ ] Feedback and Give a Star open the exact destinations in the default browser; no automatic GitHub action
+- [ ] Keyboard focus, Tab/Shift-Tab and VoiceOver read Feedback and Star on GitHub by name
+- [ ] Feedback and Star on GitHub open the exact destinations in the default browser; no automatic GitHub action
 
 SwiftUI lifecycle references: [Window](https://developer.apple.com/documentation/swiftui/window), [restorationBehavior](https://developer.apple.com/documentation/swiftui/scene/restorationbehavior(_:)) and [defaultLaunchBehavior](https://developer.apple.com/documentation/swiftui/scene/defaultlaunchbehavior(_:)).

@@ -216,6 +216,8 @@ jobs:
             -only-testing:MoeKitTests/UISnapshotTests/testFirstUseWorkspacesRender \
             -only-testing:MoeKitTests/UISnapshotTests/testSettingsModeGuidanceRenders \
             -only-testing:MoeKitTests/ReleaseCheckViewTests/testUpdatePanelAndHiddenIconsRender \
+            -only-testing:MoeKitTests/DockerCleanupViewRenderTests/testDockerStatesRenderWithoutLiveDaemon \
+            -only-testing:MoeKitTests/DockerConfirmationRenderTests/testPermanentAndCacheConfirmationRenderAndReset \
             -only-testing:MoeKitTests/AutomaticUpdateSettingsTests/testAutomaticUpdateSettingsRender \
             -only-testing:MoeKitTests/ToolPreparationViewTests/testToolPreparationRenders \
             -only-testing:MoeKitTests/MoleAnalysisViewTests/testAnalysisSheetRenders \

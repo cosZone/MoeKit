@@ -12,10 +12,12 @@ struct MoleWorkspaceView: View {
                 Picker("Cleanup category", selection: $cleanupCategory) {
                     Text("Caches").tag(0)
                     Text("Trash").tag(1)
+                    Text("Docker").tag(2)
                 }.pickerStyle(.segmented).padding(12)
                 Divider()
                 if cleanupCategory == 0 { CleanupWorkspaceView() }
-                else { TrashWorkspaceView() }
+                else if cleanupCategory == 1 { TrashWorkspaceView() }
+                else { DockerCleanupView(store: store.dockerCleanup) }
             }
         } else {
             VStack(spacing: 0) {

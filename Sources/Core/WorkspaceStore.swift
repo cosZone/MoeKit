@@ -14,6 +14,7 @@ final class WorkspaceStore {
     let installerTrash: InstallerTrashStore
     let gitCleanup: GitCleanupStore
     let trash: TrashStore
+    let dockerCleanup: DockerCleanupStore
     let toolPreparation: ToolPreparationStore
     let gettingStarted: GettingStartedState
     var projectSearch = "" { didSet { reconcileProjectSelection() } }
@@ -32,6 +33,7 @@ final class WorkspaceStore {
             trash.updateContext(.init(isDemoEnabled: isDemoEnabled, modeGeneration: toolPreparation.modeGeneration))
             processes.resetForModeChange()
             gitCleanup.invalidate()
+            dockerCleanup.updateDemo(isDemoEnabled)
             moleAnalysis.setDemoEnabled(isDemoEnabled)
             cancelScan()
             cancelMoleReportImport()
@@ -81,7 +83,8 @@ final class WorkspaceStore {
          moleAnalysis: MoleAnalysisStore? = nil,
          installerTrash: InstallerTrashStore? = nil,
          gitCleanup: GitCleanupStore? = nil,
-         trash: TrashStore? = nil) {
+         trash: TrashStore? = nil,
+         dockerCleanup: DockerCleanupStore? = nil) {
         self.isDemoEnabled = isDemoEnabled
         self.persistence = persistence
         self.gettingStarted = gettingStarted
@@ -91,6 +94,8 @@ final class WorkspaceStore {
         self.installerTrash = installerTrash ?? InstallerTrashStore()
         self.gitCleanup = gitCleanup ?? GitCleanupStore()
         self.trash = trash ?? TrashStore()
+        self.dockerCleanup = dockerCleanup ?? DockerCleanupStore()
+        self.dockerCleanup.updateDemo(isDemoEnabled)
         // Construct the MainActor model in this initializer, not in a nested
         // actor-isolated default argument inside SwiftUI State initialization.
         let preparation = toolPreparation ?? ToolPreparationStore()

@@ -12,6 +12,7 @@ final class WorkspaceStore {
     let processes = ProcessInventoryStore()
     let moleAnalysis: MoleAnalysisStore
     let installerTrash: InstallerTrashStore
+    let cleanup: CleanupStore
     let gitCleanup: GitCleanupStore
     let gitWorktreeFinish: GitWorktreeFinishStore
     let trash: TrashStore
@@ -32,6 +33,7 @@ final class WorkspaceStore {
             modeID = UUID()
             toolPreparation.setDemoEnabled(isDemoEnabled)
             trash.updateContext(.init(isDemoEnabled: isDemoEnabled, modeGeneration: toolPreparation.modeGeneration))
+            cleanup.updateContext(cleanupWorkspaceContext)
             processes.resetForModeChange()
             gitCleanup.invalidate()
             gitWorktreeFinish.setDemoEnabled(isDemoEnabled)
@@ -87,7 +89,8 @@ final class WorkspaceStore {
          gitCleanup: GitCleanupStore? = nil,
          gitWorktreeFinish: GitWorktreeFinishStore? = nil,
          trash: TrashStore? = nil,
-         dockerCleanup: DockerCleanupStore? = nil) {
+         dockerCleanup: DockerCleanupStore? = nil,
+         cleanup: CleanupStore? = nil) {
         self.isDemoEnabled = isDemoEnabled
         self.persistence = persistence
         self.gettingStarted = gettingStarted
@@ -95,6 +98,7 @@ final class WorkspaceStore {
         self.reportImporter = reportImporter
         self.moleAnalysis = moleAnalysis ?? MoleAnalysisStore()
         self.installerTrash = installerTrash ?? InstallerTrashStore()
+        self.cleanup = cleanup ?? CleanupStore()
         self.gitCleanup = gitCleanup ?? GitCleanupStore()
         self.gitWorktreeFinish = gitWorktreeFinish ?? GitWorktreeFinishStore()
         self.trash = trash ?? TrashStore()
@@ -111,6 +115,10 @@ final class WorkspaceStore {
             guard let self else { return .init(isDemoEnabled: true, modeGeneration: UUID()) }
             return .init(isDemoEnabled: self.isDemoEnabled, modeGeneration: self.toolPreparation.modeGeneration)
         }
+        self.cleanup.bindContext { [weak self] in
+            self?.cleanupWorkspaceContext ?? .init(isDemoEnabled: true, modeGeneration: UUID(), protectedPaths: [], catalogIsKnown: false)
+        }
+        self.cleanup.onMutationOutcome = { [weak self] in self?.moleAnalysis.invalidateLiveResult() }
         self.trash.onMutationOutcome = { [weak self] in self?.moleAnalysis.invalidateLiveResult() }
         processes.onEvent = { [weak self] event in self?.recordProcessEvent(event) }
         self.moleAnalysis.onContextChange = { [weak self] in self?.refreshInstallerTrashContext() }
@@ -135,7 +143,18 @@ final class WorkspaceStore {
         refreshInstallerTrashContext()
     }
 
+    var cleanupWorkspaceContext: CleanupWorkspaceContext {
+        let paths = projects.flatMap { project -> [String] in
+            var paths = [project.path]
+            if let metadata = project.gitMetadata { paths += [metadata.gitDirectoryPath, metadata.commonDirectoryPath] }
+            return paths
+        }
+        return .init(isDemoEnabled: isDemoEnabled, modeGeneration: toolPreparation.modeGeneration,
+                     protectedPaths: Array(Set(paths)).sorted(), catalogIsKnown: catalogIsWritable)
+    }
+
     private func refreshInstallerTrashContext() {
+        cleanup.updateContext(cleanupWorkspaceContext)
         let paths = projects.flatMap { project -> [String] in
             var paths = [project.path]
             if let metadata = project.gitMetadata {

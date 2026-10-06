@@ -165,6 +165,7 @@ jobs:
           python3 Scripts/test-sparkle-appcast.py
           python3 Scripts/test-sparkle-appcast.py --native-signer
           python3 Scripts/test-ui-render-artifacts.py
+          python3 Scripts/test-menubar-render-artifacts.py
           python3 Scripts/test-sparkle-render-artifacts.py
           python3 Scripts/test-mole-supervisor.py
           python3 Scripts/test-git-object-inspector.py
@@ -217,6 +218,7 @@ jobs:
             test-without-building -testLanguage zh-Hans -testRegion CN \
             -only-testing:MoeKitTests/UISnapshotTests/testDemoProjectsRenders \
             -only-testing:MoeKitTests/UISnapshotTests/testDemoTasksRenders \
+            -only-testing:MoeKitTests/MenuBarRenderTests/testMenuBarPanelStatesRender \
             -only-testing:MoeKitTests/UISnapshotTests/testGettingStartedWelcomeRenders \
             -only-testing:MoeKitTests/UISnapshotTests/testGettingStartedDestinationsRender \
             -only-testing:MoeKitTests/UISnapshotTests/testFirstUseWorkspacesRender \
@@ -278,12 +280,14 @@ jobs:
             xcrun xcresulttool export attachments --path TestResults.xcresult --output-path UIRenderArtifacts
             python3 Scripts/verify-ui-render-artifacts.py UIRenderArtifacts en
             python3 Scripts/verify-sparkle-render-artifacts.py UIRenderArtifacts en
+            python3 Scripts/verify-menubar-render-artifacts.py UIRenderArtifacts en
             python3 Scripts/verify-cache-render-artifacts.py UIRenderArtifacts en
           fi
           if [ -d ChineseRenderResults.xcresult ]; then
             xcrun xcresulttool export attachments --path ChineseRenderResults.xcresult --output-path ChineseUIRenderArtifacts
             python3 Scripts/verify-ui-render-artifacts.py ChineseUIRenderArtifacts zh-Hans
             python3 Scripts/verify-sparkle-render-artifacts.py ChineseUIRenderArtifacts zh-Hans
+            python3 Scripts/verify-menubar-render-artifacts.py ChineseUIRenderArtifacts zh-Hans
             python3 Scripts/verify-cache-render-artifacts.py ChineseUIRenderArtifacts zh-Hans
           fi
       - name: Preserve owned-view render evidence
@@ -416,6 +420,7 @@ jobs:
                         -only-testing:MoeKitTests/SparkleUpdateTests
                         -only-testing:MoeKitTests/UpdateInstallationSafetyTests
                         -only-testing:MoeKitTests/AppUpdateTerminationTests
+                        -only-testing:MoeKitTests/MenuBarTests
                         -only-testing:MoeKitTests/AppEntryPointTests
                         -only-testing:MoeKitTests/ProcessTerminationTests
                         -only-testing:MoeKitTests/ProcessTerminationStoreTests
@@ -460,7 +465,7 @@ jobs:
                       "InstallerFileAccessTests", "InstallerTrashExecutorTests", "InstallerUseEvidenceTests", "InstallerTrashStoreTests",
                       "GitPlainIndexTests", "GitCleanupInspectionTests", "GitCleanupAuthorityTests", "GitCleanupStoreTests", "GitCleanupExecutorTests", "GitWorktreeFinishAuthorityTests", "GitWorktreeFinishExecutorTests", "GitWorktreeFinishStoreTests", "GitRemotePushStoreTests", "GitRemotePushValidationTests",
                       "CleanupExecutorTests", "CleanupStoreTests", "ProcessTerminationTests", "ProcessTerminationStoreTests", "NativeProcessTerminationTests",
-                      "ReleaseVersionTests", "ReleaseCheckStoreTests", "ReleaseTransportTests", "AppEntryPointTests",
+                      "ReleaseVersionTests", "ReleaseCheckStoreTests", "ReleaseTransportTests", "AppEntryPointTests", "MenuBarTests",
                       "SparkleUpdateTests", "UpdateInstallationSafetyTests", "AppUpdateTerminationTests")
           if summary.get("passedTests", 0) < 27 or summary.get("failedTests") != 0 or summary.get("skippedTests") != 0:
               raise SystemExit(f"Optimized catalog tests must execute and pass without skips: {summary}")

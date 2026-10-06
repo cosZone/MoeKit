@@ -27,7 +27,7 @@ export default function HomePage() {
           <Image className="hero-icon" src="/icon.svg" width={176} height={176} alt="MoeKit：抱着收纳盒的小幽灵" priority />
           <p className="visual-title">小小工具箱，清楚每一步</p>
           <div className="workspace-tabs"><span><FolderGit2 size={15} /> Projects</span><span><Terminal size={15} /> Tools</span><span><ListChecks size={15} /> Tasks</span></div>
-          <div className="visual-bottomline"><ShieldCheck size={14} /> 当前阶段：用户主动触发，只读观察</div>
+          <div className="visual-bottomline"><ShieldCheck size={14} /> 受限原生操作 · 复查与确认</div>
         </div>
       </section>
 
@@ -37,7 +37,7 @@ export default function HomePage() {
       </section>
 
       <section className="honesty-panel" aria-labelledby="preview-heading">
-        <div><Activity size={20} /><h2 id="preview-heading">预览版，把边界写在前面</h2><p>现在可以整理项目、导入 Mole JSON、主动读取当前用户的进程与 TCP 监听端口。清理、卸载、命令执行和进程停止尚未开放。</p></div>
+        <div><Activity size={20} /><h2 id="preview-heading">预览版，把边界写在前面</h2><p>已支持项目发现、Mole 分析、逐次确认的 Git／缓存／精确进程操作，以及签名应用更新。旧版需先手动安装一次；广域清理、卸载和任意命令仍未开放。</p></div>
         <Link href="/docs/status">完整功能状态 <ArrowRight size={15} /></Link>
       </section>
       <footer className="landing-footer"><span>MoeKit · 一个正在长大的个人工具箱</span><div><Link href="/changelog"><BookOpen size={14} /> 更新日志</Link><a href="https://github.com/cosZone/MoeKit">GitHub <ExternalLink size={13} /></a></div></footer>

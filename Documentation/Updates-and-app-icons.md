@@ -2,7 +2,7 @@
 
 本页的菜单栏、独立图标设置和手动版本检查已随 [0.1.0-preview.9](https://github.com/cosZone/MoeKit/releases/tag/v0.1.0-preview.9) 交付；preview.8 不包含。精确源码、测试与下载验证见 [版本记录](../website/content/changelog/0.1.0-preview.9.md)。
 
-后续真实 Sparkle 集成见 [自动更新](Automatic-updates.md)。生产签名配置和原生验证仍是启用前提；当前公开 preview.9 没有自动安装。CI 与自有视图渲染不替代人工原生交互验收。
+[preview.10](../website/content/changelog/0.1.0-preview.10.md) 已交付 Sparkle 更新器与签名 feed，具体行为见 [自动更新](Automatic-updates.md)。preview.9 及更早版本仍需先手动安装本版一次。CI、自有视图渲染与合成更新 fixture 不替代真实用户生产安装、完整原生交互或权限迁移验收。
 
 ## 已实现的范围
 
@@ -10,6 +10,11 @@
 - Settings → App icons 分别保存 Dock 和菜单栏图标的选择，默认均显示。两项互不隐式改变；同时关闭会显示恢复说明
 - 图标均关闭时，从 Finder 或 Spotlight 再次打开 MoeKit 会重开已有工作区；Dock 重开也走同一路径，即使另有设置或关于窗口可见
 - 关闭窗口不会退出应用，也不会因窗口消失而销毁共享工作区 store；分析、清理与确认等视图关闭时仍遵守各自的取消/撤销规则，不能承诺所有任务后台继续。打开/关闭设置不会启动扫描或清理
+
+## 旧版与更新器不可用时的手动版本检查
+
+以下是 preview.9 的手动检查行为，也用于当前构建中更新器未启动时的主动备用入口。正常 preview.10 的更新交互由下节 Sparkle 控制；签名错误不会自动切换到未签名安装路径。
+
 - 检查更新仅由用户触发。读取固定的 cosZone/MoeKit 公开 GitHub Releases API，无认证、cookie 或持久网络缓存，不发送项目/任务数据；网络端仍会收到 IP 地址
 - 请求有 15 秒空闲、30 秒资源时限和 1 MiB 响应上限；拒绝重定向、错误响应、错误 MIME、超大数据与分页不完整的列表。错误、限流、取消、空列表分别可见
 - 预览版按数字比较，例如 preview.10 大于 preview.7，同一核心版本的正式版大于预览版；正式版默认排除预览，预览/开发构建默认包含预览，可切换渠道
@@ -19,18 +24,17 @@
 
 MoePeek 的公开许可证为 AGPL-3.0；这里只参考“检查更新”和独立图标设置的产品行为，未复制其源代码。实现依据 AppKit / SwiftUI 的平台接口独立编写。
 
-## 安全 Sparkle 后续集成（尚未启用）
+## preview.10 已交付的 Sparkle 更新
 
-用户仍需要真正的应用内更新。当前先交付可用的手动检查，不以不可用的 Sparkle 按钮冒充完成。
+固定 Sparkle 2.10.0 由一个应用生命周期控制器服务应用菜单、菜单栏和 Settings。它负责下载、验证、安装与重启；本版的八份代码、双架构签名、生产 archive／feed 签名和公开下载已核实，详见 [发布记录](../website/content/changelog/0.1.0-preview.10.md)。
 
-1. 维护者在自己可信的 Mac 使用固定版本 Sparkle 的官方 generate_keys 创建并保管 MoeKit 专属 Ed25519 密钥；只需向代码集成提供公开 SUPublicEDKey。不要把私钥发到聊天、提交仓库、打印到日志，或未经明确授权沿用 MoePeek 的私钥。若通过 GitHub Actions 签名，维护者本人通过 GitHub 安全界面存入专用环境 secret，并明确批准用途；自动化不读取或导出它
-2. 确认一个维护者控制的 HTTPS appcast 地址及预览/正式渠道。使用 generate_appcast 生成归档 EdDSA 签名；若使用 Sparkle 2.9+，同时启用 SURequireSignedFeed 和 SUVerifyUpdateBeforeExtraction，并发布对应的签名 feed / notes，禁止无签名降级。公开 key、地址或签名缺失时不启动安装器
-3. 固定经审查的 Sparkle 包版本和校验和，保留 Sparkle 及其依赖的许可证。按实际包内容逐个审核 framework、Updater.app、Autoupdate 与 XPC services 的 Mach-O 文件、bundle IDs、framework 符号链接及双架构；不能泛化现有拒绝未知代码/符号链接的发布规则
-4. 扩展精确嵌套代码 allowlist 和由内到外的签名顺序，继续逐架构验证签名标识、证书、hardened runtime 和 entitlements；保留现有 Mole / Git 辅助程序规则，不使用 codesign --deep 代替签署清单，不关闭 library validation 或脚本沙箱。当前 Apple Development 签名与未公证限制必须继续如实说明
-5. 建立独立单调递增的 CFBundleVersion 规则与渠道策略；不能将不同 workflow 的 run_number 直接混用。校验旧版本到新版本、preview.9 到 preview.10、预览到正式、渠道切换和禁止降级
-6. 在无秘密的 PR CI 验证依赖、布局、双架构 archive、配置拒绝路径和伪造/篡改 feed/归档拒绝；签名发布 workflow 保持手动精确提交与受保护环境。授权配置后，在一次性 fixture App 上实际验证更新下载、签名、安装、重启、只读卷/Translocation、取消及失败恢复，之后才可启用真实安装
+- preview.9 没有安装器，升级到本版仍需手动下载安装一次
+- 标准第二次启动提示询问后台检查；自动下载安装默认关闭，开启后通常在退出应用时安装。检查／下载偏好与预览渠道单独保存
+- 固定 HTTPS feed 与受审公钥；feed 必须签名，ZIP 必须在解压前验证，无定时未签名回退。配置无效或隔离启动时不启动更新器
+- 原生修改／分析操作忙碌时拒绝为更新退出；替换应用包不主动清空包外的项目清单、偏好和恢复记录
+- 构建顺序使用独立数字映射，preview.10 为 `2.0.10`；真实生产安装的后续更新、Gatekeeper、权限迁移和正式版频道仍需对应验收
 
-最小当前输入：维护者生成并提供 MoeKit 的公开更新 key，确认 HTTPS feed 地址，并自行配置受控签名 secret 的去向。没有这些输入时，安装仍保持未实现/未启用状态，不生成凭据、不改变访问权限。
+维护者密钥边界、精确依赖／嵌套代码清单与发布门槛见 [Sparkle 发布契约](Sparkle-release-contract.md)。私钥配置仍由维护者控制；开发签名与未公证限制不变，不通过修改系统安全设置解决安装问题。
 
 官方依据：
 - https://sparkle-project.org/documentation/

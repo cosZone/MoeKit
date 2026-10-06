@@ -1,6 +1,6 @@
 # Signed automatic updates
 
-This document describes the new source integration, not the already-published preview.9. Preview.9 has only a manual GitHub release check. A first updater-enabled build must still be downloaded manually; earlier releases cannot acquire Sparkle without replacement.
+[Preview.10](https://github.com/cosZone/MoeKit/releases/tag/v0.1.0-preview.10) is the first published updater-enabled build. Its production packages and signed feed were verified against source `2dc1e26edd6b629f792a0b5e107b362acc37a8b1`. Preview.9 has only a manual GitHub release check: upgrading from it or earlier releases still requires one manual download and application replacement. See the [verified release record](../website/content/changelog/0.1.0-preview.10.md).
 
 ## App behavior
 
@@ -35,9 +35,9 @@ Examples: preview.9 → `2.0.9`, preview.10 → `2.0.10`, stable 0.1.0 → `2.0.
 
 ## Production setup and test status
 
-The dedicated MoeKit public key supplied by the maintainer is pinned in `Configurations/Sparkle.json`. Production signing configuration remains a separate human-controlled step; no private key belongs in source, chat, PR output or diagnostics. The release workflow must compare its public-key input with this reviewed pin and verify signatures against it; missing or mismatched signing prerequisites must fail closed. Pinning the public key does not publish an updater-enabled build or an appcast. See the signed preview release instructions for signing and publication.
+The dedicated MoeKit public key supplied by the maintainer is pinned in `Configurations/Sparkle.json`. Preview.10's [release run](https://github.com/cosZone/MoeKit/actions/runs/37461300265) verified the configured public-key input against that pin, signed the app and the archive/feed, and verified those signatures; independently downloaded public bytes passed the same pinned-key checks. The [first updates commit](https://github.com/cosZone/MoeKit/commit/010ba2fe0c941ec422a9a7aead92be8cfca94c4b) contains only the signed appcast. Production signing configuration remains human-controlled; no private key belongs in source, chat, PR output or diagnostics, and missing or mismatched prerequisites must still fail closed.
 
-Source checks and mocks are not proof of a real installation. Before activation, exact-head macOS CI must compile/link the app, verify the universal nested-code layout, exercise signed synthetic feed/archive validation and demonstrate a fixture-only update and relaunch, including tampering/cancellation/failure refusals. Developer ID/notarization-specific behavior still needs a corresponding release path and cannot be proved by ad-hoc fixtures.
+Source checks and mocks are not proof of a real installation. Exact-release-source macOS CI compiled/linked the app, verified the universal nested-code layout, and completed ten native synthetic update/relaunch/refusal cases on each architecture. Production signing and public feed/archive verification also passed. An update of an actual user-installed, production-signed MoeKit has not been demonstrated; Gatekeeper, privacy-permission migration and Developer ID/notarization-specific behavior remain separate acceptance work. Ad-hoc, non-hardened fixtures cannot prove those behaviors.
 
 The current distribution remains Apple Development signed and not notarized. Sparkle does not make that build Developer ID signed, notarized or automatically trusted by Gatekeeper. First installation and platform trust restrictions still apply. Never work around them by disabling macOS security.
 

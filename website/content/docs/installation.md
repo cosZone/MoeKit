@@ -11,7 +11,9 @@ description: 先核对来源和版本，再了解 macOS 的安全提示。
 
 ## 获取可用产物
 
-当前已交付 [0.1.0-preview.9 开发签名预览](https://github.com/cosZone/MoeKit/releases/tag/v0.1.0-preview.9)：[下载 DMG](https://github.com/cosZone/MoeKit/releases/download/v0.1.0-preview.9/MoeKit-v0.1.0-preview.9-macOS.dmg) · [下载 ZIP](https://github.com/cosZone/MoeKit/releases/download/v0.1.0-preview.9/MoeKit-v0.1.0-preview.9-macOS.zip)。包内是同一份 universal Release App，并附校验和与构建信息。本版新增保留恢复数据的 Git 整理、独立 Dock／菜单栏图标设置及手动版本检查；保留此前 Mole、缓存、精确进程与 Downloads 磁盘映像工作流。使用 Apple Development 签名，未公证。精确测试与公开下载验证见 [版本记录](/changelog/0.1.0-preview.9)；文档网站独立构建，不是安装包组件。
+当前已交付 [0.1.0-preview.10 开发签名预览](https://github.com/cosZone/MoeKit/releases/tag/v0.1.0-preview.10)：[下载 DMG](https://github.com/cosZone/MoeKit/releases/download/v0.1.0-preview.10/MoeKit-v0.1.0-preview.10-macOS.dmg) · [下载 ZIP](https://github.com/cosZone/MoeKit/releases/download/v0.1.0-preview.10/MoeKit-v0.1.0-preview.10-macOS.zip)。包内是同一份 universal Release App，并附校验和、构建信息与已签名 appcast。本版首次接入 Sparkle 签名更新，保留此前 Git、Mole、缓存、精确进程与 Downloads 磁盘映像工作流。使用 Apple Development 签名，未公证。精确测试与公开下载验证见 [版本记录](/changelog/0.1.0-preview.10)；文档网站独立构建，不是安装包组件。
+
+**preview.9 及更早版本仍需手动下载并安装本版一次。** 旧版没有自动安装器，不能自行安装 Sparkle；请先完成当前操作并退出旧应用，再按下述正常安装步骤替换应用。
 
 先查看 [GitHub Releases](https://github.com/cosZone/MoeKit/releases)。只有实际发布页中附带的文件才是已交付版本；文档中的版本计划或示例号不构成下载承诺。
 
@@ -24,10 +26,10 @@ description: 先核对来源和版本，再了解 macOS 的安全提示。
 只下载 DMG 时，在文件所在目录执行，并将结果与 `SHA256SUMS.txt` 中的同名条目对照：
 
 ```sh
-shasum -a 256 MoeKit-v0.1.0-preview.9-macOS.dmg
+shasum -a 256 MoeKit-v0.1.0-preview.10-macOS.dmg
 ```
 
-如果 DMG、ZIP、`BUILD_INFO.json` 和校验和文件全部已下载到同一目录，可一次检查全部：
+如果 DMG、ZIP、`BUILD_INFO.json`、`appcast.xml` 和校验和五个文件全部已下载到同一目录，可一次检查全部：
 
 ```sh
 shasum -a 256 -c SHA256SUMS.txt
@@ -41,11 +43,13 @@ shasum -a 256 -c SHA256SUMS.txt
 
 引导可跳过，并可从 **Help → Getting started** 或 **Settings → General → Getting started** 重新打开。已有项目、列表读取错误或显式 Demo 启动时不会自动弹出。跳过只额外保存本地引导版本号，不会清空项目列表。
 
-## 图标、重开与手动检查更新
+## 图标、重开与应用更新
 
 Settings → App icons 分别设置 Dock 与菜单栏图标。两者均隐藏时，可从 Finder 或 Spotlight 再次打开 MoeKit 恢复工作区；关闭窗口不等于退出应用，各项任务仍遵守自身取消规则。
 
-应用菜单、菜单栏与 Settings 可主动检查 GitHub 新版本；检查不发送项目／任务数据，但 GitHub 会收到请求 IP。发现版本后打开本仓库 Release 页面，由你手动下载安装；没有后台检查或 Sparkle 自动安装。详细边界见 [preview.9 说明](/changelog/0.1.0-preview.9)。
+安装 preview.10 后，应用菜单、菜单栏与 Settings → Updates 共享 Sparkle 更新界面。标准第二次启动提示询问后台检查；「自动下载并安装更新」默认关闭，可另行开启，自动安装通常等到退出应用。检查／下载偏好和预览渠道选择会保存；正在执行原生修改／恢复、Git 整理、进程停止或 Mole 分析时会拒绝为更新退出。
+
+请求可能发送应用版本，GitHub 可见连接 IP，不发送项目／任务内容或系统画像。更新源和 ZIP 都要求签名，ZIP 在解压前验证；配置不可用时仍可主动查看 GitHub 手动版本检查，签名失败不自动退回未签名安装。实际用户生产安装的后续更新与权限迁移仍需验收。详细行为见 [preview.10 说明](/changelog/0.1.0-preview.10)。
 
 Git 整理需要受支持的本地仓库和固定位置已安装的 Apple 签名 Git；工具缺失或不支持时拒绝，不自动下载安装。每个目标需检查与独立确认，移动到恢复目录不释放空间。使用与恢复限制见 [项目管理](/docs/projects)。
 
@@ -83,6 +87,7 @@ MoeKit 不附带或自动安装 Mole。先确认已有分析器与 [官方 V1.57
 
 ```sh
 mise install
+mise exec -- tuist install
 mise exec -- tuist generate --no-open
 xcodebuild -workspace MoeKit.xcworkspace -scheme MoeKit \
   -configuration Debug -destination 'platform=macOS' \

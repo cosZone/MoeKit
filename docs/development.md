@@ -40,9 +40,9 @@
 
 ## 发布计划
 
-借鉴 MoePeek 的 SemVer、单一版本来源、忽略个人 Signing.xcconfig、保留示例配置、签名验证和 draft 测试发布经验。后续 Sparkle 集成与测试隔离见 仓库内 `Documentation/Automatic-updates.md`；生产密钥配置由维护者本人完成。
+借鉴 MoePeek 的 SemVer、单一版本来源、忽略个人 Signing.xcconfig、保留示例配置、签名验证和 draft 测试发布经验。Sparkle 已随 [preview.10](../website/content/changelog/0.1.0-preview.10.md) 交付；更新与隔离边界见 [自动更新说明](../Documentation/Automatic-updates.md)，生产密钥配置仍由维护者本人控制。
 
-MoePeek 的现有发布 workflow 未包含测试门禁或 Apple 公证；MoeKit 不直接沿用这一缺口。未来发布需完成 CI 构建与测试、稳定签名、合适的公证与分发验证、发布材料检查，再建立正式发布流程。当前不创建标签、发布下载链接或可用性徽章。
+MoeKit 的开发预览已通过独立的精确源码 CI、Apple Development 签名、发布资产与更新源验证交付，并创建对应标签和下载页；实际记录见 preview.10。Developer ID 正式分发、Apple 公证和真实用户生产更新验收仍未完成，不能把开发预览当作正式分发。
 
 许可证及分发方式未决定；对源码、工具调用、捆绑和分发分别做依赖与许可记录，不在本文推断商业分发结论。
 
@@ -64,6 +64,6 @@ MoePeek 的现有发布 workflow 未包含测试门禁或 Apple 公证；MoeKit 
 | CLAUDE.md 强调弱引用、窗口/timer 清理、异步取消 | 将窗口生命周期、资源释放和取消作为工程验收项 |
 | 签名配置以被忽略的本地文件和 `.example` 区分 | 不提交凭据或本机签名信息；提供不含秘密的配置样例 |
 
-MoeKit 接入固定版本 Sparkle 后，先运行 `mise exec -- tuist install` 安装已锁定依赖，再运行 `mise exec -- tuist generate --no-open`，随后用仓库 README 中的 xcodebuild 命令构建。开发、演示与测试构建不会启动自动更新器；签名发布另走审查后的工作流。
+MoeKit 接入固定版本 Sparkle 后，先运行 `mise exec -- tuist install` 安装已锁定依赖，再运行 `mise exec -- tuist generate --no-open`，随后用仓库 README 中的 xcodebuild 命令构建。开发、XCTest 或以 `--demo`／`--disable-updates` 启动的进程不会启动更新器；发布版中的工作区 Demo 开关不暂停应用更新。签名发布另走审查后的工作流。
 
 现有参考 release workflow 没有覆盖测试与公证步骤。MoeKit 可学习其组织方式，但应在自身发行门槛中补齐相应验证，不沿用这项缺口。参考项目的已观察结构不等于允许复制其源码；拟复用任何文件之前仍需核实许可与适用性。

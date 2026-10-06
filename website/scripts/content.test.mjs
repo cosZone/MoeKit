@@ -2,7 +2,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { resolve, basename } from 'node:path';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import matter from 'gray-matter';
+import { readFrontmatter } from './frontmatter.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const docs = readdirSync(`${root}/content/docs`).filter((f) => /\.mdx?$/.test(f));
@@ -14,7 +14,7 @@ const all = [...docs.map((f) => `content/docs/${f}`), ...versions.map((f) => `co
 test('all Markdown pages have meaningful metadata and working internal routes', () => {
   for (const file of all) {
     const text = readFileSync(`${root}/${file}`, 'utf8');
-    const { data } = matter(text);
+    const { data } = readFrontmatter(text);
     assert.ok(data.title && data.description, `${file}: missing title/description`);
     for (const [, href] of text.matchAll(/\]\((\/[^)\s]+)\)/g)) {
       assert.ok(routes.has(href.split('#')[0]), `${file}: broken internal link ${href}`);
@@ -32,7 +32,7 @@ test('version records stay plain Markdown with honest release metadata', () => {
   assert.ok(versions.length > 0);
   assert.equal(readdirSync(`${root}/content/changelog`).some((f) => f.endsWith('.mdx')), false);
   for (const file of versions) {
-    const { data, content } = matter(readFileSync(`${root}/content/changelog/${file}`, 'utf8'));
+    const { data, content } = readFrontmatter(readFileSync(`${root}/content/changelog/${file}`, 'utf8'));
     assert.equal(data.version, basename(file, '.md'));
     assert.match(data.version, /^(?:unreleased|\d+\.\d+\.\d+(?:-preview\.\d+)?)$/);
     if (data.version === 'unreleased') assert.equal(data.status, 'unreleased');

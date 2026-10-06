@@ -15,7 +15,7 @@ Swift 6 · SwiftUI / AppKit · macOS 15+ · Tuist 4.148.3 · SPM
 - **Tasks**：本次会话的发现任务、取消、状态与底部结果详情；可展开 Diagnostics
 - 独立 Demo 开关与明确示例标识；正常启动无虚构项目、运行结果或磁盘测量
 - 可跳过、可重开的上手引导：项目整理、进程查看或示例体验；先说明范围，再由用户主动选择文件夹或开始扫描
-- **preview.9 应用入口与手动更新**：菜单栏原生入口，Dock / 菜单栏图标独立设置与重开恢复；主动检查 GitHub 新版本并手动下载，尚未启用 Sparkle 自动安装。详见 [更新与应用入口](Documentation/Updates-and-app-icons.md)
+- **应用入口与 preview.10 签名更新**：保留独立 Dock / 菜单栏图标设置与重开恢复；新增 Sparkle 后台检查、可选的自动下载安装与预览渠道设置。从 preview.9 及更早版本仍需先手动安装一次；自动下载安装默认关闭。详见 [自动更新](Documentation/Automatic-updates.md) 与 [应用入口](Documentation/Updates-and-app-icons.md)
 - 原生 NavigationSplitView、Table、工具栏与 SF Symbols；自定义应用图标
 
 尚未实现：任意 CLI 执行、AI 专用无头浏览器归属与清理、广域 Mole 清理、卸载、维护、实时系统指标、提权、第三方插件加载及持久任务历史。导入报告不运行 Mole，报告数值不等于可回收空间。
@@ -28,11 +28,11 @@ Swift 6 · SwiftUI / AppKit · macOS 15+ · Tuist 4.148.3 · SPM
 
 精确分析器下载指引和原生单个 `.dmg` 操作从 preview.7 起交付；preview.8 新增独立的精确进程停止与原生缓存工作流；preview.9 保留这些能力。
 
-**预览验证记录：** `0.1.0-preview.9` 的精确源码 [`c5de701`](https://github.com/cosZone/MoeKit/commit/c5de70153e2eb6f9d1c547c17cf3926565514e50) 已完成 [发布运行](https://github.com/cosZone/MoeKit/actions/runs/37232795385)，四份公开资产的字节、来源与完整 App 内容摘要已核实。主 App 和两个原创 helper 均完成双架构开发签名验证，没有捆绑 Apple Git。发布 Swift Testing 报告 556 项，其中 41 项 opt-in 检查跳过；另有 15 项 XCTest 与 105 项发布辅助测试通过。实际 Git／缓存／进程／安装器操作以同源码 [Native CI](https://github.com/cosZone/MoeKit/actions/runs/37231951693) 的自有 fixture 为准，其独立使用证据 job 建立了当前完整 provider 的 idle 正例，不等于未来或全局未使用证明。完整边界见 [preview.9 记录](website/content/changelog/0.1.0-preview.9.md)；完整窗口、键盘、VoiceOver、双架构实机与真实目录权限仍需手动验收。
+**预览验证记录：** `0.1.0-preview.10` 的精确源码 [`2dc1e26`](https://github.com/cosZone/MoeKit/commit/2dc1e26edd6b629f792a0b5e107b362acc37a8b1) 已完成 [发布运行](https://github.com/cosZone/MoeKit/actions/runs/37461300265)，五份公开资产、完整 ZIP App 内容和首个签名 feed 已核实。主 App、两个原创 helper 与固定 Sparkle 组件共八份代码均完成双架构开发签名验证；生产 ZIP／feed 签名与受审公钥匹配，没有捆绑 Apple Git。发布 Swift Testing 报告 567 项，其中 41 项 opt-in 检查跳过；另有 16 项 XCTest、129 项发布辅助测试和 20 项 appcast 测试通过。同源码 [Native CI](https://github.com/cosZone/MoeKit/actions/runs/37459987788)、[Docs CI](https://github.com/cosZone/MoeKit/actions/runs/37459987753) 与 [双架构 Sparkle fixture](https://github.com/cosZone/MoeKit/actions/runs/37459987760) 均通过；合成 fixture 不代表真实用户安装的生产 App 已完成更新。完整证据和边界见 [preview.10 记录](website/content/changelog/0.1.0-preview.10.md)，历史 [preview.9 记录](website/content/changelog/0.1.0-preview.9.md) 保持原样。真实生产更新、完整窗口／键盘／VoiceOver、双架构实机与真实目录权限仍需验收。
 
 ## preview.8：真实缓存清理
 
-Tools → Mole → Cleanup 新增原生批量缓存清理：主动检查用户缓存目录 → 选择多个精确缓存 → 复查完整清单并确认 → 移入废纸篓；每项记录可独立确认原路径恢复，或另行确认不可恢复的永久移除。移动到废纸篓不释放空间，永久移除也不保证等量物理空间立即回收。此工作流已随 preview.8 交付，preview.7 不包含；首版验证见 [preview.8 记录](website/content/changelog/0.1.0-preview.8.md)，本版回归见上方 preview.9 记录；后续源码改动不自动进入已发布安装包。支持范围、限制和使用方式见 [原生缓存清理](Documentation/Native-cache-cleanup.md)。
+Tools → Mole → Cleanup 新增原生批量缓存清理：主动检查用户缓存目录 → 选择多个精确缓存 → 复查完整清单并确认 → 移入废纸篓；每项记录可独立确认原路径恢复，或另行确认不可恢复的永久移除。移动到废纸篓不释放空间，永久移除也不保证等量物理空间立即回收。此工作流已随 preview.8 交付，preview.7 不包含；首版验证见 [preview.8 记录](website/content/changelog/0.1.0-preview.8.md)，后续回归见上方对应版本记录；后续源码改动不自动进入已发布安装包。支持范围、限制和使用方式见 [原生缓存清理](Documentation/Native-cache-cleanup.md)。
 
 ## 构建
 
@@ -49,15 +49,15 @@ xcodebuild -workspace MoeKit.xcworkspace -scheme MoeKit \
 open DerivedData/Build/Products/Debug/MoeKit.app
 ```
 
-在 Settings → Preview 中开启 Demo；也可通过 `open -n …/MoeKit.app --args --demo` 启动。`Package.swift` 仅管理 Tuist 的 SPM 依赖，目前为空；请通过生成的 Xcode workspace 构建，不使用 `swift run`。
+在 Settings → Preview 中开启 Demo；也可通过 `open -n …/MoeKit.app --args --demo` 启动。工作区 Demo 开关不暂停发布版更新器；以 `--demo` 启动的进程才隔离更新。`Package.swift` 管理 Tuist 的 SPM 依赖，固定 Sparkle 2.10.0；请通过生成的 Xcode workspace 构建，不使用 `swift run`。
 
 ## 下载与开发
 
 - [Actions](https://github.com/cosZone/MoeKit/actions)：Native CI 构建与测试；手动运行 Preview app artifact 可下载包含 `.app` 的 ZIP、源码 SHA、SHA-256 校验和与构建信息
 - Actions 的 Preview app artifact 仅 **ad-hoc 签名，没有 Developer ID 签名、没有公证**；该工作流不会创建 tag 或 GitHub Release
-- [0.1.0-preview.9](https://github.com/cosZone/MoeKit/releases/tag/v0.1.0-preview.9) 已发布：[DMG（推荐）](https://github.com/cosZone/MoeKit/releases/download/v0.1.0-preview.9/MoeKit-v0.1.0-preview.9-macOS.dmg) · [ZIP](https://github.com/cosZone/MoeKit/releases/download/v0.1.0-preview.9/MoeKit-v0.1.0-preview.9-macOS.zip)。两种包内是同一份 universal Release App，新增保留恢复数据的 Git 整理、独立菜单栏／Dock 设置和手动版本检查，并保留此前的进程、缓存、Mole 分析与单个 Downloads `.dmg` 工作流；附校验和及构建信息
+- [0.1.0-preview.10](https://github.com/cosZone/MoeKit/releases/tag/v0.1.0-preview.10) 已发布：[DMG（推荐）](https://github.com/cosZone/MoeKit/releases/download/v0.1.0-preview.10/MoeKit-v0.1.0-preview.10-macOS.dmg) · [ZIP](https://github.com/cosZone/MoeKit/releases/download/v0.1.0-preview.10/MoeKit-v0.1.0-preview.10-macOS.zip)。两种包内是同一份 universal Release App，首次交付 Sparkle 签名更新，并保留此前受限工作流；附校验和、构建信息及已签名 appcast。从 preview.9 及更早版本仍需手动安装本版一次
 - 使用 **Apple Development 签名，未公证**，不等于 Developer ID 正式分发，Gatekeeper 仍可能阻止打开；DMG 格式不会改变这一限制
-- 按版本的实际交付说明见 [preview.9 更新记录](website/content/changelog/0.1.0-preview.9.md)；preview.1 至 preview.8 保持原样。文档网站独立部署，不随 App 安装。维护者流程见 [开发签名预览发布](Documentation/Signed-preview-release.md)
+- 按版本的实际交付说明见 [preview.10 更新记录](website/content/changelog/0.1.0-preview.10.md)；preview.1 至 preview.9 保持原样。文档网站独立部署，不随 App 安装。维护者流程见 [开发签名预览发布](Documentation/Signed-preview-release.md)
 - [构建与交付说明](Documentation/Build-and-preview.md)
 - [架构与数据边界](Documentation/Architecture.md)
 - [工具准备与安装边界](Documentation/Tool-preparation.md)

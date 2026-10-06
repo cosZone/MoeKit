@@ -33,9 +33,13 @@ Git 整理只处理明确选择和逐次确认的受支持目标，不运行 liv
 
 确认后，工作树／登记或分支 ref 移入主仓库 `.git/moekit-recovery/` 的操作目录，保存原路径、提交和阶段记录。数据继续占用存储，会话内恢复需另行确认；重启后不自动扫描、恢复或删除。记录与恢复内容可能含私人数据，不是独立 Git bundle 或异地备份；分享前复查并脱敏。完整限制见 [项目管理](/docs/projects)。
 
-## 手动更新检查
+## 更新请求与应用替换
 
-[preview.9](/changelog/0.1.0-preview.9) 已交付用户主动触发的 GitHub 版本检查，preview.8 不包含。它只请求固定的 cosZone/MoeKit 公开 Releases API，不使用认证、Cookie 或持久网络缓存，不发送项目／任务数据；GitHub 仍会收到请求的 IP 地址。它不会自动检查、下载代码或替换应用；具体网络与取消边界见 [更新与应用入口](https://github.com/cosZone/MoeKit/blob/c5de70153e2eb6f9d1c547c17cf3926565514e50/Documentation/Updates-and-app-icons.md)。
+[preview.10](/changelog/0.1.0-preview.10) 已交付 Sparkle 更新器。后台检查通过标准提示或 Settings 选择，自动下载安装默认关闭；更新请求访问固定 GitHub feed 与本仓库版本资产，可能携带应用版本，服务端可见 IP 地址。不发送项目／任务内容或系统画像，更新说明禁用 JavaScript。版本源和更新 ZIP 均要求签名，ZIP 在解压前验证，签名失败没有未签名回退。
+
+应用替换保留包外的项目清单、置顶、偏好与私有恢复记录；不会主动清理用户项目或因失败重置数据。原生修改／分析操作忙碌时会阻止为更新退出；会话内扫描、报告和任务记录不承诺跨重启保留。真实生产安装的更新和权限迁移仍需验收，开发签名与未公证限制见 [安装说明](/docs/installation)。
+
+[preview.9](/changelog/0.1.0-preview.9) 及更早版本没有自动安装器，升级到本版需先手动安装。旧版手动检查和更新器未启动时的备用入口只请求本仓库公开 Releases API，不使用认证、Cookie 或持久网络缓存；用户自行在浏览器下载安装。两种更新路径不应混淆。
 
 ## 文档网站
 

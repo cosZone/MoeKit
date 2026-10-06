@@ -47,6 +47,6 @@ ZIP 的最终字节与 appcast 原始 UTF-8 字节分别签名。Feed 内只有�
 
 便携测试使用非生产测试密钥与合成资产验证 tamper、错误公钥、错误 URL、重放及并发更新拒绝；原生 release helper 测试对合成 universal bundle 逐层 ad-hoc 签名，验证框架链接、ZIP、DMG 与每个 code object。实际签名安装/重启由独立的隔离 Sparkle fixture 验证，不能用 parser 或 archive pass 代替。
 
-生产密钥配置、真实签名新版本、公开 feed 与资产一致性，以及已安装 App 的实际更新结果须各自取得证据后才算已交付。源码、CI 与本文件不意味着当前发布包已具备自动更新。
+[preview.10](../website/content/changelog/0.1.0-preview.10.md) 已取得生产签名、固定公钥与 ZIP／feed 签名一致性、五份公开资产和首个 updates 分支的验证证据，是首个包含更新器的发布包；preview.9 及更早版本仍需先手动安装它。双架构合成 fixture 的安装／重启已验证，但真实用户安装的生产签名 App 后续更新、Gatekeeper 和隐私授权迁移仍需各自验收；源码、CI 和签名成功不能代替这些结果。
 
 依据：[Sparkle setup](https://sparkle-project.org/documentation/)、[发布与签名 feed](https://sparkle-project.org/documentation/publishing/)、[逐层重签说明](https://sparkle-project.org/documentation/sandboxing/)、[固定版签名实现](https://github.com/sparkle-project/Sparkle/blob/eef1a539a373c1f1a320624b1130fc5de7b2e100/common_cli/Signing.swift)、[OpenSSL Ed25519 verification](https://docs.openssl.org/3.0/man1/openssl-pkeyutl/#ed25519-and-ed448-algorithms)。

@@ -64,6 +64,30 @@ Git 准备页仍提供其官方 Homebrew 指引。Demo 不检查真实工具。�
 
 移入废纸篓不释放占用存储；永久删除也不保证立即等量回收物理空间，因为打开文件、硬链接、APFS 快照／克隆可能保留物理块。此工作流面向已停止相关工作负载的合作式本地使用，不是 OS 沙箱，也不保证抵御恶意同用户进程竞争。完整实现与限制见 [原生缓存清理设计](https://github.com/cosZone/MoeKit/blob/b0bdd59ff672efe16a23a20b422e0e433179be11/Documentation/Native-cache-cleanup.md)。
 
+## preview.11：个人废纸篓与 Docker（尚未发布）
+
+源码中的 Cleanup 已分为 **Caches / Trash / Docker**。以下新增能力正在准备 [preview.11](/changelog/0.1.0-preview.11)，不包含在当前公开 preview.10 安装包中，也不改变上述 Downloads／缓存凭据的操作边界。
+
+### Trash：个人废纸篓
+
+主动扫描当前用户 `~/.Trash` 后，选择受支持文件、非空目录或链接，复查完整路径和后代清单，声明相关工作负载已停止，再确认不可恢复删除。另一个“清空本次快照”入口必须取得完整可验证快照并准确输入 `EMPTY`；筛选不缩小此范围，新到达项目不被追加。最后修改时间不冒充删除时间，原始位置与进入废纸篓的日期保持不可用。
+
+仅当前非 root 用户自己的本地内置可写 APFS 废纸篓受支持；外置卷、其他用户、网络／云卷及任意自选目录未实现。根目录须当前用户所有、0700、无 ACL，不修改权限。凭据／保险库／恢复控制名称、Git 元数据、其他 UID、特殊文件及未知权限受保护，链接不跟随目标。完整性或预算不足时不能清空。
+
+120 秒计划只使用一次，操作前重新验证。取消与部分失败停止后续项目，已删除的数据无法恢复。中断可能留下私有 payload、删除槽和记录，可主动查看记录并在 Finder 中检查整个操作目录；不自动重试或提供通用“放回原处”。[完整范围和预算](https://github.com/cosZone/MoeKit/blob/main/Documentation/Trash-management.md)。
+
+### Docker：精确对象与独立缓存范围
+
+选择 Docker Desktop 或 Local Docker Engine 的固定本机 Unix socket，主动连接并刷新。显示实际 daemon／内核对端与对象清单；忽略 Docker CLI context，不读取配置／凭据，不自动启动 daemon、安装 CLI、拉取镜像或修改权限。
+
+按完整 ID 选择未使用镜像与 created／exited 容器。任何容器引用（包括停止容器）都保护镜像；容器删除会永久失去其可写层。运行／暂停／重启／dead／未知状态容器不可选，所有卷只展示且保持保护。镜像没有 force 或父镜像连带清理。
+
+构建缓存为另一个 **本 daemon 全部未使用缓存** 范围，确认页有独立复选项；不是按缓存行精确删除，也不触及其他 builder／远端 context。计划 60 秒、单次消费，每次修改前重新核对 socket／内核对端／daemon 和完整引用。
+
+超时、断连或取消后，已发送请求仍可能稍后完成；即时清单中仍有对象时不能据此宣称已安全保留。结果保留在本次应用会话中，导航、刷新或 Demo 切换不会抹去；Demo 隐藏真实报告，返回真实模式可再查看。无自动重试。共享层不能相加，Engine 回收量不保证 Docker Desktop 磁盘映像立即缩小。[完整 Docker 边界](https://github.com/cosZone/MoeKit/blob/main/Documentation/Docker-cleanup.md)。
+
+两类操作及验证忙碌时均阻止应用为 Sparkle 更新退出。自动测试只操作独立自有目录和 CI daemon；实际用户权限、Docker Desktop、完整窗口／键盘／VoiceOver 仍需验收。
+
 ## 四种覆盖状态
 
 | 状态 | 含义 |

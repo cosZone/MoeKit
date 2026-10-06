@@ -279,8 +279,14 @@ struct DockerSocketAdapterTests {
         let socketURL = directory.appendingPathComponent("daemon.sock")
         let alias = directory.appendingPathComponent("desktop.sock")
         let fd = socket(AF_UNIX, SOCK_STREAM, 0)
-        #expect(fd >= 0)
+        try #require(fd >= 0, "Owned socket creation failed, errno \(errno)")
         defer { _ = close(fd) }
+        try #require(fcntl(fd, F_SETFD, FD_CLOEXEC) == 0, "Listener close-on-exec failed, errno \(errno)")
+        // Darwin rejects socket options after full shutdown. Configure the
+        // listener before connect; accepted sockets inherit SOF_NOSIGPIPE.
+        var noSignal: Int32 = 1
+        try #require(setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &noSignal, socklen_t(MemoryLayout<Int32>.size)) == 0,
+                     "Listener SO_NOSIGPIPE failed, errno \(errno)")
         var address = sockaddr_un()
         address.sun_family = sa_family_t(AF_UNIX)
         address.sun_len = UInt8(MemoryLayout<sockaddr_un>.size)
@@ -289,48 +295,216 @@ struct DockerSocketAdapterTests {
         let bound = withUnsafePointer(to: &address) {
             $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { bind(fd, $0, socklen_t(MemoryLayout<sockaddr_un>.size)) }
         }
-        #expect(bound == 0)
-        #expect(chmod(socketURL.path, 0o600) == 0)
-        #expect(listen(fd, 1) == 0)
+        try #require(bound == 0, "Owned bind failed, errno \(errno)")
+        try #require(chmod(socketURL.path, 0o600) == 0, "Owned socket mode failed, errno \(errno)")
+        try #require(listen(fd, 1) == 0, "Owned listen failed, errno \(errno)")
         try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: socketURL)
         let endpoint = DockerEndpoint(name: "Owned fixture", socketPath: alias.path)
         let transport = DockerSocketTransport(timeout: 2)
         let identity = try transport.identity(for: endpoint)
         #expect(identity.path == socketURL.resolvingSymlinksInPath().path)
-        let completed = DispatchSemaphore(value: 0)
-        DispatchQueue.global().async {
-            defer { completed.signal() }
-            for _ in 0..<3 {
-                var wait = pollfd(fd: fd, events: Int16(POLLIN), revents: 0)
-                guard poll(&wait, 1, 3_000) > 0 else { return }
-                let connection = accept(fd, nil, nil)
-                guard connection >= 0 else { return }
-                defer { _ = close(connection) }
-                var buffer = [UInt8](repeating: 0, count: 2048)
-                guard recv(connection, &buffer, buffer.count, 0) > 0 else { continue }
-                let response = Array("HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\n{}".utf8)
-                _ = response.withUnsafeBytes { send(connection, $0.baseAddress, $0.count, 0) }
-            }
+        let expectedRequest = Data("GET /version HTTP/1.1\r\nHost: localhost\r\nAccept: application/json\r\nConnection: close\r\nContent-Length: 0\r\n\r\n".utf8)
+        let server = try DockerNativeSocketFixture(listener: fd, expectedRequest: expectedRequest)
+        server.start()
+        defer {
+            // This runs on an early client throw too. The worker owns a dup, so
+            // it can never accidentally poll an fd reused after the test closes fd.
+            #expect(server.stopAndWait(), "Owned socket worker did not finish: \(server.snapshot)")
+            print("Docker native socket fixture: \(server.snapshot)")
         }
-        let peer = try transport.peerIdentity(endpoint: endpoint, identity: identity, cancellation: DockerCancellation())
+        try server.waitReady()
+        let peer = try server.client("peer probe") {
+            try transport.peerIdentity(endpoint: endpoint, identity: identity, cancellation: DockerCancellation())
+        }
         #expect(peer.pid == getpid())
         #expect(peer.uid == geteuid())
-        let response = try transport.request(endpoint: endpoint, identity: identity, peer: peer, method: "GET", path: "/version", cancellation: DockerCancellation())
+        // Deliberately queue the probe before allowing accept. With backlog 1,
+        // the HTTP connection must not race an undrained closed probe.
+        server.allowProbeDrain()
+        try server.waitDrained(0)
+        let response = try server.client("HTTP request") {
+            try transport.request(endpoint: endpoint, identity: identity, peer: peer, method: "GET", path: "/version", cancellation: DockerCancellation())
+        }
         #expect(response.status == 200)
         #expect(response.body == Data("{}".utf8))
+        try server.waitDrained(1)
         let wrongPeer = DockerPeerIdentity(pid: peer.pid, uid: peer.uid, gid: peer.gid, processToken: peer.processToken + [0])
         #expect(throws: DockerCleanupError.changed) {
-            _ = try transport.request(endpoint: endpoint, identity: identity, peer: wrongPeer, method: "GET", path: "/version", cancellation: DockerCancellation())
+            try server.client("wrong-peer request", expectedError: .changed) {
+                _ = try transport.request(endpoint: endpoint, identity: identity, peer: wrongPeer, method: "GET", path: "/version", cancellation: DockerCancellation())
+            }
         }
+        try server.waitDrained(2)
+        #expect(server.receivedByteCounts == [0, expectedRequest.count, 0])
         // The connected peer check rejected the request before any HTTP bytes were sent.
         try FileManager.default.removeItem(at: alias)
         try Data("replacement is not a socket".utf8).write(to: alias)
         #expect(throws: DockerCleanupError.unsafeSocket) {
             _ = try transport.request(endpoint: endpoint, identity: identity, peer: peer, method: "GET", path: "/version", cancellation: DockerCancellation())
         }
-        #expect(completed.wait(timeout: .now() + 4) == .success)
     }
 }
+
+/// Test-only server. The accept gate forces the formerly racy backlog ordering;
+/// per-connection acknowledgements prove EOF/framing and close before reconnect.
+private final class DockerNativeSocketFixture: @unchecked Sendable {
+    private let listener: Int32
+    private let expectedRequest: Data
+    private let ready = DispatchSemaphore(value: 0)
+    private let acceptProbe = DispatchSemaphore(value: 0)
+    private let drained = (0..<3).map { _ in DispatchSemaphore(value: 0) }
+    private let completed = DispatchSemaphore(value: 0)
+    private let lock = NSLock()
+    private var stopped = false
+    private var finished = false
+    private var failure: String?
+    private var events: [String] = []
+    private var counts: [Int] = []
+
+    init(listener: Int32, expectedRequest: Data) throws {
+        let owned = dup(listener)
+        guard owned >= 0 else { throw DockerSocketFixtureFailure(stage: "dup listener", code: errno) }
+        guard fcntl(owned, F_SETFL, O_NONBLOCK) == 0 else {
+            let code = errno; _ = close(owned)
+            throw DockerSocketFixtureFailure(stage: "listener F_SETFL", code: code)
+        }
+        guard fcntl(owned, F_SETFD, FD_CLOEXEC) == 0 else {
+            let code = errno; _ = close(owned)
+            throw DockerSocketFixtureFailure(stage: "listener F_SETFD", code: code)
+        }
+        self.listener = owned; self.expectedRequest = expectedRequest
+    }
+    var snapshot: String { lock.lock(); defer { lock.unlock() }; return events.joined(separator: " | ") }
+    var receivedByteCounts: [Int] { lock.lock(); defer { lock.unlock() }; return counts }
+    private func record(_ event: String) { lock.lock(); events.append(event); lock.unlock() }
+    private func check(_ stage: String) throws {
+        lock.lock(); let cancelled = stopped; lock.unlock()
+        if cancelled { throw DockerSocketFixtureFailure(stage: stage + " cancelled", code: ECANCELED) }
+    }
+    func start() {
+        DispatchQueue.global().async { [self] in
+            defer {
+                _ = close(listener)
+                lock.lock(); finished = true; lock.unlock()
+                // Release waiters on failure too; they check failure before proceeding.
+                ready.signal(); drained.forEach { $0.signal() }; completed.signal()
+            }
+            do {
+                record("server ready; accept gated"); ready.signal()
+                guard acceptProbe.wait(timeout: .now() + 3) == .success else {
+                    throw DockerSocketFixtureFailure(stage: "probe accept gate", code: ETIMEDOUT)
+                }
+                for index in 0..<3 {
+                    try check("connection \(index)")
+                    let count = try serve(index)
+                    lock.lock(); counts.append(count); events.append("connection \(index) closed; received \(count) bytes"); lock.unlock()
+                    drained[index].signal()
+                }
+            } catch {
+                lock.lock(); failure = String(describing: error); events.append("server failure: \(error)"); lock.unlock()
+            }
+        }
+    }
+    func waitReady() throws { try waitFor(ready, stage: "server ready") }
+    func allowProbeDrain() { record("probe returned; allow accept"); acceptProbe.signal() }
+    func waitDrained(_ index: Int) throws { try waitFor(drained[index], stage: "connection \(index) drained") }
+    private func waitFor(_ semaphore: DispatchSemaphore, stage: String) throws {
+        guard semaphore.wait(timeout: .now() + 3) == .success else {
+            throw DockerSocketFixtureFailure(stage: stage + "; " + snapshot, code: ETIMEDOUT)
+        }
+        lock.lock(); let error = failure; lock.unlock()
+        if let error { throw DockerSocketFixtureFailure(stage: stage + "; " + error, code: 0) }
+    }
+    func stopAndWait() -> Bool {
+        lock.lock(); stopped = true; let done = finished; lock.unlock()
+        acceptProbe.signal()
+        return done || completed.wait(timeout: .now() + 4) == .success
+    }
+    func client<T>(_ stage: String, expectedError: DockerCleanupError? = nil, _ action: () throws -> T) throws -> T {
+        record("client " + stage)
+        do { return try action() }
+        catch {
+            let observedErrno = errno // Snapshot only; production errors intentionally omit syscall details.
+            if let expectedError, error as? DockerCleanupError == expectedError { throw error }
+            throw DockerSocketFixtureFailure(stage: stage + ": \(error); thread errno snapshot=\(observedErrno); " + snapshot, code: 0)
+        }
+    }
+    private func wait(_ descriptor: Int32, events: Int16, deadline: TimeInterval, stage: String) throws {
+        while true {
+            try check(stage)
+            guard ProcessInfo.processInfo.systemUptime < deadline else { throw DockerSocketFixtureFailure(stage: stage, code: ETIMEDOUT) }
+            var entry = pollfd(fd: descriptor, events: events, revents: 0)
+            let result = poll(&entry, 1, 100)
+            if result < 0 { let code = errno; if code == EINTR { continue }; throw DockerSocketFixtureFailure(stage: stage, code: code) }
+            if result > 0 {
+                guard entry.revents & Int16(POLLNVAL) == 0 else { throw DockerSocketFixtureFailure(stage: stage, code: EBADF) }
+                if entry.revents & (events | Int16(POLLHUP) | Int16(POLLERR)) != 0 { return }
+            }
+        }
+    }
+    private func serve(_ index: Int) throws -> Int {
+        let deadline = ProcessInfo.processInfo.systemUptime + 3
+        var connection: Int32 = -1
+        while connection < 0 {
+            try wait(listener, events: Int16(POLLIN), deadline: deadline, stage: "accept \(index)")
+            connection = accept(listener, nil, nil)
+            if connection < 0 {
+                let code = errno
+                if code == EINTR || code == EAGAIN { continue }
+                throw DockerSocketFixtureFailure(stage: "accept \(index)", code: code)
+            }
+        }
+        defer { _ = close(connection) }
+        record("accepted connection \(index)")
+        guard fcntl(connection, F_SETFL, O_NONBLOCK) == 0 else {
+            throw DockerSocketFixtureFailure(stage: "connection \(index) F_SETFL", code: errno)
+        }
+        guard fcntl(connection, F_SETFD, FD_CLOEXEC) == 0 else {
+            throw DockerSocketFixtureFailure(stage: "connection \(index) F_SETFD", code: errno)
+        }
+        var received = Data()
+        var buffer = [UInt8](repeating: 0, count: 1024)
+        while true {
+            try wait(connection, events: Int16(POLLIN), deadline: deadline, stage: "read \(index)")
+            let count = recv(connection, &buffer, buffer.count, 0)
+            if count < 0 {
+                let code = errno
+                if code == EAGAIN || code == EINTR { continue }
+                throw DockerSocketFixtureFailure(stage: "read \(index)", code: code)
+            }
+            if count == 0 {
+                guard index != 1, received.isEmpty else { throw DockerSocketFixtureFailure(stage: "unexpected EOF/data \(index)", code: 0) }
+                return 0
+            }
+            received.append(contentsOf: buffer.prefix(count))
+            guard index == 1, received.count <= 4096 else { throw DockerSocketFixtureFailure(stage: "unexpected/bounded request \(index)", code: 0) }
+            if received.range(of: Data("\r\n\r\n".utf8)) != nil { break }
+        }
+        guard received == expectedRequest else { throw DockerSocketFixtureFailure(stage: "full HTTP request mismatch", code: 0) }
+        let response = Data("HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\n{}".utf8)
+        var sent = 0
+        while sent < response.count {
+            try wait(connection, events: Int16(POLLOUT), deadline: deadline, stage: "write response")
+            let count = response.withUnsafeBytes { send(connection, $0.baseAddress!.advanced(by: sent), $0.count - sent, 0) }
+            if count < 0 {
+                let code = errno
+                if code == EAGAIN || code == EINTR { continue }
+                throw DockerSocketFixtureFailure(stage: "write response", code: code)
+            }
+            guard count > 0 else { throw DockerSocketFixtureFailure(stage: "empty response write", code: 0) }
+            sent += count
+        }
+        record("complete HTTP response sent")
+        return received.count
+    }
+}
+
+private struct DockerSocketFixtureFailure: Error, CustomStringConvertible {
+    let stage: String
+    let code: Int32
+    var description: String { "Docker socket fixture: \(stage) (errno \(code))" }
+}
+
 #endif
 
 private final class DockerFixtureClock: @unchecked Sendable {

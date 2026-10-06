@@ -1,19 +1,20 @@
 <?xml version='1.0' encoding='utf-8'?>
-<rss xmlns:moekit="https://github.com/cosZone/MoeKit/ns/update" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0"><channel><title>MoeKit updates</title><link>https://github.com/cosZone/MoeKit</link><item><title>MoeKit 0.1.0-preview.12</title><link>https://github.com/cosZone/MoeKit/releases/tag/v0.1.0-preview.12</link><sparkle:version>2.0.12</sparkle:version><sparkle:shortVersionString>0.1.0-preview.12</sparkle:shortVersionString><sparkle:minimumSystemVersion>15.0.0</sparkle:minimumSystemVersion><moekit:sourceCommit>fa630c57dd87862597874d5ba459453beac95e60</moekit:sourceCommit><moekit:runID>37510296062</moekit:runID><moekit:runNumber>17</moekit:runNumber><moekit:runAttempt>1</moekit:runAttempt><sparkle:channel>preview</sparkle:channel><description sparkle:format="plain-text">## 更新
+<rss xmlns:moekit="https://github.com/cosZone/MoeKit/ns/update" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0"><channel><title>MoeKit updates</title><link>https://github.com/cosZone/MoeKit</link><item><title>MoeKit 0.1.0-preview.13</title><link>https://github.com/cosZone/MoeKit/releases/tag/v0.1.0-preview.13</link><sparkle:version>2.0.13</sparkle:version><sparkle:shortVersionString>0.1.0-preview.13</sparkle:shortVersionString><sparkle:minimumSystemVersion>15.0.0</sparkle:minimumSystemVersion><moekit:sourceCommit>2860c39bc5b170089c302ca4fed00853dd16d9bd</moekit:sourceCommit><moekit:runID>37527243263</moekit:runID><moekit:runNumber>18</moekit:runNumber><moekit:runAttempt>1</moekit:runAttempt><sparkle:channel>preview</sparkle:channel><description sparkle:format="plain-text">## 修复
 
-- **Mole 更易上手**：自动检测兼容安装，缺少时提供分步准备与重新检测
-- **AI worktree 收尾**：确认本地合入，按需另行确认推送，核验后再单独决定退役；退役保留恢复数据
-- **界面更简洁**：精简重复说明，About 显示完整的 preview 版本
-- **菜单栏焕新**：幽灵工具箱图标、快捷面板和任务状态提示，支持“减少动态效果”
+- **缓存扫描**：修复无关废纸篓的读取限制导致缓存扫描受阻的问题
+- **大小显示**：受保护或部分不可读的项目也能保留已读大小；完整、部分和未知状态分开显示
+- **进度与提示**：显示当前扫描阶段和路径，失败时提供更明确的原因
+
+- **扫描稳定性**：修复目录项较多时可能出现的读取崩溃
 
 ## 使用前
 
-Git 本地合入目前仅支持 fast-forward；推送与退役分别确认，不自动重试不确定的推送。真实远端凭据交互仍需实机验收。
+大小不代表可以删除，也不等于实际可回收空间。删除仍需复查确认；废纸篓列表不完整时不能整批清空，永久删除无法撤销。
 
-macOS 15+，Apple Silicon / Intel。使用 Apple Development 签名、未公证；preview.9 及更早版本需先手动安装一次。
+macOS 15+，Apple Silicon / Intel。发布时计划采用 Apple Development 签名，暂不公证；preview.9 及更早需先手动安装一次。
 
-[Mole 准备指南](https://github.com/cosZone/MoeKit/blob/72f9f1f91f52d6c19f2177615780ecd0376fe6d9/Documentation/Mole-beginner-setup.md) · [AI worktree 支持范围](https://github.com/cosZone/MoeKit/blob/72f9f1f91f52d6c19f2177615780ecd0376fe6d9/Documentation/Git-worktree-finish.md)</description><enclosure url="https://github.com/cosZone/MoeKit/releases/download/v0.1.0-preview.12/MoeKit-v0.1.0-preview.12-macOS.zip" length="6760188" type="application/octet-stream" sparkle:edSignature="5ZHLlnEQxGEgTs0vYtBTWzfo4BCKKgVLF7833Y/GJ4hy5bGxcXo+m2Wd804ZGDt5jkQoPkNkrc798H9hCvPyCw==" /></item></channel></rss>
+[支持范围与验证边界](https://github.com/cosZone/MoeKit/blob/372d323ab14d755bfc4a91ba9c4c08a48c753ec1/Documentation/Scan-usability-review.md)</description><enclosure url="https://github.com/cosZone/MoeKit/releases/download/v0.1.0-preview.13/MoeKit-v0.1.0-preview.13-macOS.zip" length="6823848" type="application/octet-stream" sparkle:edSignature="KPW+3bwQNTxKn5uraE6yHoU9q5Dfh1MhEQ4XuxHB4tNX0j3Yt+euer10SMf2Yh+DLQdXlaOPZknaHGpgKPyIDw==" /></item></channel></rss>
 <!-- sparkle-signatures:
-edSignature: Er89tRDbQbx4DHYi5a9OS1OC3ynSOUCbfy/tcfX0/WyHuUtQZlJ3vgn0j2mYilUwErciFj4f4n6TPiAH+WpbAQ==
-length: 2211
+edSignature: TkA56P4TrvZZph0M6MFmbVGpbz/oYbzysPv81G+G9WIHU4atKaioS4EEB+kJlb3Pn9Axcnr81wscatp91oPiCQ==
+length: 2060
 -->

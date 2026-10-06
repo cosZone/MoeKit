@@ -128,6 +128,11 @@ def verify(directory: Path, language: str) -> int:
         for appearance in ("light", "dark")
         for width, height in (((520, 600),) if scenario == "hidden-icons" else ((540, 520),))
     })
+    expected.update({
+        f"about-{scenario}-{language}-{appearance}-440x400": (440, 400)
+        for scenario in ("preview", "development", "unavailable")
+        for appearance in ("light", "dark")
+    })
     manifest = json.loads((directory / "manifest.json").read_text())
     images, scopes = {}, {}
     for test in manifest:
@@ -165,6 +170,14 @@ def verify(directory: Path, language: str) -> int:
             f"Partial-result title: {'部分结果' if language == 'zh-Hans' else 'Partial result'}",
             f"Content size: {width} × {height} points",
         }
+        if name.startswith("about-"):
+            preview = name.startswith("about-preview-")
+            missing = name.startswith("about-unavailable-")
+            required.update({
+                f"About version: {'unavailable' if missing else ('0.1.0-preview.11' if preview else '0.1.0')}",
+                f"About build: {'unavailable' if missing else ('2.0.11' if preview else '1')}",
+                f"Visible About labels: {1 if missing else 2}",
+            })
         if name.startswith("updates-"):
             required.update({
                 f"Update action title: {'检查更新…' if language == 'zh-Hans' else 'Check for updates…'}",

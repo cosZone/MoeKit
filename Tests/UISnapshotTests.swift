@@ -81,16 +81,29 @@ final class UISnapshotTests: XCTestCase {
     }
 
     @MainActor
-    private func captureVariants(named scenario: String, rendersGuide: Bool = false, rendersSettings: Bool = false, isDemoEnabled: Bool = true, configure: (WorkspaceStore) -> Void) throws {
+    func testAboutReleaseLabelsRender() throws {
+        let fixtures: [(String, [String: Any])] = [
+            ("preview", ["CFBundleShortVersionString": "0.1.0", "CFBundleVersion": "2.0.11", "MoeKitPreviewVersion": "0.1.0-preview.11"]),
+            ("development", ["CFBundleShortVersionString": "0.1.0", "CFBundleVersion": "1"]),
+            ("unavailable", [:])
+        ]
+        for (scenario, info) in fixtures {
+            try captureVariants(named: "about-\(scenario)", isDemoEnabled: false,
+                                aboutInformation: AppInformation(infoDictionary: info)) { _ in }
+        }
+    }
+
+    @MainActor
+    private func captureVariants(named scenario: String, rendersGuide: Bool = false, rendersSettings: Bool = false, isDemoEnabled: Bool = true, aboutInformation: AppInformation? = nil, configure: (WorkspaceStore) -> Void) throws {
         let language = try XCTUnwrap(Bundle.main.preferredLocalizations.first)
         XCTAssertTrue(["en", "zh-Hans"].contains(language), "Render language must be explicitly supported")
         XCTAssertEqual(WorkspaceSection.projects.title, language == "zh-Hans" ? "项目" : "Projects")
         XCTAssertEqual(TaskStatus.partial.title, language == "zh-Hans" ? "部分结果" : "Partial result")
         // CI separately checks that the process locale agrees with its requested
         // language. Setting only the SwiftUI locale would leave model strings mixed.
-        let sizes = rendersSettings ? [NSSize(width: 520, height: 600)] : (rendersGuide
+        let sizes = aboutInformation != nil ? [NSSize(width: 440, height: 400)] : (rendersSettings ? [NSSize(width: 520, height: 600)] : (rendersGuide
             ? [NSSize(width: 520, height: 480), NSSize(width: 620, height: 580)]
-            : [NSSize(width: 960, height: 620), NSSize(width: 1280, height: 800)])
+            : [NSSize(width: 960, height: 620), NSSize(width: 1280, height: 800)]))
         let appearances: [(String, NSAppearance.Name, ColorScheme)] = [
             ("light", .aqua, .light), ("dark", .darkAqua, .dark),
         ]
@@ -99,7 +112,7 @@ final class UISnapshotTests: XCTestCase {
                 try autoreleasepool {
                     let name = "\(scenario)-\(language)-\(name)-\(Int(size.width))x\(Int(size.height))"
                     try capture(named: name, size: size, appearanceName: appearanceName,
-                                colorScheme: colorScheme, rendersGuide: rendersGuide, rendersSettings: rendersSettings, isDemoEnabled: isDemoEnabled, configure: configure)
+                                colorScheme: colorScheme, rendersGuide: rendersGuide, rendersSettings: rendersSettings, isDemoEnabled: isDemoEnabled, aboutInformation: aboutInformation, configure: configure)
                 }
             }
         }
@@ -107,7 +120,7 @@ final class UISnapshotTests: XCTestCase {
 
     @MainActor
     private func capture(named name: String, size: NSSize, appearanceName: NSAppearance.Name,
-                         colorScheme: ColorScheme, rendersGuide: Bool, rendersSettings: Bool, isDemoEnabled: Bool, configure: (WorkspaceStore) -> Void) throws {
+                         colorScheme: ColorScheme, rendersGuide: Bool, rendersSettings: Bool, isDemoEnabled: Bool, aboutInformation: AppInformation?, configure: (WorkspaceStore) -> Void) throws {
         // Even Demo's store initializer loads its catalog. Point it exclusively at
         // a fresh, empty test directory, never the runner's Application Support.
         let directory = FileManager.default.temporaryDirectory
@@ -121,8 +134,10 @@ final class UISnapshotTests: XCTestCase {
 
         _ = NSApplication.shared
         let appearance = try XCTUnwrap(NSAppearance(named: appearanceName))
-        let content = rendersSettings ? AnyView(SettingsView())
-            : (rendersGuide ? AnyView(GettingStartedView(close: {})) : AnyView(WorkspaceView()))
+        let capture = AboutRenderCapture()
+        let content = aboutInformation.map { AnyView(AboutView(information: $0)) }
+            ?? (rendersSettings ? AnyView(SettingsView())
+                : (rendersGuide ? AnyView(GettingStartedView(close: {})) : AnyView(WorkspaceView())))
         let root = content
             .environment(store)
             .environment(AppVisibilityPreferences())
@@ -130,6 +145,8 @@ final class UISnapshotTests: XCTestCase {
             .environment(\.locale, Locale.current)
             .frame(width: size.width, height: size.height)
             .background(Color(nsColor: .windowBackgroundColor))
+            .installerCaptureViewport()
+            .environment(\.installerCaptureCollector, { capture.regions = $0 })
             .transaction { $0.animation = nil }
         let hosting = NSHostingView(rootView: root)
         hosting.sizingOptions = []
@@ -180,6 +197,23 @@ final class UISnapshotTests: XCTestCase {
         XCTAssertTrue(try FileManager.default.contentsOfDirectory(atPath: directory.path).isEmpty,
                       "Rendering synthetic views must not persist a catalog")
 
+        if let information = aboutInformation {
+            let viewport = CGRect(origin: .zero, size: size).insetBy(dx: -1, dy: -1)
+            // Independent literal expectations reject an English fallback in
+            // the Chinese process, not just agreement with the view's lookup.
+            let chinese = Bundle.main.preferredLocalizations.first == "zh-Hans"
+            let version = information.displayVersion.map { "\(chinese ? "版本" : "Version") \($0)" }
+                ?? (chinese ? "版本信息不可用" : "Version unavailable")
+            var expected = ["about.version": version]
+            if let build = information.build { expected["about.build"] = "\(chinese ? "内部构建" : "Internal build") \(build)" }
+            for (id, text) in expected {
+                let region = try XCTUnwrap(capture.regions.first { $0.id == id })
+                XCTAssertEqual(region.text, text)
+                XCTAssertGreaterThan(region.bounds.height, 0)
+                XCTAssertTrue(viewport.contains(region.bounds), "About labels must remain visible")
+            }
+        }
+
         let metadata = XCTAttachment(string: """
         \(name)
         Content size: \(Int(size.width)) × \(Int(size.height)) points
@@ -190,6 +224,9 @@ final class UISnapshotTests: XCTestCase {
         Bundle language: \(Bundle.main.preferredLocalizations.first ?? "unknown")
         Projects title: \(WorkspaceSection.projects.title)
         Partial-result title: \(TaskStatus.partial.title)
+        About version: \(aboutInformation?.displayVersion ?? "unavailable")
+        About build: \(aboutInformation?.build ?? "unavailable")
+        Visible About labels: \(capture.regions.filter { $0.id.hasPrefix("about.") }.count)
         Hosting bounds: \(hosting.bounds)
         Window content layout: \(window.contentLayoutRect)
         macOS: \(ProcessInfo.processInfo.operatingSystemVersionString)
@@ -222,3 +259,5 @@ final class UISnapshotTests: XCTestCase {
         return colors.count
     }
 }
+
+@MainActor private final class AboutRenderCapture { var regions: [InstallerCaptureRegion] = [] }

@@ -9,7 +9,7 @@ final class TrashViewTests: XCTestCase {
     @MainActor
     func testTrashConfirmationsRender() async throws {
         let language = try XCTUnwrap(Bundle.main.preferredLocalizations.first)
-        XCTAssertEqual(String(localized: "Trash management"), language == "zh-Hans" ? "废纸篓管理" : "Trash management")
+        XCTAssertEqual(String(localized: "Trash"), language == "zh-Hans" ? "废纸篓" : "Trash")
         for clear in [false, true] {
             for dark in [false, true] {
                 let directory = FileManager.default.temporaryDirectory.appendingPathComponent("MoeKit-Trash-Render-\(UUID())")

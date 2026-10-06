@@ -39,6 +39,7 @@ class RenderArtifactTests(unittest.TestCase):
         scenarios += ["installer-" + state + "-compact" for state in ("trash-confirmation", "restore-confirmation")]
         scenarios += ["process-stop-graceful", "process-stop-force"]
         scenarios += ["updates-" + state for state in ("available", "current", "development", "failure", "cancelled", "hidden-icons")]
+        scenarios += ["about-" + state for state in ("preview", "development", "unavailable")]
         attachments = []
         for scenario in scenarios:
             sizes = ((520, 600),) if scenario.startswith("settings-") else (((520, 480), (620, 580)) if scenario.startswith("getting-started-") else ((960, 620), (1280, 800)))
@@ -52,6 +53,8 @@ class RenderArtifactTests(unittest.TestCase):
                 sizes = ((520, 600),) if scenario == "updates-hidden-icons" else ((540, 520),)
             if scenario.startswith("process-stop-"):
                 sizes = ((740, 780),)
+            if scenario.startswith("about-"):
+                sizes = ((440, 400),)
             for appearance in ("light", "dark"):
                 for width, height in sizes:
                     name = f"{scenario}-{language}-{appearance}-{width}x{height}"
@@ -59,6 +62,13 @@ class RenderArtifactTests(unittest.TestCase):
                     (root / image).write_bytes(png(width, height))
                     text = name + ".txt"
                     (root / text).write_text(f"Bundle language: {language}\nProjects title: {'项目' if language == 'zh-Hans' else 'Projects'}\nPartial-result title: {'部分结果' if language == 'zh-Hans' else 'Partial result'}\nContent size: {width} × {height} points\nProcess locale: {'zh_CN' if language == 'zh-Hans' else 'en_US'}\n")
+                    if scenario.startswith("about-"):
+                        with (root / text).open("a") as stream:
+                            preview = scenario == "about-preview"
+                            missing = scenario == "about-unavailable"
+                            stream.write(f"About version: {'unavailable' if missing else ('0.1.0-preview.11' if preview else '0.1.0')}\n")
+                            stream.write(f"About build: {'unavailable' if missing else ('2.0.11' if preview else '1')}\n")
+                            stream.write(f"Visible About labels: {1 if missing else 2}\n")
                     if scenario.startswith("mole-analysis-"):
                         with (root / text).open("a") as stream:
                             stream.write(f"Setup ready title: {'可以开始分析' if language == 'zh-Hans' else 'Ready to analyze'}\n")
@@ -92,11 +102,21 @@ class RenderArtifactTests(unittest.TestCase):
         return manifest
 
     def test_complete_english_and_chinese(self):
-        for language, count in [("en", 142), ("zh-Hans", 134)]:
+        for language, count in [("en", 148), ("zh-Hans", 140)]:
             with self.subTest(language=language), tempfile.TemporaryDirectory() as path:
                 root = Path(path)
                 self.fixture(root, language)
                 self.assertEqual(module.verify(root, language), count)
+
+    def test_rejects_incorrect_about_release_label(self):
+        with tempfile.TemporaryDirectory() as path:
+            root = Path(path)
+            manifest = self.fixture(root, "en")
+            item = next(item for item in manifest[0]["attachments"] if item["exportedFileName"].startswith("about-preview-") and item["exportedFileName"].endswith(".txt"))
+            text = root / item["exportedFileName"]
+            text.write_text(text.read_text().replace("About version: 0.1.0-preview.11", "About version: 0.1.0"))
+            with self.assertRaisesRegex(ValueError, "localization"):
+                module.verify(root, "en")
 
     def test_rejects_model_fallback(self):
         with tempfile.TemporaryDirectory() as path:
@@ -113,11 +133,11 @@ class RenderArtifactTests(unittest.TestCase):
             manifest = self.fixture(root, "zh-Hans")
             manifest[0]["attachments"].pop()
             (root / "manifest.json").write_text(json.dumps(manifest))
-            with self.assertRaisesRegex(ValueError, "Expected 134"):
+            with self.assertRaisesRegex(ValueError, "Expected 140"):
                 module.verify(root, "zh-Hans")
 
     def test_rejects_missing_installer_image_or_scope(self):
-        for language, count in (("en", 142), ("zh-Hans", 134)):
+        for language, count in (("en", 148), ("zh-Hans", 140)):
             for suffix in (".png", ".txt"):
                 with self.subTest(language=language, suffix=suffix), tempfile.TemporaryDirectory() as path:
                     root = Path(path)
@@ -130,7 +150,7 @@ class RenderArtifactTests(unittest.TestCase):
                         module.verify(root, language)
 
     def test_rejects_missing_compact_installer_image_or_scope(self):
-        for language, count in (("en", 142), ("zh-Hans", 134)):
+        for language, count in (("en", 148), ("zh-Hans", 140)):
             for suffix in (".png", ".txt"):
                 with self.subTest(language=language, suffix=suffix), tempfile.TemporaryDirectory() as path:
                     root = Path(path)
@@ -155,7 +175,7 @@ class RenderArtifactTests(unittest.TestCase):
                     module.verify(root, "en")
 
     def test_accepts_installer_retina_bitmap_for_every_scenario(self):
-        for language, count in (("en", 142), ("zh-Hans", 134)):
+        for language, count in (("en", 148), ("zh-Hans", 140)):
             with self.subTest(language=language), tempfile.TemporaryDirectory() as path:
                 root = Path(path)
                 manifest = self.fixture(root, language)

@@ -169,7 +169,7 @@ private struct SidebarView: View {
                         }
                     }
                     Section("Discovery") {
-                        Label("Selected folders only", systemImage: "folder.badge.gearshape").foregroundStyle(.secondary)
+                        Label("Chosen folders", systemImage: "folder.badge.gearshape").foregroundStyle(.secondary)
                         Button("Add location…") { store.chooseProject(scanChildren: true) }
                             .disabled(store.isDemoEnabled || store.isScanning)
                     }

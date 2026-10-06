@@ -26,12 +26,16 @@ struct GettingStartedView: View {
                     if let goal = store.gettingStarted.selectedGoal {
                         Label(goal.title, systemImage: goal.symbol).font(.title3).fontWeight(.semibold)
                         guidanceSection("Your first step", symbol: "1.circle", text: goal.firstStep)
-                        guidanceSection("Before you start", symbol: "hand.raised", text: goal.privacy)
+                        guidanceSection("Before you start", symbol: "hand.raised", text: goal.privacySummary)
+                        DisclosureGroup("What is read and saved") {
+                            Text(goal.privacy).font(.caption).foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true).padding(.top, 6)
+                        }
                         if goal == .projects {
-                            Text("After discovery, Tasks shows progress, cancellation and actual results. Git working-tree changes are not checked yet.")
+                            Text("See progress and results in Tasks. Git changes are not checked.")
                                 .font(.callout).foregroundStyle(.secondary)
                         }
-                        Text("This button opens the workspace. It does not start a scan or ask for folder access.")
+                        Text("Opening the workspace does not start a scan.")
                             .font(.caption).foregroundStyle(.secondary)
                     } else {
                         Text("What would you like to do first?").font(.headline)
@@ -52,7 +56,7 @@ struct GettingStartedView: View {
                             .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(nsColor: .separatorColor).opacity(0.5)))
                             .accessibilityElement(children: .combine)
                         }
-                        Text("Mole Space supports reports and confirmed analysis with the official V1.57.0 analyzer. Native cache cleanup and stopping exact unprotected processes each require separate confirmation. Uninstall remains unavailable.")
+                        Text("Scans start when you choose. Changes need your confirmation.")
                             .font(.caption).foregroundStyle(.secondary)
                     }
                 }.frame(maxWidth: .infinity, alignment: .leading).padding(24)

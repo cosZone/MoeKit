@@ -14,24 +14,28 @@ struct GitRemotePushView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("4. Review and verify the remote push").font(.headline)
+            Text("Optional: push to a remote").font(.headline)
             TextField("Exact HTTPS repository URL", text: $remoteURL)
                 .disabled(state.isBusy || state.result != nil)
                 .accessibilityIdentifier("git-finish.remote-url")
             TextField("Remote branch name", text: $remoteBranch)
                 .disabled(state.isBusy || state.result != nil)
                 .accessibilityIdentifier("git-finish.remote-branch")
-            Text("Enter a plain HTTPS URL, such as https://github.com/owner/repository.git, and an existing remote branch. Remote configuration from the repository is not used. No fetch, branch creation, force push, or remote deletion is available.")
+            Text("Enter an HTTPS repository URL and an existing branch. MoeKit does not use saved remotes, fetch, create branches, force push or delete remote branches.")
                 .font(.caption).foregroundStyle(.secondary)
             if let endpoint, let ref {
                 Text("Credential destination: \(endpoint.host)").font(.caption).textSelection(.enabled)
                 Text("Exact remote ref: \(ref)").font(.caption).textSelection(.enabled)
                 Toggle("I allow this connection to use existing macOS Keychain Git credentials for this exact host and repository path", isOn: $credentialConsent)
                     .disabled(state.isBusy)
-                Text("This may read existing credentials even during inspection. Credentials are not shown or logged; the fixed helper cannot store or erase them. Sign in with your Git client first if access is unavailable. Git may internally use a shell only to dispatch MoeKit's fixed credential helper. Repository hooks are disabled; a fixed native gate checks the approved push target.")
+                Text("Inspection may read existing Keychain credentials. MoeKit does not display, log, save or erase them. Sign in with your Git client first if access is unavailable.")
                     .font(.caption).foregroundStyle(.secondary)
+                DisclosureGroup("Connection details") {
+                    Text("Git may use a shell only to dispatch MoeKit's fixed credential helper. Repository hooks are disabled; a native gate checks the approved push target.")
+                        .font(.caption).foregroundStyle(.secondary).padding(.top, 6)
+                }
                 if state.result == nil {
-                    Button("Inspect exact remote branch") {
+                    Button("Check remote branch") {
                         guard credentialConsent else { return }
                         confirmation = ""
                         state.inspect(.init(finish: finish, remoteURL: remoteURL, remoteBranch: remoteBranch), credentialConsent: credentialConsent)
@@ -52,7 +56,7 @@ struct GitRemotePushView: View {
                 Text("Remote ref: \(plan.remoteRef)").font(.caption).textSelection(.enabled)
                 Text("Expected remote commit: \(plan.expectedRemoteOID)").font(.caption).textSelection(.enabled)
                 Text("Commit to publish: \(plan.sourceOID)").font(.caption).textSelection(.enabled)
-                Text("This sends the selected commit and its reachable Git history to the displayed repository using an ordinary non-force push. Confirm only if that repository should receive this code and history.")
+                Text("This pushes the selected commit and all reachable Git history to the displayed repository, without force. Confirm only if this destination should receive the code and history.")
                     .font(.caption).foregroundStyle(.secondary)
                 TextField("Type the exact refs/heads/branch to authorize this push", text: $confirmation)
                     .disabled(state.isBusy).accessibilityIdentifier("git-finish.remote-confirmation")
@@ -66,7 +70,7 @@ struct GitRemotePushView: View {
             if let result = state.result, matches(result.plan.request) {
                 outcome(result)
                 if !result.verified {
-                    Text("The worktree stays available. Do not assume a timeout means the push failed, and do not retry blindly. Check the exact remote again without sending another push.")
+                    Text("The worktree is kept. A timeout does not mean the push failed. Recheck the remote; do not send another push blindly.")
                         .font(.caption).foregroundStyle(.secondary)
                     Button("Recheck remote only") {
                         state.reconcile(resultID: result.id, credentialConsent: credentialConsent)
@@ -75,7 +79,7 @@ struct GitRemotePushView: View {
                 }
             }
             Text("Existing Keychain entries may be host-scoped. The credential is used only for the displayed HTTPS URL; system Keychain access may require your permission.").font(.caption).foregroundStyle(.secondary)
-            Text("Remote verification is a fresh observation of the exact ref, not a lock on the server. Remote CI, pull requests, branch protection approvals, and project tests are not checked by this flow.")
+            Text("The remote check is a snapshot, not a server lock. Remote CI, pull requests, branch approvals and project tests are not checked.")
                 .font(.caption).foregroundStyle(.secondary)
         }
         .onAppear { if remoteBranch.isEmpty { remoteBranch = finish.plan.request.targetBranch } }

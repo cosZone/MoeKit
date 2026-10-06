@@ -29,7 +29,7 @@ struct ProcessWorkspaceView: View {
                             .font(.caption).padding(8)
                     }
                     if !inventory.termination.results.isEmpty {
-                        DisclosureGroup("Last real stop result") {
+                        DisclosureGroup("Last stop result") {
                             ScrollView {
                                 VStack(alignment: .leading, spacing: 6) {
                                     ForEach(inventory.termination.results) { result in
@@ -55,7 +55,7 @@ struct ProcessWorkspaceView: View {
                     }
                     StatusBar(
                         leading: String(localized: "\(inventory.rows.count) processes · \(inventory.selection.count) selected"),
-                        trailing: String(localized: "Exact targets · stopping requires confirmation")
+                        trailing: String(localized: "Stopping requires confirmation")
                     )
                 }
             }
@@ -106,6 +106,12 @@ struct ProcessWorkspaceView: View {
             }
             Text("Current user only. TCP listening ports and project associations reflect this snapshot; unknown readings are not empty results.")
                 .font(.caption).foregroundStyle(.secondary)
+            if inventory.snapshot == nil {
+                DisclosureGroup("What scanning reads") {
+                    Text("Reads your process names and executable paths, working folders and TCP listening ports. Command arguments and environment variables are not read. Scans run only when requested and send no stop signals.")
+                        .font(.caption).foregroundStyle(.secondary).padding(.top, 4)
+                }.font(.caption)
+            }
             if inventory.unavailableProjectCount > 0 {
                 Label("\(inventory.unavailableProjectCount) project folders could not be resolved. Associations may be missing.", systemImage: "folder.badge.questionmark")
                     .font(.caption).foregroundStyle(.orange)
@@ -193,7 +199,7 @@ struct ProcessWorkspaceView: View {
         switch inventory.lastScanStatus {
         case .cancelled: return String(localized: "Scan cancelled")
         case .failed: return String(localized: "Snapshot unavailable")
-        default: return String(localized: "Inspect running processes")
+        default: return String(localized: "See running processes")
         }
     }
 
@@ -211,7 +217,7 @@ struct ProcessWorkspaceView: View {
         switch inventory.lastScanStatus {
         case .cancelled: return String(localized: "The scan was cancelled. No processes were changed. Start a new scan when you’re ready.")
         case .failed: return String(localized: "The scan did not produce a snapshot. Start a new scan to retry; no processes were changed.")
-        default: return String(localized: "Choose Start scan in the toolbar to read current-user executable names and paths, working directories and TCP listening endpoints. No command arguments, environment variables or process signals. Nothing is scanned automatically.")
+        default: return String(localized: "Choose Start scan to see your processes and listening ports. Scanning does not stop anything.")
         }
     }
 
@@ -220,7 +226,7 @@ struct ProcessWorkspaceView: View {
             HStack {
                 Text("Process details").fontWeight(.semibold)
                 Spacer()
-                Button("Review stop plan", systemImage: "checklist") {
+                Button("Review stop…", systemImage: "checklist") {
                     guard !store.isDemoEnabled else { return }
                     inventory.reviewSelection()
                 }
@@ -309,7 +315,7 @@ struct ProcessStopPlanView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 9) {
-                Label("Review stop plan", systemImage: "checklist").font(.title2).fontWeight(.semibold)
+                Label("Review stop…", systemImage: "checklist").font(.title2).fontWeight(.semibold)
                 Text("Review exact targets. Preparing a confirmation rechecks current identity and metadata. Protected targets must be removed before stopping.")
                     .foregroundStyle(.secondary)
                 LabeledContent("Snapshot", value: plan.snapshotDate.formatted(date: .abbreviated, time: .complete))
@@ -361,7 +367,7 @@ struct ProcessStopPlanView: View {
                     Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
                 }
                 if !termination.results.isEmpty {
-                    Text("Last real stop result").fontWeight(.medium)
+                    Text("Last stop result").fontWeight(.medium)
                     ScrollView {
                         VStack(alignment: .leading, spacing: 8) {
                             ForEach(termination.results) { result in

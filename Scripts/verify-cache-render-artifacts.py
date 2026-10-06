@@ -74,7 +74,7 @@ def verify(directory, language):
             if x < -0.5 or y < -0.5 or x+w > width+0.5 or y+h > height+0.5: raise ValueError('clipped mandatory content')
             if not item['text'].strip(): raise ValueError('empty displayed content')
         chinese = language == 'zh-Hans'
-        if not compact and values['cleanup.heading'] != ('原生缓存清理' if chinese else 'Native cache cleanup'): raise ValueError('locale fallback')
+        if not compact and values['cleanup.heading'] != ('缓存清理' if chinese else 'Cache cleanup'): raise ValueError('locale fallback')
         if scenario == 'trash-review':
             if values['cleanup.trash.confirm'] != ('将所选缓存移入废纸篓' if chinese else 'Move selected caches to Trash'): raise ValueError('wrong confirmation label')
             if not compact:

@@ -935,6 +935,176 @@
           }
         }
       }
+    },
+    "Advanced details": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "高级详情"
+          }
+        }
+      }
+    },
+    "Checking known locations and verifying the analyzer. Mole is not running.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在检查常见位置并验证分析器，尚未运行 Mole。"
+          }
+        }
+      }
+    },
+    "Choose a folder to continue.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择文件夹后继续。"
+          }
+        }
+      }
+    },
+    "Choose a folder. Analysis starts only after your confirmation.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择文件夹，确认后才开始分析。"
+          }
+        }
+      }
+    },
+    "Copy, paste into Terminal with ⌘V, then press Return. The command downloads from GitHub into new folders in your home directory. Existing installations stay unchanged.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复制后在终端按 ⌘V 粘贴，再按回车。命令从 GitHub 下载到主目录中的新文件夹，不覆盖已有安装。"
+          }
+        }
+      }
+    },
+    "Downloaded installers and recovery": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已下载安装包与恢复"
+          }
+        }
+      }
+    },
+    "Exit Demo to set up Mole and analyze your folders.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "退出示例后可设置 Mole 并分析文件夹。"
+          }
+        }
+      }
+    },
+    "Find what is taking up space in a folder.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看文件夹中的空间占用。"
+          }
+        }
+      }
+    },
+    "Finish Mole setup first.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请先完成 Mole 设置。"
+          }
+        }
+      }
+    },
+    "If an error appears, stop and read it. Existing files and download folders are kept. Try Recheck first.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "如有报错，请停下并阅读提示。已有文件和下载目录都会保留，先尝试「重新检测」。"
+          }
+        }
+      }
+    },
+    "Mole V1.57.0 is verified. Choose a folder below.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已验证 Mole V1.57.0，请在下方选择文件夹。"
+          }
+        }
+      }
+    },
+    "Not found in the checked locations. Follow the setup guide, or choose your file in Advanced details.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检测位置中未找到分析器。请按指引设置，或在「高级详情」选择已安装文件。"
+          }
+        }
+      }
+    },
+    "Set up Mole": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "设置 Mole"
+          }
+        }
+      }
+    },
+    "Set up the analyzer": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "设置分析器"
+          }
+        }
+      }
+    },
+    "This file is incompatible. Use the official V1.57.0 analyzer in the guide below.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此文件不兼容。请按下方指引使用官方 V1.57.0 分析器。"
+          }
+        }
+      }
+    },
+    "Use the official V1.57.0 file for this Mac. Homebrew and source builds are not compatible.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用适用于此 Mac 的官方 V1.57.0 文件；Homebrew 和自行编译版本暂不兼容。"
+          }
+        }
+      }
+    },
+    "Verification failed. Read the reason in Advanced details before continuing.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未通过验证。请先查看「高级详情」中的原因。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

@@ -10,7 +10,7 @@ struct InstallerTrashView: View {
         GroupBox {
             VStack(alignment: .leading, spacing: 12) {
                 identifiedLabel("Downloaded disk image", systemImage: "opticaldisc", id: "installer.heading").font(.headline)
-                Text("Select one .dmg row from the current live analysis of your local Downloads folder. The report is only a selection hint; MoeKit independently checks the file before offering a confirmation.")
+                Text("Select one .dmg from a fresh Downloads analysis. MoeKit checks the file before asking to move it to Trash.")
                 if !store.isEnabled {
                     Label("Native Trash and restore are disabled for this context.", systemImage: "lock")
                         .foregroundStyle(.secondary)
@@ -23,7 +23,7 @@ struct InstallerTrashView: View {
                     .font(.caption).foregroundStyle(.secondary)
                 if let selected = store.selectedPath {
                     path("Selected file", selected)
-                    Button("Review native Trash…") { store.prepare() }.disabled(!store.canPrepare)
+                    Button("Review move to Trash…") { store.prepare() }.disabled(!store.canPrepare)
                 } else {
                     Text("No eligible .dmg selected").foregroundStyle(.secondary)
                 }
@@ -43,7 +43,7 @@ struct InstallerTrashView: View {
                 if let plan = store.plan { trashConfirmation(plan) }
                 if let plan = store.restorePlan { restoreConfirmation(plan) }
                 if let outcome = store.lastOutcome {
-                    Text("Latest actual operation outcome").font(.headline)
+                    Text("Latest result").font(.headline)
                     Label(outcome.message, systemImage: outcome.requiresRecovery ? "exclamationmark.triangle" : "doc.text")
                         .textSelection(.enabled)
                     if let receipt = outcome.receipt {
@@ -61,7 +61,7 @@ struct InstallerTrashView: View {
                     Spacer()
                     identifiedButton("Read recovery records", id: "installer.recovery.read") { store.loadRecovery() }.disabled(!store.canReadRecovery)
                 }
-                Text("Read-only listing of MoeKit’s private records. No Trash scan or automatic restore occurs. Each original-path restore needs a new confirmation and never overwrites a destination.")
+                Text("Load MoeKit’s recovery records. Restoring needs a new confirmation and never replaces an existing file.")
                     .font(.caption).foregroundStyle(.secondary)
                 if store.recoveryItems.isEmpty {
                     Text(store.hasReadRecovery ? String(localized: "No validated recovery records found") : String(localized: "Recovery records have not been read"))
@@ -95,17 +95,17 @@ struct InstallerTrashView: View {
             identifiedText("Confirm native macOS Trash", id: "installer.trash.heading").font(.headline)
             path("Exact original path", plan.originalURL.path, id: "installer.trash.original-path")
             Text("1 file · \(plan.sizeLabel) (\(plan.file.bytes) bytes)").monospacedDigit()
-            identifiedText("MoeKit will move this disk image using native macOS Trash. This is not a Mole cleanup command. Moving to Trash does not free its storage; no Trash emptying is offered here.", id: "installer.trash.effects")
+            identifiedText("This disk image moves to macOS Trash. Its storage is not freed until it is deleted from Trash. This action does not empty Trash.", id: "installer.trash.effects")
             path("Exact private staging path", plan.recoveryURL.appendingPathComponent(plan.originalURL.lastPathComponent).path, id: "installer.trash.staging-path")
             storagePaths(plan.recoveryURL, idPrefix: "installer.trash")
             path("Private journal directory", plan.recoveryURL.path, id: "installer.trash.journal-path")
             path("First recovery record", plan.recoveryURL.appendingPathComponent("000000.json").path, id: "installer.trash.record-path")
-            identifiedText("The private MoeKit and InstallerRecovery parent directories and shared operations.lock and projects.json.lock files may also be created. The lock only coordinates cooperating MoeKit instances; it does not lock out other applications.", id: "installer.trash.lock-effects")
-            identifiedText("After confirmation, MoeKit creates this private operation directory and numbered JSON recovery records inside it. These records persist and disclose the original path only in this private journal. Closing this plan does not create them.", id: "installer.trash.journal-effects")
-            identifiedText("This version accepts only a complete, empty disk-image inventory. Eject only images you opened yourself. Do not eject system-managed images; an inventory containing them remains unsupported. MoeKit cannot classify images for you and never ejects them.", id: "installer.trash.inventory-effects")
+            identifiedText("MoeKit may create the parent folders and lock files listed above. These locks coordinate MoeKit instances only; other apps can still access the file.", id: "installer.trash.lock-effects")
+            identifiedText("Confirming creates this private folder and recovery records containing the original path. Records are kept. Cancelling creates none of them.", id: "installer.trash.journal-effects")
+            identifiedText("All disk images must be detached. Eject only images you opened yourself; leave system-managed images alone. MoeKit does not identify or eject them.", id: "installer.trash.inventory-effects")
             Text("No open descriptor or fileport use observed in the checked current-user processes").font(.headline)
             identifiedText("Checks cover current-user vnode file descriptors and fileports, plus a complete, empty disk-image inventory. Any attached image, including a system-managed image, keeps this operation unavailable; MoeKit does not classify images. Memory mappings, other users, system services and files opened after the check are not exhaustively observable. This is not proof that the image is globally unused.", id: "installer.trash.scope-effects")
-            Text("A same-user race can temporarily move a replacement before a mismatch is detected. The native Trash API uses a path. This operation is designed for ordinary cooperative local use, not malicious same-user interference.")
+            Text("If another app replaces the path, MoeKit may temporarily move the replacement before detecting it. This does not protect against malicious same-user interference.")
                 .font(.caption).foregroundStyle(.secondary)
             Toggle(attestation, isOn: Binding(
                 get: { store.installationFinished },

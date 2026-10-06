@@ -53,21 +53,21 @@ enum GettingStartedGoal: String, CaseIterable, Identifiable {
         switch self {
         case .projects: String(localized: "Organize my projects")
         case .processes: String(localized: "See processes and ports")
-        case .demo: String(localized: "Look around with examples")
+        case .demo: String(localized: "Try the demo")
         }
     }
     var summary: String {
         switch self {
-        case .projects: String(localized: "Add a project folder or discover Git repositories in folders you choose.")
-        case .processes: String(localized: "Find your current user’s processes and TCP listening ports with a read-only snapshot.")
-        case .demo: String(localized: "Try example projects, task results and a Mole report before using your own data.")
+        case .projects: String(localized: "Add one project or find projects in a folder.")
+        case .processes: String(localized: "See your running processes and listening ports.")
+        case .demo: String(localized: "Explore with built-in example data.")
         }
     }
     var firstStep: String {
         switch self {
-        case .projects: String(localized: "In Projects, choose Add project for one folder, or Discover in folder to find Git repositories. Review discovery results before importing.")
-        case .processes: String(localized: "In Processes & Ports, choose Start scan when you’re ready. Select a row to see its identity, ports and project-association evidence.")
-        case .demo: String(localized: "Explore Projects, Tools and Tasks. The Demo banner stays visible; use Exit demo whenever you want to return to your own data.")
+        case .projects: String(localized: "Choose Add project, or Discover in folder to find Git projects. Review the results before adding them.")
+        case .processes: String(localized: "Choose Start scan in Processes & Ports. Select a process to see its details.")
+        case .demo: String(localized: "Explore Projects, Tools and Tasks. Choose Exit demo to return to your own data.")
         }
     }
     var privacy: String {
@@ -75,6 +75,13 @@ enum GettingStartedGoal: String, CaseIterable, Identifiable {
         case .projects: String(localized: "Reading starts only after you choose a folder. Discovery is bounded and read-only. Project paths, names and pins are saved locally; project files are not changed.")
         case .processes: String(localized: "A snapshot is read only when you choose Start scan or Refresh: current-user executable names and paths, working directories, and TCP listening endpoints. Arguments and environment variables are not read. Scanning sends no signals; stopping requires a separate confirmation.")
         case .demo: String(localized: "Demo uses built-in examples. Entering Demo does not scan folders or processes, import reports, or replace your saved projects. Processes & Ports has no Demo scan.")
+        }
+    }
+    var privacySummary: String {
+        switch self {
+        case .projects: String(localized: "Only folders you choose are read. Your project list is saved locally; project files stay unchanged.")
+        case .processes: String(localized: "Read your processes and listening ports on demand. Stopping a process needs a separate confirmation.")
+        case .demo: String(localized: "Built-in examples only. Your saved projects stay unchanged.")
         }
     }
     var buttonTitle: String {

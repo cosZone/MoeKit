@@ -12,6 +12,7 @@ struct AppInformationTests {
             "NSHumanReadableCopyright": "Copyright © 2026 MoeKit"
         ])
         #expect(information.version == "0.3.1")
+        #expect(information.displayVersion == "0.3.1")
         #expect(information.build == "42")
         #expect(information.copyright == "Copyright © 2026 MoeKit")
     }
@@ -22,9 +23,43 @@ struct AppInformationTests {
         for dictionary in dictionaries {
             let information = AppInformation(infoDictionary: dictionary)
             #expect(information.version == nil)
+            #expect(information.releaseVersion == nil)
+            #expect(information.displayVersion == nil)
             #expect(information.build == nil)
             #expect(information.copyright == nil)
         }
+    }
+
+    @Test("About shows the exact release label and keeps the internal build separate")
+    func releaseMetadata() {
+        for key in ["MoeKitPreviewVersion", "MoeKitReleaseVersion"] {
+            let information = AppInformation(infoDictionary: [
+                "CFBundleShortVersionString": "0.1.0",
+                "CFBundleVersion": "2.0.11",
+                key: "0.1.0-preview.11"
+            ])
+            #expect(information.version == "0.1.0")
+            #expect(information.displayVersion == "0.1.0-preview.11")
+            #expect(information.build == "2.0.11")
+        }
+        let stable = AppInformation(infoDictionary: ["MoeKitReleaseVersion": "0.2.0", "CFBundleVersion": "3.0.99"])
+        #expect(stable.displayVersion == "0.2.0")
+        #expect(stable.build == "3.0.99")
+    }
+
+    @Test("Unresolved and malformed release labels do not invent a preview version")
+    func invalidReleaseMetadata() {
+        let values: [Any] = ["$(MOEKIT_VERSION)", "", "0.1.0-preview.011", "v0.1.0-preview.11", 11]
+        for raw in values {
+            let information = AppInformation(infoDictionary: [
+                "CFBundleShortVersionString": "0.1.0", "CFBundleVersion": "2.0.11", "MoeKitPreviewVersion": raw
+            ])
+            #expect(information.releaseVersion == nil)
+            #expect(information.displayVersion == "0.1.0")
+            #expect(information.build == "2.0.11")
+        }
+        let buildOnly = AppInformation(infoDictionary: ["CFBundleVersion": "2.0.11"])
+        #expect(buildOnly.displayVersion == nil)
     }
 
     @Test("Blank, unresolved and wrong-type metadata stays unavailable")

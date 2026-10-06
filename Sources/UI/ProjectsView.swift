@@ -32,7 +32,7 @@ struct ProjectsView: View {
             }
             Divider()
             Table(rows, selection: $store.selectedProjectID, sortOrder: $sortOrder) {
-                TableColumn("Project / working directory", value: \.name) { project in
+                TableColumn("Project", value: \.name) { project in
                     HStack(spacing: 7) {
                         if store.hasProjectChildren(project.id) {
                             Button { store.toggleExpansion(project.id) } label: {
@@ -80,7 +80,7 @@ struct ProjectsView: View {
                     ContentUnavailableView {
                         Label(store.isScanning ? "Discovering projects…" : (store.displayedProjects.isEmpty ? "Your projects, in one place" : "No matching projects"), systemImage: store.isScanning ? "hourglass" : "folder")
                     } description: {
-                        Text(store.isScanning ? "Reading only the folders you selected. You can cancel discovery at any time." : (store.displayedProjects.isEmpty ? "Choose Add project for one folder, or Discover in folder to find Git repositories and review what to import. Only selected folders are read; no project files are changed." : "Try a different search or filter."))
+                        Text(store.isScanning ? "Reading only the folders you selected. You can cancel discovery at any time." : (store.displayedProjects.isEmpty ? "Add a project or find Git projects in a folder. Only folders you choose are read; your files stay unchanged." : "Try a different search or filter."))
                     } actions: {
                         if !store.isScanning && store.displayedProjects.isEmpty {
                             Button("Add project…") { store.chooseProject(scanChildren: false) }.disabled(store.isDemoEnabled)
@@ -111,7 +111,7 @@ struct ProjectsView: View {
             VStack(alignment: .leading, spacing: 5) {
                 Text(store.selectedProject?.name ?? String(localized: "Select a project")).fontWeight(.semibold)
                     .lineLimit(1)
-                Text(store.selectedProject?.path ?? String(localized: "Select a working directory to reveal it in Finder"))
+                Text(store.selectedProject?.path ?? String(localized: "Select a project to see its location"))
                     .font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
             }
             Spacer()

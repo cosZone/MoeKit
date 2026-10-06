@@ -25,7 +25,7 @@ struct ToolPreparationView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 Label("Tool preparation", systemImage: "wrench.and.screwdriver").font(.title2).fontWeight(.semibold)
-                Text("Check file locations and find official installation instructions. Finding a file does not verify a working or trusted tool.")
+                Text("Check installed files or follow the setup guide. A found file still needs verification.")
                     .foregroundStyle(.secondary)
                 Picker("Tool", selection: $tool) {
                     ForEach(PreparedTool.allCases) { item in Text(item.title).tag(item) }
@@ -38,14 +38,14 @@ struct ToolPreparationView: View {
                 GroupBox {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Location checks").font(.headline)
-                        Text("Only metadata is inspected. No version command, shell, installer or tool is started.")
+                        Text("Reads file information only; does not run the tool.")
                             .font(.callout).foregroundStyle(.secondary)
                         HStack {
                             Button("Check common locations") { preparation.inspect(tool, locations: locations) }
                                 .disabled(!canInspect)
                             Button("Inspect another file…") { chooseFile() }.disabled(!canInspect)
                         }
-                        DisclosureGroup("Locations checked by this button", isExpanded: $showsLocations) {
+                        DisclosureGroup("Checked locations", isExpanded: $showsLocations) {
                             ForEach(locations, id: \.path) { location in
                                 Text(tool.conventionalLocationLabel(location, home: homeDirectory)).font(.caption.monospaced()).textSelection(.enabled)
                                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -77,10 +77,12 @@ struct ToolPreparationView: View {
                     }.frame(maxWidth: .infinity, alignment: .leading).padding(6)
                 }
                 ToolInstallationGuidanceView(tool: tool)
-                Text(tool == .mole
-                     ? "Space can import a JSON report without running Mole. Live analysis requires a separately verified official analyzer and confirmation. No cleanup command is connected."
-                     : "Project discovery reads Git metadata without running Git. A file at /usr/bin/git may be an Apple launcher; it does not prove Command Line Tools are installed. Git status execution remains unavailable.")
-                    .font(.callout).foregroundStyle(.secondary)
+                DisclosureGroup("Advanced details") {
+                    Text(tool == .mole
+                         ? "Space can import a JSON report without running Mole. Live analysis requires a separately verified official analyzer and confirmation. No cleanup command is connected."
+                         : "Project discovery reads Git metadata without running Git. A file at /usr/bin/git may be an Apple launcher; it does not prove Command Line Tools are installed. Git status execution remains unavailable.")
+                        .font(.caption).foregroundStyle(.secondary).padding(.top, 6)
+                }
             }.padding(24)
         }
         .frame(minWidth: 580, idealWidth: 680, minHeight: 520, idealHeight: 720)

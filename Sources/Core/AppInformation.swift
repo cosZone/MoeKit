@@ -3,11 +3,16 @@ import Foundation
 /// Display-only bundle metadata. Missing build information must stay unknown.
 struct AppInformation: Equatable, Sendable {
     let version: String?
+    /// Human-facing release label; never derive it from Sparkle's build counter.
+    let releaseVersion: String?
     let build: String?
     let copyright: String?
 
+    var displayVersion: String? { releaseVersion ?? version }
+
     init(infoDictionary: [String: Any]?) {
         version = Self.displayValue(infoDictionary?["CFBundleShortVersionString"])
+        releaseVersion = ReleaseVersion.installed(in: infoDictionary)?.description
         build = Self.displayValue(infoDictionary?["CFBundleVersion"])
         copyright = Self.displayValue(infoDictionary?["NSHumanReadableCopyright"])
     }

@@ -28,10 +28,10 @@ struct MoleInstallationGuidanceView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(m("Install the supported Mole analyzer")).font(.headline)
-            Text(m("You only need the official V1.57.0 analyzer for this Mac. Homebrew and source-built versions do not match this app's compatibility check."))
+            Text(m("Set up the analyzer")).font(.headline)
+            Text(m("Use the official V1.57.0 file for this Mac. Homebrew and source builds are not compatible."))
                 .font(.callout).foregroundStyle(.secondary)
-            Text("A browser download may have a macOS quarantine marker. MoeKit refuses quarantined files; neither this command nor MoeKit removes that marker or bypasses Gatekeeper. Do not retry a blocked file through another download route to evade a security warning.")
+            Text("MoeKit rejects quarantined files. Neither MoeKit nor this command removes macOS protection. Do not switch download routes to bypass a security warning.")
                 .font(.caption).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             step(1, m("Review the official download")) {
@@ -53,13 +53,13 @@ struct MoleInstallationGuidanceView: View {
                     NSPasteboard.general.clearContents()
                     if NSPasteboard.general.setString(command, forType: .string) { copiedCommand = command }
                 }.accessibilityIdentifier("mole.setup.copy-command")
-                Text(m("Copying only changes the clipboard. In Terminal, press ⌘V to paste the reviewed command, then press Return. Running it downloads from GitHub and writes new folders in your home directory; it never overwrites an existing installation."))
+                Text(m("Copy, paste into Terminal with ⌘V, then press Return. The command downloads from GitHub into new folders in your home directory. Existing installations stay unchanged."))
                     .foregroundStyle(.secondary)
                 Text(m("Wait for this success message before continuing:"))
                     .foregroundStyle(.secondary)
                 Text(verbatim: "Mole analyzer ready").font(.callout.monospaced())
                     .textSelection(.enabled)
-                Text(m("If Terminal reports an error or an existing folder, stop and read the message. Existing files and the temporary download folder are kept. Try Recheck before changing anything."))
+                Text(m("If an error appears, stop and read it. Existing files and download folders are kept. Try Recheck first."))
                     .font(.caption).foregroundStyle(.secondary)
             }
             step(4, m("Return to MoeKit and recheck")) {

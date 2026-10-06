@@ -19,10 +19,10 @@ struct TrashWorkspaceView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Label("Trash management", systemImage: "trash").fontWeight(.medium)
-                    .installerCaptureIdentity("trash.heading", text: String(localized: "Trash management"))
+                Label("Trash", systemImage: "trash").fontWeight(.medium)
+                    .installerCaptureIdentity("trash.heading", text: String(localized: "Trash"))
                 Spacer()
-                Text("Current user · home Trash only").foregroundStyle(.secondary)
+                Text("Your home Trash only").foregroundStyle(.secondary)
             }.padding(.horizontal, 16).frame(height: 38)
             Divider()
             ScrollView {
@@ -44,10 +44,12 @@ struct TrashWorkspaceView: View {
     }
     private var introduction: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Review your Trash before deleting").font(.title2.weight(.semibold))
-            Text("Scan your home Trash, select exact items, then review a separate permanent-deletion confirmation. Clear scanned Trash reviews the complete snapshot and requires typing EMPTY.")
-            Text("External-volume Trash and other users’ Trash are not included. Original locations and deletion dates are unavailable; Last modified is the file’s modification date. Symbolic links are listed as links and never followed.")
-                .font(.caption).foregroundStyle(.secondary)
+            Text("Choose items to delete").font(.title2.weight(.semibold))
+            Text("Scan your home Trash, then select items to review. Deletion is permanent. Clearing the scanned items also requires typing EMPTY.")
+            DisclosureGroup("Scan details") {
+                Text("External-volume Trash and other users’ Trash are not included. Original locations and deletion dates are unavailable; Last modified is the file’s modification date. Symbolic links are listed as links and never followed.")
+                    .font(.caption).foregroundStyle(.secondary).padding(.top, 6)
+            }
             if store.isDemoEnabled {
                 Label("Trash operations are unavailable in Demo. Actual results from this session remain visible.", systemImage: "lock").foregroundStyle(.secondary)
             }
@@ -57,7 +59,7 @@ struct TrashWorkspaceView: View {
         HStack {
             Button("Scan home Trash", systemImage: "arrow.clockwise") { store.inspect() }.disabled(!store.canInspect)
                 .installerCaptureIdentity("trash.scan", text: String(localized: "Scan home Trash"))
-            Button("Show home Trash in Finder") {
+            Button("Show in Finder") {
                 NSWorkspace.shared.activateFileViewerSelecting([TrashEnvironment.user.trash])
             }.disabled(store.isDemoEnabled || store.isBusy)
             Spacer()
@@ -117,8 +119,8 @@ struct TrashWorkspaceView: View {
                             .disabled(!store.canInspect)
                         Button("Deselect all") { store.select(paths: []) }.disabled(!store.canInspect || store.selectedPaths.isEmpty)
                         Spacer()
-                        Button("Review selected deletion…") { store.prepare(action: .selectedItems) }.disabled(!store.canPrepare)
-                        Button("Review clear scanned Trash…") { store.prepare(action: .clearSnapshot) }.disabled(!store.canClear)
+                        Button("Review selected items…") { store.prepare(action: .selectedItems) }.disabled(!store.canPrepare)
+                        Button("Review all scanned items…") { store.prepare(action: .clearSnapshot) }.disabled(!store.canClear)
                     }
                     if !inspection.canClearSnapshot {
                         Text("Clear scanned Trash is unavailable while any item is unreadable or unsupported. You can select the eligible items individually.")
@@ -133,10 +135,10 @@ struct TrashWorkspaceView: View {
     private func confirmation(_ plan: TrashRemovalPlan) -> some View {
         GroupBox {
             VStack(alignment: .leading, spacing: 12) {
-                Text(plan.action == .clearSnapshot ? "Confirm clearing this Trash snapshot" : "Confirm permanent deletion of selected Trash items")
-                    .font(.headline).installerCaptureIdentity("trash.review.heading", text: plan.action == .clearSnapshot ? String(localized: "Confirm clearing this Trash snapshot") : String(localized: "Confirm permanent deletion of selected Trash items"))
-                Text("Only the exact items and contents listed below are authorized. Deletion is permanent and cannot be undone through Trash or MoeKit. Items arriving later are never added to this confirmation.")
-                    .foregroundStyle(.red).installerCaptureIdentity("trash.review.effects", text: String(localized: "Only the exact items and contents listed below are authorized. Deletion is permanent and cannot be undone through Trash or MoeKit. Items arriving later are never added to this confirmation."))
+                Text(plan.action == .clearSnapshot ? "Permanently delete all scanned items?" : "Permanently delete selected items?")
+                    .font(.headline).installerCaptureIdentity("trash.review.heading", text: plan.action == .clearSnapshot ? String(localized: "Permanently delete all scanned items?") : String(localized: "Permanently delete selected items?"))
+                Text("Only the items and contents listed below will be permanently deleted. Trash and MoeKit cannot restore them. New arrivals are not included.")
+                    .foregroundStyle(.red).installerCaptureIdentity("trash.review.effects", text: String(localized: "Only the items and contents listed below will be permanently deleted. Trash and MoeKit cannot restore them. New arrivals are not included."))
                 Text("\(plan.items.count) Trash items · \(size(plan.logicalBytes)) logical size").monospacedDigit()
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 12) {
@@ -177,9 +179,9 @@ struct TrashWorkspaceView: View {
                         HStack {
                             Button("Cancel plan") { store.cancel() }.installerCaptureIdentity("trash.review.cancel", text: String(localized: "Cancel plan"))
                             Spacer()
-                            Button("Permanently delete confirmed items", role: .destructive) { store.confirm(planID: plan.id) }
+                            Button("Permanently delete", role: .destructive) { store.confirm(planID: plan.id) }
                                 .disabled(!store.canConfirm(planID: plan.id))
-                                .installerCaptureIdentity("trash.review.confirm", text: String(localized: "Permanently delete confirmed items"))
+                                .installerCaptureIdentity("trash.review.confirm", text: String(localized: "Permanently delete"))
                         }
                     }
                 }
@@ -189,8 +191,8 @@ struct TrashWorkspaceView: View {
     private func outcomes(_ outcome: TrashOutcome) -> some View {
         GroupBox {
             VStack(alignment: .leading, spacing: 10) {
-                Text("Actual Trash deletion outcomes").font(.headline)
-                    .installerCaptureIdentity("trash.outcome.heading", text: String(localized: "Actual Trash deletion outcomes"))
+                Text("Deletion results").font(.headline)
+                    .installerCaptureIdentity("trash.outcome.heading", text: String(localized: "Deletion results"))
                 if store.isDemoEnabled { Text("Actual operations from this session, not example data").font(.caption) }
                 ForEach(outcome.items) { item in
                     path("Reviewed Trash path", item.originalURL)
@@ -208,14 +210,14 @@ struct TrashWorkspaceView: View {
         GroupBox {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
-                    Text("Trash operation records").font(.headline)
+                    Text("Previous operations").font(.headline)
                     Spacer()
-                    Button("Read Trash operation records") { store.readRecords() }.disabled(!store.canReadRecords)
+                    Button("Load records") { store.readRecords() }.disabled(!store.canReadRecords)
                 }
                 Text("The latest 128 operation records are shown. Older records remain in the private records folder.").font(.caption).foregroundStyle(.secondary)
                 Text("Read-only history of this Trash adapter. An interrupted operation may retain a payload and individual delete-entry slots. Inspect all contents manually; these records do not authorize another deletion.")
                     .font(.caption).foregroundStyle(.secondary)
-                if store.hasReadRecords && store.recoveryItems.isEmpty { Text("No Trash operation records found").foregroundStyle(.secondary) }
+                if store.hasReadRecords && store.recoveryItems.isEmpty { Text("No previous operations").foregroundStyle(.secondary) }
                 ForEach(store.recoveryItems) { item in
                     if let record = item.record {
                         Label(record.state == .deleted ? "Recorded deletion completed" : "Operation requires manual inspection", systemImage: record.state == .deleted ? "checkmark.circle" : "exclamationmark.triangle")

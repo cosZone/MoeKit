@@ -21,7 +21,7 @@ struct AutomaticUpdateSettings: View {
                     get: { updates.includePreviews }, set: { updates.setIncludePreviews($0) }))
                     .disabled(updates.snapshot.sessionInProgress)
                     .installerCaptureIdentity("sparkle.previews", text: String(localized: "Include preview releases"))
-                Text("Sparkle verifies signed updates before installation. Automatic installation happens when MoeKit quits; you can also review and install an update now.")
+                Text("Updates are signature-checked. Automatic installation runs when MoeKit quits; you can also install now.")
                     .font(.caption).foregroundStyle(.secondary)
                     .installerCaptureIdentity("sparkle.behavior", text: "signed update behavior")
                 if let date = updates.snapshot.lastChecked {
@@ -34,7 +34,7 @@ struct AutomaticUpdateSettings: View {
                 Button("Check releases on GitHub…", action: openManualReleases)
                     .installerCaptureIdentity("sparkle.releases", text: String(localized: "Check releases on GitHub…"))
             }
-            Text("Update requests go to GitHub and may include your app version and IP address. Project data and system profiling are not sent. Project lists, preferences and recovery receipts stay outside the app bundle.")
+            Text("GitHub receives update requests, which may include your app version and IP address. Project data and system profiles are not sent.")
                 .font(.caption).foregroundStyle(.secondary)
                 .installerCaptureIdentity("sparkle.privacy", text: "update privacy and retained preferences")
         }

@@ -25,7 +25,7 @@ struct MoleAnalysisView: View {
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    Text(m("See what is taking up space in one folder. First check Mole, then choose a folder and review the analysis."))
+                    Text(m("Find what is taking up space in a folder."))
                         .foregroundStyle(.secondary)
                     installationStatus
                     if analysis.isBusy {
@@ -37,7 +37,7 @@ struct MoleAnalysisView: View {
                         }
                     }
                     if !analysis.isDemoEnabled {
-                        DisclosureGroup(m("Step-by-step installation"), isExpanded: $showsInstallation) {
+                        DisclosureGroup(m("Set up Mole"), isExpanded: $showsInstallation) {
                             MoleInstallationGuidanceView(
                                 onRecheck: { analysis.discoverInstalledAnalyzer() },
                                 isRecheckDisabled: analysis.isBusy,
@@ -53,7 +53,7 @@ struct MoleAnalysisView: View {
                     if let plan = analysis.plan { confirmation(plan) }
                     if let result = analysis.result { resultView(result) }
                     advancedOptions
-                    DisclosureGroup(m("Downloaded disk image actions and recovery"), isExpanded: $showsInstallerActions) {
+                    DisclosureGroup(m("Downloaded installers and recovery"), isExpanded: $showsInstallerActions) {
                         InstallerTrashView().padding(.top, 8)
                     }
                 }.padding(20)
@@ -119,7 +119,7 @@ struct MoleAnalysisView: View {
         GroupBox {
             VStack(alignment: .leading, spacing: 10) {
                 Text(m("2. Choose a folder")).font(.headline)
-                Text(m("Choose Downloads or another folder you want to inspect. Nothing runs until you review the plan and confirm."))
+                Text(m("Choose a folder. Analysis starts only after your confirmation."))
                     .font(.callout).foregroundStyle(.secondary)
                 if let directory = analysis.directory {
                     Label(InstallerPathDisplay.quoted(directory.path), systemImage: "folder")
@@ -138,10 +138,10 @@ struct MoleAnalysisView: View {
                         .accessibilityIdentifier("mole.setup.review")
                 }
                 if analysis.executable == nil && !analysis.isDemoEnabled {
-                    Text(m("Set up a compatible analyzer above to enable analysis."))
+                    Text(m("Finish Mole setup first."))
                         .font(.caption).foregroundStyle(.secondary)
                 } else if analysis.directory == nil && !analysis.isDemoEnabled {
-                    Text(m("Choose a folder to enable Review analysis."))
+                    Text(m("Choose a folder to continue."))
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }.frame(maxWidth: .infinity, alignment: .leading).padding(6)
@@ -149,7 +149,7 @@ struct MoleAnalysisView: View {
     }
 
     private var advancedOptions: some View {
-        DisclosureGroup(m("Advanced: analyzer file and check details"), isExpanded: $showsAdvanced) {
+        DisclosureGroup(m("Advanced details"), isExpanded: $showsAdvanced) {
             VStack(alignment: .leading, spacing: 12) {
                 Text(m("Use this if you installed the official analyzer somewhere else. Choosing a file does not verify it; Review analysis checks it before offering a confirmation."))
                     .font(.callout).foregroundStyle(.secondary)
@@ -199,8 +199,8 @@ struct MoleAnalysisView: View {
     }
 
     private var statusExplanation: String {
-        if analysis.isDemoEnabled { return m("Leave Demo to check your installation and analyze a real folder. No installation is inspected in Demo.") }
-        if analysis.isDiscovering { return m("Checking a small set of installation locations and the official analyzer's exact file contents. Mole is not being run.") }
+        if analysis.isDemoEnabled { return m("Exit Demo to set up Mole and analyze your folders.") }
+        if analysis.isDiscovering { return m("Checking known locations and verifying the analyzer. Mole is not running.") }
         if isManualSelection {
             return m(analysis.plan == nil
                 ? "A file was selected manually. Choose a folder, then use Review analysis to verify that file."
@@ -210,10 +210,10 @@ struct MoleAnalysisView: View {
             return m("Choose Recheck to look for a supported analyzer. This check does not run Mole or install anything.")
         }
         switch state {
-        case .usable: return m("The official V1.57.0 analyzer was verified for this app. Choose a folder below; it will be checked again before each analysis.")
-        case .missing: return m("No analyzer was found in the checked locations. Follow the steps below, or use Advanced if yours is installed elsewhere.")
-        case .incompatible: return m("An installed file does not match the supported official V1.57.0 analyzer. Homebrew builds, custom builds and other versions are not supported; use the guide below.")
-        case .unverified: return m("MoeKit could not verify a compatible analyzer. It may be unreadable, a command wrapper or blocked by macOS. Review Advanced for the reason before continuing.")
+        case .usable: return m("Mole V1.57.0 is verified. Choose a folder below.")
+        case .missing: return m("Not found in the checked locations. Follow the setup guide, or choose your file in Advanced details.")
+        case .incompatible: return m("This file is incompatible. Use the official V1.57.0 analyzer in the guide below.")
+        case .unverified: return m("Verification failed. Read the reason in Advanced details before continuing.")
         }
     }
 
@@ -265,11 +265,12 @@ struct MoleAnalysisView: View {
                 Text("Mole runs with your normal user permissions, without an OS sandbox. The reviewed analysis command does not delete or change selected-folder content; incidental metadata reads may extend beyond it.")
                 Text("MoeKit will create a verified temporary analyzer copy and a fresh private cache/temp directory below the location shown here, then remove only that session after the process stops. Your existing Mole cache is not used.")
                 Text(InstallerPathDisplay.quoted(plan.privateSessionParent.path)).font(.caption.monospaced()).textSelection(.enabled)
-                Text("Analyzer limits: 120 seconds elapsed, 60 CPU seconds per process, 16 MB report and 64 KB diagnostics. Reports may be partial; sizes are not reclaimable space.")
+                Text("Reports may be incomplete. Reported sizes are not space you can necessarily free.")
                 DisclosureGroup(m("Analyzer verification details")) {
                     VStack(alignment: .leading, spacing: 6) {
                         Text(InstallerPathDisplay.quoted(plan.executable.path))
                         Text("\(plan.release.version) · \(plan.release.architecture) · SHA-256 \(plan.release.sha256)")
+                        Text("Analyzer limits: 120 seconds elapsed, 60 CPU seconds per process, 16 MB report and 64 KB diagnostics. Reports may be partial; sizes are not reclaimable space.")
                     }.font(.caption.monospaced()).textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
                 }

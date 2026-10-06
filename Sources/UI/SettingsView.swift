@@ -29,7 +29,7 @@ struct SettingsView: View {
                     Image("BrandMark").resizable().frame(width: 56, height: 56).clipShape(RoundedRectangle(cornerRadius: 12))
                     VStack(alignment: .leading, spacing: 3) {
                         Text("MoeKit").font(.title2).fontWeight(.semibold)
-                        Text("A native home for your personal CLI toolbox").foregroundStyle(.secondary)
+                        Text("Projects and tools, in one place").foregroundStyle(.secondary)
                     }
                 }
             }
@@ -38,7 +38,7 @@ struct SettingsView: View {
                     .installerCaptureIdentity("icons.dock", text: String(localized: "Show Dock icon"))
                 Toggle("Show menu bar icon", isOn: $visibility.showMenuBarIcon)
                     .installerCaptureIdentity("icons.menu", text: String(localized: "Show menu bar icon"))
-                Text("Closing windows keeps MoeKit open. Some operations cancel when their view closes. Use Quit MoeKit to exit.")
+                Text("Closing a window may cancel its work. MoeKit stays open until you quit.")
                     .font(.caption).foregroundStyle(.secondary)
                 if visibility.hasNoPersistentIcon {
                     Label("Both icons are hidden. Open MoeKit from Finder or Spotlight to return to the workspace and settings.", systemImage: "info.circle")
@@ -59,31 +59,35 @@ struct SettingsView: View {
                 Button("Open getting started") {
                     if store.showGettingStarted() { openWindow(id: "getting-started") }
                 }.disabled(!store.canNavigateFromGettingStarted)
-                Text("Choose a first step and learn what this preview can read and do.")
+                Text("Find a first step.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("Preview") {
                 Toggle("Use demo data", isOn: $store.isDemoEnabled)
-                Text("Demo mode uses example projects and results. Changing modes cancels current discovery and report imports. It never starts a process or changes project files.")
+                Text("Use built-in examples. Switching modes cancels discovery and report imports; project files stay unchanged.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("Project discovery") {
-                LabeledContent("Maximum depth", value: "4")
-                LabeledContent("Maximum directories", value: "2,000")
-                Text("Hidden directories, symbolic links, dependency folders and build outputs are skipped. Discovery stops at a Git repository.")
-                    .font(.caption).foregroundStyle(.secondary)
+                DisclosureGroup("Discovery limits") {
+                    LabeledContent("Maximum depth", value: "4")
+                    LabeledContent("Maximum directories", value: "2,000")
+                    Text("Hidden directories, symbolic links, dependency folders and build outputs are skipped. Discovery stops at a Git repository.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
             }
             Section("Tools") {
                 Button("Tool preparation…") { openWindow(id: "tool-preparation") }
                 ForEach(store.registry.descriptors) { module in
-                    LabeledContent(module.title, value: module.id == MoleModule.id ? String(localized: "Verify analyzer before use") : (module.readiness.canExecute ? String(localized: "Available") : String(localized: "Adapter not connected")))
+                    LabeledContent(module.title, value: module.id == MoleModule.id ? String(localized: "Verify analyzer before use") : (module.readiness.canExecute ? String(localized: "Available") : String(localized: "Not available yet")))
                 }
-                Text("Space supports reports and confirmed analysis. Native cache cleanup and exact-process stopping each require separate confirmation. Uninstall, maintenance and live status remain unavailable.")
+                Text("Analysis, cleanup and process stopping are reviewed before they run. Uninstall, maintenance and live status are not available yet.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("Storage") {
-                Text("Your project list, pins and private recovery receipts are stored in MoeKit’s Application Support folder. Task records and imported reports last for the current session.")
-                    .font(.caption).foregroundStyle(.secondary)
+                DisclosureGroup("What is saved locally") {
+                    Text("Your project list, pins and private recovery receipts are stored in MoeKit’s Application Support folder. Task records and imported reports last for the current session.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
             }
         }.formStyle(.grouped)
     }

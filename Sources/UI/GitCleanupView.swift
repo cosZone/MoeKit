@@ -37,7 +37,7 @@ struct GitCleanupView: View {
             Text(project.path).font(.caption).textSelection(.enabled)
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
-                    Text("Retire one clean linked worktree, or separately remove one fully merged local branch. Files and refs move into a private recovery folder inside the main repository. This does not reclaim disk space.")
+                    Text("Retire a clean worktree or remove a merged local branch. Files and refs move to recovery inside the main repository; no disk space is freed.")
                     if project.kind == .worktree {
                         Button("Finish AI worktree…") {
                             guard !workspace.isDemoEnabled else { return }
@@ -56,8 +56,13 @@ struct GitCleanupView: View {
                         Button("Choose shared parent folder…") { chooseScope() }.disabled(state.isBusy)
                         Text(scope?.path ?? "No folder selected").font(.caption).textSelection(.enabled)
                     }
-                    Text("Inspection reads only the selected scope and copies bounded Git objects into an app-owned temporary directory. A verified Apple Git binary inspects that copy. No repository hooks, filters, scripts or network operations run.").font(.caption).foregroundStyle(.secondary)
-                    Button("Inspect exact target") {
+                    Text("Checks the selected folder using a private temporary copy of Git data. No hooks, project scripts or network operations run.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    DisclosureGroup("Inspection details") {
+                        Text("Inspection reads only the selected scope and copies bounded Git objects into an app-owned temporary directory. A verified Apple Git binary inspects that copy. No repository hooks, filters, scripts or network operations run.")
+                            .font(.caption).foregroundStyle(.secondary).padding(.top, 6)
+                    }.font(.caption).foregroundStyle(.secondary)
+                    Button("Inspect target") {
                         guard !workspace.isDemoEnabled, let scope else { return }
                         stoppedWork = false; confirmation = ""
                         state.inspect(.init(scope: scope, project: project, baseBranch: baseBranch, branch: branch, action: action,
@@ -70,7 +75,7 @@ struct GitCleanupView: View {
                     if let error = state.error { Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.orange).textSelection(.enabled) }
                     if let plan = state.plan, matchesCurrentSelection(plan) {
                         Divider()
-                        Text("Review this exact operation").font(.headline)
+                        Text("Review operation").font(.headline)
                         LabeledContent("Action", value: plan.request.action.title)
                         LabeledContent("Branch", value: plan.request.branch)
                         Text("Commit: " + plan.targetOID).font(.caption).textSelection(.enabled)
@@ -101,7 +106,7 @@ struct GitCleanupView: View {
                             Button("Reveal recovery folder") { NSWorkspace.shared.activateFileViewerSelecting([receipt.plan.recovery]) }
                             Button("Review restore…") { restoreTarget = receipt }.disabled(state.isBusy || workspace.isDemoEnabled)
                         }
-                        Text("Restore is available in this session. After restarting, keep the recovery folder and its JSON receipts; they record the original paths and commit. No recovery data is automatically purged.").font(.caption).foregroundStyle(.secondary)
+                        Text("You can restore during this session. After restarting, keep the recovery folder and its records of the original paths and commit. Recovery data is never cleared automatically.").font(.caption).foregroundStyle(.secondary)
                     }
                 }.frame(maxWidth: .infinity, alignment: .leading)
             }

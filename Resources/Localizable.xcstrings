@@ -10446,6 +10446,1196 @@
           }
         }
       }
+    },
+    "1. Choose a cache folder": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1. 选择缓存文件夹"
+          }
+        }
+      }
+    },
+    "2. Select caches": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2. 选择缓存"
+          }
+        }
+      }
+    },
+    "3. Move selected caches to Trash": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "3. 将所选缓存移到废纸篓"
+          }
+        }
+      }
+    },
+    "Add a project or find Git projects in a folder. Only folders you choose are read; your files stay unchanged.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加项目，或在文件夹中查找 Git 项目。仅读取你选择的文件夹，不改动文件。"
+          }
+        }
+      }
+    },
+    "Add one project or find projects in a folder.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加一个项目，或在文件夹中查找项目。"
+          }
+        }
+      }
+    },
+    "Advanced details": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "高级详情"
+          }
+        }
+      }
+    },
+    "All disk images must be detached. Eject only images you opened yourself; leave system-managed images alone. MoeKit does not identify or eject them.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所有磁盘映像均需卸载。只推出自己打开的映像，请勿操作系统管理的映像。MoeKit 不会识别或推出它们。"
+          }
+        }
+      }
+    },
+    "Analysis, cleanup and process stopping are reviewed before they run. Uninstall, maintenance and live status are not available yet.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分析、清理和停止进程前都需复查确认。卸载、维护和实时状态尚不可用。"
+          }
+        }
+      }
+    },
+    "Analyze a folder, or import a Mole JSON report. Importing only reads the report. Reported sizes are not space you can necessarily free.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分析文件夹，或导入 Mole JSON 报告。导入仅读取报告；显示大小不代表都能释放。"
+          }
+        }
+      }
+    },
+    "Built-in examples only. Your saved projects stay unchanged.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅使用内置示例，不改变已保存的项目。"
+          }
+        }
+      }
+    },
+    "Cache cleanup": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缓存清理"
+          }
+        }
+      }
+    },
+    "Cache recovery": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缓存恢复"
+          }
+        }
+      }
+    },
+    "Check installed files or follow the setup guide. A found file still needs verification.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查已安装文件，或按指引设置。找到文件后仍需验证。"
+          }
+        }
+      }
+    },
+    "Checked locations": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检测位置"
+          }
+        }
+      }
+    },
+    "Choose Add project, or Discover in folder to find Git projects. Review the results before adding them.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点击「添加项目」，或用「在文件夹中发现…」查找 Git 项目，复查后再添加。"
+          }
+        }
+      }
+    },
+    "Choose Start scan in Processes & Ports. Select a process to see its details.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在「进程与端口」点击「开始扫描」，选择进程查看详情。"
+          }
+        }
+      }
+    },
+    "Choose Start scan to see your processes and listening ports. Scanning does not stop anything.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点击「开始扫描」查看你的进程和监听端口。扫描不会停止任何进程。"
+          }
+        }
+      }
+    },
+    "Choose a folder, then inspect it. Inspection does not change files.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择文件夹后再检查，检查不会改动文件。"
+          }
+        }
+      }
+    },
+    "Choose a task to see its results.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择任务查看结果。"
+          }
+        }
+      }
+    },
+    "Choose caches to remove": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择要清理的缓存"
+          }
+        }
+      }
+    },
+    "Choose items to delete": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择要删除的项目"
+          }
+        }
+      }
+    },
+    "Closing a window may cancel its work. MoeKit stays open until you quit.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关闭窗口可能取消其中的操作。退出应用前，MoeKit 会保持运行。"
+          }
+        }
+      }
+    },
+    "Confirming creates this private folder and recovery records containing the original path. Records are kept. Cancelling creates none of them.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "确认后会创建此私有文件夹，并保留含原始路径的恢复记录。取消则不会创建。"
+          }
+        }
+      }
+    },
+    "Current session only": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅保留本次会话"
+          }
+        }
+      }
+    },
+    "Deletion results": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除结果"
+          }
+        }
+      }
+    },
+    "Discovery limits": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发现范围"
+          }
+        }
+      }
+    },
+    "Explore Projects, Tools and Tasks. Choose Exit demo to return to your own data.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "浏览项目、工具和任务，点击「退出示例」回到自己的数据。"
+          }
+        }
+      }
+    },
+    "Explore with built-in example data.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用内置示例熟悉界面。"
+          }
+        }
+      }
+    },
+    "Find a first step.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从这里开始。"
+          }
+        }
+      }
+    },
+    "GitHub receives update requests, which may include your app version and IP address. Project data and system profiles are not sent.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更新请求发送给 GitHub，可能包含应用版本和 IP 地址；不发送项目数据或系统配置。"
+          }
+        }
+      }
+    },
+    "Imported report": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已导入报告"
+          }
+        }
+      }
+    },
+    "Inspect a cache folder, select items, then review. A cache label does not mean its contents are safe to remove.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查缓存文件夹，选择项目后复查。标为缓存不代表内容都能安全删除。"
+          }
+        }
+      }
+    },
+    "Inspect folder": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查文件夹"
+          }
+        }
+      }
+    },
+    "Internal build %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内部构建 %@"
+          }
+        }
+      }
+    },
+    "Last stop result": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最近停止结果"
+          }
+        }
+      }
+    },
+    "Latest result": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最近结果"
+          }
+        }
+      }
+    },
+    "Load MoeKit’s cache records. Restore and permanent deletion each need a new review and confirmation.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "读取 MoeKit 的缓存记录。恢复和永久删除均需重新复查并单独确认。"
+          }
+        }
+      }
+    },
+    "Load MoeKit’s recovery records. Restoring needs a new confirmation and never replaces an existing file.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "读取 MoeKit 的恢复记录。恢复时需重新确认，且不会覆盖已有文件。"
+          }
+        }
+      }
+    },
+    "Load records": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "读取记录"
+          }
+        }
+      }
+    },
+    "Load recovery records": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "读取恢复记录"
+          }
+        }
+      }
+    },
+    "MoeKit may create the parent folders and lock files listed above. These locks coordinate MoeKit instances only; other apps can still access the file.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MoeKit 可能创建上列父目录和锁文件。锁仅协调 MoeKit 实例，其他应用仍可访问文件。"
+          }
+        }
+      }
+    },
+    "MoeKit rejects quarantined files. Neither MoeKit nor this command removes macOS protection. Do not switch download routes to bypass a security warning.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MoeKit 拒绝带隔离标记的文件；应用和此命令都不会移除 macOS 保护。请勿更换下载途径来绕过安全警告。"
+          }
+        }
+      }
+    },
+    "Not available yet": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚不可用"
+          }
+        }
+      }
+    },
+    "Only folders you choose are read. Your project list is saved locally; project files stay unchanged.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅读取所选文件夹。项目列表保存在本机，不改动项目文件。"
+          }
+        }
+      }
+    },
+    "Only the items and contents listed below will be permanently deleted. Trash and MoeKit cannot restore them. New arrivals are not included.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅永久删除下列项目及内容，废纸篓和 MoeKit 均无法恢复。之后新进入的项目不在范围内。"
+          }
+        }
+      }
+    },
+    "Opening the workspace does not start a scan.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开工作区不会开始扫描。"
+          }
+        }
+      }
+    },
+    "Other folder…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "其他文件夹…"
+          }
+        }
+      }
+    },
+    "Permanently delete": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "永久删除"
+          }
+        }
+      }
+    },
+    "Permanently delete all scanned items?": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "永久删除全部扫描项？"
+          }
+        }
+      }
+    },
+    "Permanently delete selected items?": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "永久删除所选项？"
+          }
+        }
+      }
+    },
+    "Previous operations": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "历史操作"
+          }
+        }
+      }
+    },
+    "Project discovery and process scan results appear here.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "项目发现和进程扫描的结果会显示在这里。"
+          }
+        }
+      }
+    },
+    "Projects and tools, in one place": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "项目与工具，一处管理"
+          }
+        }
+      }
+    },
+    "Read your processes and listening ports on demand. Stopping a process needs a separate confirmation.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按需读取你的进程和监听端口。停止进程时需单独确认。"
+          }
+        }
+      }
+    },
+    "Reading the report only. No files are changed.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅读取报告，不改动文件。"
+          }
+        }
+      }
+    },
+    "Reads file information only; does not run the tool.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅读取文件信息，不运行工具。"
+          }
+        }
+      }
+    },
+    "Reads your process names and executable paths, working folders and TCP listening ports. Command arguments and environment variables are not read. Scans run only when requested and send no stop signals.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "读取你的进程名称、可执行文件路径、工作目录和 TCP 监听端口，不读取命令参数或环境变量。仅在你请求时扫描，不发送停止信号。"
+          }
+        }
+      }
+    },
+    "Reports may be incomplete. Reported sizes are not space you can necessarily free.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "报告可能不完整，显示大小不代表都能释放。"
+          }
+        }
+      }
+    },
+    "Results by item": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "逐项结果"
+          }
+        }
+      }
+    },
+    "Review all scanned items…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复查全部扫描项…"
+          }
+        }
+      }
+    },
+    "Review move to Trash…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复查移到废纸篓…"
+          }
+        }
+      }
+    },
+    "Review selected items…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复查所选项…"
+          }
+        }
+      }
+    },
+    "Review selection…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复查所选项…"
+          }
+        }
+      }
+    },
+    "Review stop…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复查停止…"
+          }
+        }
+      }
+    },
+    "Scan details": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "扫描详情"
+          }
+        }
+      }
+    },
+    "Scan your home Trash, then select items to review. Deletion is permanent. Clearing the scanned items also requires typing EMPTY.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "扫描主目录废纸篓，再选择项目复查。删除后无法恢复；清空本次扫描结果还需输入 EMPTY。"
+          }
+        }
+      }
+    },
+    "Scans start when you choose. Changes need your confirmation.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "由你决定何时扫描，改动前需确认。"
+          }
+        }
+      }
+    },
+    "See progress and results in Tasks. Git changes are not checked.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在「任务」查看进度和结果。尚未检查 Git 文件改动。"
+          }
+        }
+      }
+    },
+    "See running processes": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看运行中的进程"
+          }
+        }
+      }
+    },
+    "See what takes up space": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看空间占用"
+          }
+        }
+      }
+    },
+    "See your running processes and listening ports.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看你的进程和监听端口。"
+          }
+        }
+      }
+    },
+    "Select a project to see its location": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择项目查看位置"
+          }
+        }
+      }
+    },
+    "Select an entry to see its path": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择条目查看路径"
+          }
+        }
+      }
+    },
+    "Select one .dmg from a fresh Downloads analysis. MoeKit checks the file before asking to move it to Trash.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从本次「下载」文件夹分析中选择一个 .dmg。MoeKit 检查文件后才会请求移到废纸篓。"
+          }
+        }
+      }
+    },
+    "Show in Finder": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在 Finder 中显示"
+          }
+        }
+      }
+    },
+    "Sizes do not guarantee free space": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示大小不等于可释放空间"
+          }
+        }
+      }
+    },
+    "Star on GitHub": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在 GitHub 点赞"
+          }
+        }
+      }
+    },
+    "Stopping requires confirmation": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "停止前需确认"
+          }
+        }
+      }
+    },
+    "Supported folders and protections": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "支持范围与保护措施"
+          }
+        }
+      }
+    },
+    "This disk image moves to macOS Trash. Its storage is not freed until it is deleted from Trash. This action does not empty Trash.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此磁盘映像会移到 macOS 废纸篓，删除前仍占用空间。本操作不会清空废纸篓。"
+          }
+        }
+      }
+    },
+    "Try the demo": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "体验示例"
+          }
+        }
+      }
+    },
+    "Updates are signature-checked. Automatic installation runs when MoeKit quits; you can also install now.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更新会经过签名验证。自动安装在退出 MoeKit 时进行，也可以立即安装。"
+          }
+        }
+      }
+    },
+    "Use built-in examples. Switching modes cancels discovery and report imports; project files stay unchanged.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用内置示例。切换模式会取消项目发现和报告导入，不改动项目文件。"
+          }
+        }
+      }
+    },
+    "User caches": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用户缓存"
+          }
+        }
+      }
+    },
+    "What is read and saved": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "读取与保存内容"
+          }
+        }
+      }
+    },
+    "What is saved locally": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本机保存内容"
+          }
+        }
+      }
+    },
+    "What scanning reads": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "扫描读取内容"
+          }
+        }
+      }
+    },
+    "Your home Trash only": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅当前用户的主目录废纸篓"
+          }
+        }
+      }
+    },
+    "If another app replaces the path, MoeKit may temporarily move the replacement before detecting it. This does not protect against malicious same-user interference.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "若其他应用替换路径，MoeKit 可能在发现前暂时移动替换后的文件。本操作无法防范同一用户下的恶意干预。"
+          }
+        }
+      }
+    },
+    "No previous operations": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暂无历史操作"
+          }
+        }
+      }
+    },
+    "Retire a clean worktree or remove a merged local branch. Files and refs move to recovery inside the main repository; no disk space is freed.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "退役干净的工作树，或移除已合并的本地分支。文件和引用会移入主仓库内的恢复目录，不会释放空间。"
+          }
+        }
+      }
+    },
+    "Inspect target": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查目标"
+          }
+        }
+      }
+    },
+    "Review operation": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复查操作"
+          }
+        }
+      }
+    },
+    "You can restore during this session. After restarting, keep the recovery folder and its records of the original paths and commit. Recovery data is never cleared automatically.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本次会话中可恢复。重启后请保留恢复目录，以及记录原始路径和提交的凭据；恢复数据不会自动清除。"
+          }
+        }
+      }
+    },
+    "Review commits, integrate them locally, then review retirement separately. An AI completion message does not verify saved files, merged commits or tests.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复查提交并合入本地分支，再单独复查工作树退役。AI 说已完成，不代表文件已保存、提交已合并或测试已通过。"
+          }
+        }
+      }
+    },
+    "1. Check source and target": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1. 检查来源与目标"
+          }
+        }
+      }
+    },
+    "Choose an existing local branch. Its clean main worktree can be updated. Diverged histories and unsupported layouts need Git outside MoeKit.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择已有的本地分支，其干净的主工作树可以一并更新。历史分叉或不支持的布局需在 MoeKit 外使用 Git 处理。"
+          }
+        }
+      }
+    },
+    "Check integration": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查合入方案"
+          }
+        }
+      }
+    },
+    "Untracked and ignored files are counted together. Both stay protected.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未跟踪和被忽略的文件合并计数，均受保护。"
+          }
+        }
+      }
+    },
+    "Resolve before integrating": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "合入前需解决"
+          }
+        }
+      }
+    },
+    "All source commits are already in the target. Review retirement separately in Git cleanup.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "来源提交已全部包含在目标中。请回到「Git 整理」单独复查退役。"
+          }
+        }
+      }
+    },
+    "Fast-forward moves the target branch to the source commit. If checked out in the main worktree, its tracked files and index also change. The source files and branch stay.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "快进会将目标分支移到来源提交。若目标已在主工作树检出，其已跟踪文件和暂存区也会更新。来源文件和分支保留。"
+          }
+        }
+      }
+    },
+    "Close tools using both worktrees. Other apps can still write during these checks. Do not edit or run Git until verification finishes.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "先关闭使用这两个工作树的工具。检查期间其他应用仍可能写入；验证完成前请勿编辑或运行 Git。"
+          }
+        }
+      }
+    },
+    "This confirms local integration only. Retirement needs a separate review and confirmation.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本次仅确认本地合入。退役需另行复查并确认。"
+          }
+        }
+      }
+    },
+    "The local branch and any updated worktree match the source commit. Project behavior and tests are not verified.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本地分支及已更新的工作树与来源提交一致，尚未验证项目行为或测试结果。"
+          }
+        }
+      }
+    },
+    "Review worktree retirement": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复查工作树退役"
+          }
+        }
+      }
+    },
+    "Review again to move the clean worktree into recovery. Its branch stays, and no disk space is freed. A separate confirmation is required.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "再次复查后可将干净工作树移到恢复目录，分支会保留，不释放空间。仍需单独确认。"
+          }
+        }
+      }
+    },
+    "Optional: push to a remote": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可选：推送到远端"
+          }
+        }
+      }
+    },
+    "Enter an HTTPS repository URL and an existing branch. MoeKit does not use saved remotes, fetch, create branches, force push or delete remote branches.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "输入 HTTPS 仓库地址和已有分支。MoeKit 不使用保存的远端配置，也不拉取、创建分支、强推或删除远端分支。"
+          }
+        }
+      }
+    },
+    "Check remote branch": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查远端分支"
+          }
+        }
+      }
+    },
+    "This pushes the selected commit and all reachable Git history to the displayed repository, without force. Confirm only if this destination should receive the code and history.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这会将所选提交及所有可达 Git 历史推送到所示仓库，不强推。请确认该仓库可以接收这些代码和历史后再继续。"
+          }
+        }
+      }
+    },
+    "The worktree is kept. A timeout does not mean the push failed. Recheck the remote; do not send another push blindly.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工作树会保留。超时不代表推送失败，请重新检查远端，不要盲目再次推送。"
+          }
+        }
+      }
+    },
+    "The remote check is a snapshot, not a server lock. Remote CI, pull requests, branch approvals and project tests are not checked.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "远端检查只是当时的结果，不会锁定服务器。此流程不检查远端 CI、拉取请求、分支审批或项目测试。"
+          }
+        }
+      }
+    },
+    "Checks the selected folder using a private temporary copy of Git data. No hooks, project scripts or network operations run.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅检查所选文件夹，会在私有临时目录中复制 Git 数据。不运行钩子、项目脚本或网络操作。"
+          }
+        }
+      }
+    },
+    "Inspection details": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查详情"
+          }
+        }
+      }
+    },
+    "Inspection may read existing Keychain credentials. MoeKit does not display, log, save or erase them. Sign in with your Git client first if access is unavailable.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查时可能读取已有的钥匙串凭据。MoeKit 不显示、记录、保存或删除它们。如无法访问，请先在 Git 客户端登录。"
+          }
+        }
+      }
+    },
+    "Connection details": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "连接详情"
+          }
+        }
+      }
+    },
+    "Git may use a shell only to dispatch MoeKit's fixed credential helper. Repository hooks are disabled; a native gate checks the approved push target.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Git 可能仅为调用 MoeKit 的固定凭据助手而使用 Shell。仓库钩子禁用，原生检查会核对已批准的推送目标。"
+          }
+        }
+      }
+    },
+    "Chosen folders": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所选文件夹"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

@@ -37,7 +37,7 @@ struct TasksView: View {
                         ContentUnavailableView {
                             Label(store.displayedTasks.isEmpty ? "No tasks yet" : "No matching tasks", systemImage: "list.bullet.rectangle")
                         } description: {
-                            Text(store.displayedTasks.isEmpty ? "Discovery and process scans appear here with their actual results." : "Try a different search or task filter.")
+                            Text(store.displayedTasks.isEmpty ? "Project discovery and process scan results appear here." : "Try a different search or task filter.")
                         } actions: {
                             if store.hasTaskFilters { Button("Clear filters") { store.clearTaskFilters() } }
                             else if store.displayedTasks.isEmpty {
@@ -50,12 +50,12 @@ struct TasksView: View {
                 if let task = store.selectedTask {
                     TaskDetailView(task: task).id(task.id).frame(maxWidth: .infinity, minHeight: 180, idealHeight: 240, maxHeight: 450)
                 } else {
-                    ContentUnavailableView("Select a task", systemImage: "list.bullet.rectangle", description: Text("Select a visible record to inspect its result and diagnostics."))
+                    ContentUnavailableView("Select a task", systemImage: "list.bullet.rectangle", description: Text("Choose a task to see its results."))
                         .frame(maxWidth: .infinity, minHeight: 180, idealHeight: 240, maxHeight: 450)
                 }
             }.frame(maxWidth: .infinity, maxHeight: .infinity)
             StatusBar(leading: String(localized: "\(store.filteredTasks.count) records"),
-                      trailing: store.isDemoEnabled ? String(localized: "Example data") : String(localized: "Task records are kept for this session"))
+                      trailing: store.isDemoEnabled ? String(localized: "Example data") : String(localized: "Current session only"))
         }
     }
 }

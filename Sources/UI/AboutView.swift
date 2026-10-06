@@ -2,7 +2,11 @@ import AppKit
 import SwiftUI
 
 struct AboutView: View {
-    private let information = AppInformation(infoDictionary: Bundle.main.infoDictionary)
+    let information: AppInformation
+
+    init(information: AppInformation = AppInformation(infoDictionary: Bundle.main.infoDictionary)) {
+        self.information = information
+    }
 
     var body: some View {
         VStack(spacing: 24) {
@@ -21,7 +25,7 @@ struct AboutView: View {
                     .foregroundStyle(.secondary)
                     .textSelection(.enabled)
 
-                Text("A native home for your personal CLI toolbox")
+                Text("Projects and tools, in one place")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -38,7 +42,7 @@ struct AboutView: View {
                     .help("Open MoeKit’s GitHub issues in your browser")
 
                     Link(destination: MoeKitLinks.repository) {
-                        Label("Give a Star", systemImage: "star")
+                        Label("Star on GitHub", systemImage: "star")
                     }
                     .help("Open the MoeKit repository to give it a star on GitHub")
                 }
@@ -62,15 +66,21 @@ struct AboutView: View {
 
     @ViewBuilder
     private var versionLabel: some View {
-        switch (information.version, information.build) {
-        case let (.some(version), .some(build)):
-            Text("Version \(version) (\(build))")
-        case let (.some(version), .none):
-            Text("Version \(version)")
-        case let (.none, .some(build)):
-            Text("Build \(build)")
-        case (.none, .none):
-            Text("Version unavailable")
+        VStack(spacing: 3) {
+            if let version = information.displayVersion {
+                Text("Version \(version)")
+                    .fontWeight(.medium)
+                    .installerCaptureIdentity("about.version", text: String(localized: "Version \(version)"))
+            } else {
+                Text("Version unavailable")
+                    .installerCaptureIdentity("about.version", text: String(localized: "Version unavailable"))
+            }
+            if let build = information.build {
+                Text("Internal build \(build)")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .installerCaptureIdentity("about.build", text: String(localized: "Internal build \(build)"))
+            }
         }
     }
 }

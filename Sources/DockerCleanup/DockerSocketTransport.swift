@@ -3,6 +3,9 @@ import Foundation
 import Darwin
 #else
 import Glibc
+#if canImport(DockerLinuxSystem)
+import DockerLinuxSystem
+#endif
 #endif
 
 struct DockerHTTPResponse: Sendable {
@@ -149,14 +152,18 @@ struct DockerSocketTransport: DockerTransport {
         guard getsockopt(descriptor, SOL_SOCKET, 77, &processDescriptor, &length) == 0,
               length == MemoryLayout<Int32>.size, processDescriptor >= 0 else { throw DockerCleanupError.unsafeSocket }
         defer { _ = close(processDescriptor) }
+        #if canImport(DockerLinuxSystem)
         var value = stat()
-        var filesystem = statfs()
+        var filesystem = DockerLinuxSystem.statfs()
         // Require pidfs (Linux 6.9+), whose per-process inode distinguishes PID reuse.
         // Older anon_inode pidfds do not provide this identity and are refused.
-        guard fstat(processDescriptor, &value) == 0, fstatfs(processDescriptor, &filesystem) == 0,
+        guard fstat(processDescriptor, &value) == 0, DockerLinuxSystem.fstatfs(processDescriptor, &filesystem) == 0,
               filesystem.f_type == 0x50494446 else { throw DockerCleanupError.unsafeSocket }
         return DockerPeerIdentity(pid: credentials.pid, uid: credentials.uid, gid: credentials.gid,
                                   processToken: [UInt64(value.st_dev), UInt64(value.st_ino)])
+        #else
+        throw DockerCleanupError.unsafeSocket
+        #endif
         #endif
     }
 

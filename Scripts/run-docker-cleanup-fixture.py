@@ -168,6 +168,7 @@ def main():
         sources = [ROOT / "Sources/DockerCleanup" / name for name in (
             "DockerCleanupModels.swift", "DockerSocketTransport.swift", "NativeDockerCleanupExecutor.swift")]
         subprocess.run([tools["swiftc"], "-swift-version", "6", "-strict-concurrency=complete", "-parse-as-library",
+                        "-I", str(ROOT / "Scripts/Fixtures/DockerCleanup/DockerLinuxSystem"),
                         *map(str, sources), str(ROOT / "Scripts/Fixtures/DockerCleanup/main.swift"), "-o", str(binary)], check=True)
         output = subprocess.check_output([str(binary), str(manifest_path)], text=True, timeout=180)
         proof = json.loads(output)

@@ -192,8 +192,9 @@ final class InstallerRecoveryJournal {
                 guard errno == 0 else { throw InstallerTrashFailure.journal }
                 break
             }
-            var bytes = entry.pointee.d_name
-            let name = withUnsafeBytes(of: &bytes) { String(decoding: $0.prefix(while: { $0 != 0 }), as: UTF8.self) }
+            let name: String
+            do { name = try DarwinDirectoryEntry.name(entry) }
+            catch { throw InstallerTrashFailure.journal }
             if name == "." || name == ".." { continue }
             guard names.count < 512 else { throw InstallerTrashFailure.journal }
             try InstallerFileAccess.basename(name); names.append(name)

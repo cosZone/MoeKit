@@ -77,9 +77,9 @@ enum CleanupFiles {
                 guard errno == 0 else { throw CleanupFailure.changed }
                 break
             }
-            var raw = entry.pointee.d_name
-            let bytes = withUnsafeBytes(of: &raw) { Data($0.prefix(while: { $0 != 0 })) }
-            guard let name = String(data: bytes, encoding: .utf8) else {
+            let name: String
+            do { name = try DarwinDirectoryEntry.name(entry) }
+            catch {
                 throw CleanupFailure.refused(String(localized: "A filename could not be displayed without changing its bytes."))
             }
             if name == "." || name == ".." { continue }

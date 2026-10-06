@@ -78,6 +78,8 @@ require(bool(sources), "No Swift app sources found")
 # execution entry points remain forbidden. The supervisor is audited separately.
 for path in sources:
     text = path.read_text()
+    require(".pointee.d_name" not in text,
+            f"Packed Darwin directory names must use the bounded decoder, not a full tuple copy: {path.relative_to(ROOT)}")
     for pattern in (r"\b(?:Process|NSTask|NSAppleScript)\s*\(",
                     r"\b(?:posix_spawn\w*|execve|execv|popen)\s*\(",
                     r"(?<![.\w])system\s*\(", r"\b(?:Darwin|Glibc)\.system\s*\(",

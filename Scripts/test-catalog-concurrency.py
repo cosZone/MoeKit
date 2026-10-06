@@ -153,7 +153,7 @@ def main():
         # scanner-anchoring change; compiling it does not exercise real discovery.
         anchored = ROOT / "Sources/Services/AnchoredDirectory.swift"
         if anchored.exists():
-            sources.append(str(anchored))
+            sources.extend([str(anchored), "Sources/Services/DarwinDirectoryEntry.swift"])
         flags = ["-Onone"] if args.configuration == "debug" else ["-O"]
         if args.configuration == "asan":
             flags += ["-sanitize=address"]

@@ -11636,6 +11636,356 @@
           }
         }
       }
+    },
+    "%@ (partial)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@（部分）"
+          }
+        }
+      }
+    },
+    "%@ at %@: %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@（%@）：%@"
+          }
+        }
+      }
+    },
+    "%lld of %lld items": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld / %lld 个项目"
+          }
+        }
+      }
+    },
+    "A Git or protected project location overlaps this folder.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Git 或受保护的项目位置与此文件夹重叠。"
+          }
+        }
+      }
+    },
+    "A different volume was skipped at %@. Its contents are not included.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已跳过 %@ 处的其他卷，其内容未计入。"
+          }
+        }
+      }
+    },
+    "A special filesystem item has no regular-file size: %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "特殊文件系统项目没有常规文件大小：%@"
+          }
+        }
+      }
+    },
+    "A symbolic link was skipped at %@. Its target was not followed.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已跳过 %@ 处的符号链接，未读取其指向的内容。"
+          }
+        }
+      }
+    },
+    "Cache folder validation": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缓存目录检查"
+          }
+        }
+      }
+    },
+    "Cannot verify Git ancestry at %@: %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法验证 %@ 的 Git 上级目录：%@"
+          }
+        }
+      }
+    },
+    "Cannot verify protected location %@: %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法验证受保护位置 %@：%@"
+          }
+        }
+      }
+    },
+    "Checking cleanup eligibility…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在检查清理条件…"
+          }
+        }
+      }
+    },
+    "Cleanup folder validation": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清理目录检查"
+          }
+        }
+      }
+    },
+    "Cleanup validation could not be completed: %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法完成清理检查：%@"
+          }
+        }
+      }
+    },
+    "Cloud metadata validation": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "云端元数据检查"
+          }
+        }
+      }
+    },
+    "Complete cleanup manifest": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完整清理清单检查"
+          }
+        }
+      }
+    },
+    "Complete deletion manifest": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完整删除清单检查"
+          }
+        }
+      }
+    },
+    "Final protection validation": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最终保护检查"
+          }
+        }
+      }
+    },
+    "Git metadata was found in a containing folder: %@. Cleanup remains protected.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在上级文件夹 %@ 中发现 Git 元数据，仍不允许清理。"
+          }
+        }
+      }
+    },
+    "Measuring readable file sizes…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在统计可读取的文件大小…"
+          }
+        }
+      }
+    },
+    "Metadata could not be completely read at %@: %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法完整读取 %@ 的元数据：%@"
+          }
+        }
+      }
+    },
+    "Project catalog protection": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "项目目录保护检查"
+          }
+        }
+      }
+    },
+    "Protected location parent": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "受保护位置的上级目录检查"
+          }
+        }
+      }
+    },
+    "Protected-path validation": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "受保护路径检查"
+          }
+        }
+      }
+    },
+    "Readable sizes remain available for protected items. Partial sizes include only inspected file metadata; no link targets are followed.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "受保护项目也会显示可读取的大小。部分大小仅包含已检查的文件元数据，不跟随链接目标。"
+          }
+        }
+      }
+    },
+    "Size is partial because the read-only scan reached its time, entry, or depth limit.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "只读扫描已达到时间、条目数或深度上限，当前大小为部分结果。"
+          }
+        }
+      }
+    },
+    "The folder changed during the scan: %@. Scan again for a current size.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "扫描期间文件夹发生变化：%@。重新扫描可获取当前大小。"
+          }
+        }
+      }
+    },
+    "The open-folder limit was reached at %@. The size is partial.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在 %@ 处达到同时打开文件夹的上限，大小为部分结果。"
+          }
+        }
+      }
+    },
+    "The path could not be opened without following links, or its identity changed.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法在不跟随链接的情况下打开路径，或其身份已发生变化。"
+          }
+        }
+      }
+    },
+    "The protected location is a link or unsupported object: %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "受保护位置为链接或不支持的对象：%@"
+          }
+        }
+      }
+    },
+    "This check found unsupported ownership, permissions, ACL, file flags, or volume metadata.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此项检查发现不支持的所有权、权限、ACL、文件标志或卷元数据。"
+          }
+        }
+      }
+    },
+    "Trash deletion eligibility": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "废纸篓删除条件检查"
+          }
+        }
+      }
+    },
+    "Why some items are unavailable": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看不可用原因"
+          }
+        }
+      }
+    },
+    "Write-access ACL validation": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "写入权限 ACL 检查"
+          }
+        }
+      }
+    },
+    "macOS denied read access to %@. Readable sizes are retained; inspect this location in Finder if needed.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "macOS 拒绝读取 %@。已保留可读部分的大小；需要时可在访达中检查该位置。"
+          }
+        }
+      }
+    },
+    "Only the first %lld items are listed. Inspect the remaining items in Finder.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅列出前 %lld 个项目。其余项目可在访达中检查。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

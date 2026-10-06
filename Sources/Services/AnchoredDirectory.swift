@@ -208,9 +208,9 @@ final class AnchoredDirectory {
                     if errno != 0 { throw AnchoredDirectory.posixError() }
                     return nil
                 }
-                guard let name = withUnsafeBytes(of: entry.pointee.d_name, { bytes in
-                    String(validatingCString: bytes.baseAddress!.assumingMemoryBound(to: CChar.self))
-                }) else { throw AccessError.invalidComponent }
+                let name: String
+                do { name = try DarwinDirectoryEntry.name(entry) }
+                catch { throw AccessError.invalidComponent }
                 if name != "." && name != ".." { return name }
             }
         }

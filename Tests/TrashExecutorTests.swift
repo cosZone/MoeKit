@@ -259,6 +259,23 @@ struct TrashExecutorTests {
         #expect(records.count == 1 && records.first?.record == nil && records.first?.issue != nil)
         try f.verifySentinel()
     }
+    @Test("A capped top-level listing retains readable selected items but cannot clear the whole snapshot")
+    func cappedListing() async throws {
+        let f = try TrashFixture(), executor = f.executor(), scope = context
+        for index in 0...NativeTrashExecutor.maximumItems { _ = try f.file("item-\(index)") }
+        let report = try await executor.inspect(context: scope)
+        #expect(report.items.count == NativeTrashExecutor.maximumItems)
+        #expect(!report.listingIsComplete && !report.canClearSnapshot && !report.issues.isEmpty)
+        let first = try #require(report.items.first)
+        #expect(first.logicalBytes == Int64(f.marker.count) && first.isEligible)
+        let selected = try await executor.prepare(inspectionID: report.id, selectedPaths: [first.id], action: .selectedItems, context: scope)
+        #expect(selected.items.count == 1)
+        await #expect(throws: (any Error).self) {
+            try await executor.prepare(inspectionID: report.id, selectedPaths: Set(report.items.map(\.id)), action: .clearSnapshot, context: scope)
+        }
+        #expect(!FileManager.default.fileExists(atPath: f.recovery.path))
+        try f.verifySentinel()
+    }
     @Test("Vaults, credential descendants, Git metadata and nonprivate roots remain visible but not deletable")
     func protectedContent() async throws {
         let f = try TrashFixture(), vault = try f.file("personal.vault"), tree = try f.folder("with-secret"), git = try f.folder("repository"), scope = context
@@ -271,7 +288,9 @@ struct TrashExecutorTests {
             try await executor.prepare(inspectionID: report.id, selectedPaths: [vault.path], action: .selectedItems, context: scope)
         }
         try #require(chmod(f.trash.path, 0o755) == 0)
-        await #expect(throws: (any Error).self) { try await f.executor().inspect(context: scope) }
+        let readable = try await f.executor().inspect(context: scope)
+        #expect(readable.items.allSatisfy { !$0.isEligible })
+        #expect(readable.items.first(where: { $0.url == vault })?.logicalBytes == Int64(f.marker.count))
     }
     @Test("Symlink ancestors and production scope injection are refused without inspecting real Trash")
     func productionScopeGuard() async throws {
@@ -292,6 +311,7 @@ struct TrashExecutorTests {
         try #require(acl_set_fd_np(fd, acl, ACL_TYPE_EXTENDED) == 0)
         let report = try await f.executor().inspect(context: scope)
         #expect(report.items.count == 1 && report.items.first?.isEligible == false)
+        #expect(report.items.first?.logicalBytes == Int64(f.marker.count))
         #expect(try Data(contentsOf: file) == f.marker)
         #expect(!FileManager.default.fileExists(atPath: f.recovery.path))
     }

@@ -44,7 +44,9 @@ final class GitCleanupCapture {
             guard let next = readdir(stream) else {
                 guard errno == 0 else { throw GitCleanupFailure.changed }; break
             }
-            guard let name = withUnsafeBytes(of: next.pointee.d_name, { String(validatingCString: $0.baseAddress!.assumingMemoryBound(to: CChar.self)) }) else { throw GitCleanupFailure.unsupported }
+            let name: String
+            do { name = try DarwinDirectoryEntry.name(next) }
+            catch { throw GitCleanupFailure.unsupported }
             if name == "." || name == ".." || (prefix.isEmpty && skip.contains(name)) { continue }
             try Task.checkCancellation()
             count += 1

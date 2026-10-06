@@ -26,8 +26,13 @@ struct TrashItem: Identifiable, Equatable, Sendable {
     let manifest: CleanupManifest?
     let modifiedAt: Date?
     let blocker: String?
+    var sizeEstimate: DiskUsageEstimate? = nil
     var isEligible: Bool { manifest != nil && blocker == nil }
-    var logicalBytes: Int64? { manifest?.logicalBytes }
+    var logicalBytes: Int64? { manifest?.logicalBytes ?? sizeEstimate?.logicalBytes }
+    var displayedSize: String {
+        if let manifest { return ByteCountFormatter.string(fromByteCount: manifest.logicalBytes, countStyle: .file) }
+        return sizeEstimate?.formattedSize ?? String(localized: "Unknown")
+    }
     // Finder's private put-back metadata is not a supported original-path API.
     // Neither the last modified date nor scan time is represented as deletion time.
 }
@@ -39,7 +44,9 @@ struct TrashInspection: Identifiable, Equatable, Sendable {
     let context: TrashContext
     let observedAt: Date
     let rootExists: Bool
-    var canClearSnapshot: Bool { !items.isEmpty && items.allSatisfy(\.isEligible) }
+    var listingIsComplete = true
+    var issues: [String] = []
+    var canClearSnapshot: Bool { listingIsComplete && !items.isEmpty && items.allSatisfy(\.isEligible) }
 }
 
 struct TrashRemovalPlan: Identifiable, Equatable, Sendable {
@@ -110,10 +117,17 @@ struct TrashRecoveryItem: Identifiable, Sendable {
 
 protocol TrashExecuting: Sendable {
     func inspect(context: TrashContext) async throws -> TrashInspection
+    func inspect(context: TrashContext, progress: @escaping @Sendable (DirectoryScanProgress) -> Void) async throws -> TrashInspection
     func prepare(inspectionID: UUID, selectedPaths: Set<String>, action: TrashRemovalPlan.Action, context: TrashContext) async throws -> TrashRemovalPlan
     func discardPlan() async
     func remove(planID: UUID, context: TrashContext, progress: @escaping @Sendable (TrashProgress) -> Void) async throws -> TrashOutcome
     func readRecords() async throws -> [TrashRecoveryItem]
+}
+
+extension TrashExecuting {
+    func inspect(context: TrashContext, progress: @escaping @Sendable (DirectoryScanProgress) -> Void) async throws -> TrashInspection {
+        try await inspect(context: context)
+    }
 }
 
 enum TrashFailure: Error, LocalizedError, Sendable {

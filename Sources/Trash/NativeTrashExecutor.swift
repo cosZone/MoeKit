@@ -26,10 +26,12 @@ actor NativeTrashExecutor: TrashExecuting {
     func discardPlan() { prepared = nil }
 
     func inspect(context: TrashContext) throws -> TrashInspection {
+        try inspect(context: context, progress: { _ in })
+    }
+    func inspect(context: TrashContext, progress: @escaping @Sendable (DirectoryScanProgress) -> Void) throws -> TrashInspection {
         guard !busy else { throw TrashFailure.busy }
         prepared = nil; inspection = nil
-        let home: InstallerDirectoryAnchor
-        do { home = try verifiedHome() } catch { throw TrashFailure.unavailable }
+        let home = try verifiedHome(readOnly: true)
         var status = stat()
         if fstatat(home.fd, environment.trash.lastPathComponent, &status, AT_SYMLINK_NOFOLLOW) != 0 {
             guard errno == ENOENT else { throw TrashFailure.unavailable }
@@ -37,33 +39,60 @@ actor NativeTrashExecutor: TrashExecuting {
             inspection = .init(display: display, root: nil)
             return display
         }
-        let root: InstallerDirectoryAnchor
-        do { root = try home.child(environment.trash.lastPathComponent); try validate(root) }
-        catch { throw TrashFailure.unavailable }
-        let names = try CleanupFiles.names(root, limit: Self.maximumItems)
+        let readRoot: AnchoredDirectory
+        do { readRoot = try AnchoredDirectory.selected(environment.trash) }
+        catch is CancellationError { throw CancellationError() }
+        catch { throw CleanupFailure.refused(ReadOnlyDiskInventory.issue(error, at: environment.trash)) }
+        let listing = try ReadOnlyDiskInventory.list(readRoot, limit: Self.maximumItems)
+        let sizeBudget = ReadOnlyDiskInventory.Budget()
+        var estimates: [String: DiskUsageEstimate] = [:], dates: [String: Date] = [:]
+        for (index, name) in listing.names.enumerated() {
+            try Task.checkCancellation()
+            progress(.init(phase: .sizing, finished: index, total: listing.names.count, currentPath: environment.trash.appendingPathComponent(name).path))
+            estimates[name] = try ReadOnlyDiskInventory.estimate(parent: readRoot, name: name, budget: sizeBudget)
+            if let value = try? readRoot.status(name) { dates[name] = Date(timeIntervalSince1970: Double(value.st_mtimespec.tv_sec)) }
+        }
+        var root: InstallerDirectoryAnchor?, sharedBlocker: String?
+        do {
+            let strictRoot = try home.child(environment.trash.lastPathComponent)
+            try validate(strictRoot); root = strictRoot
+        } catch is CancellationError { throw CancellationError() }
+        catch { sharedBlocker = CleanupFiles.inspectionMessage(error, stage: String(localized: "Trash deletion eligibility"), url: environment.trash) }
         let deadline = Date().addingTimeInterval(45)
         var items: [TrashItem] = [], remaining = CleanupFiles.maximumEntries
-        for name in names {
+        for (index, name) in listing.names.enumerated() {
             try Task.checkCancellation()
-            let url = root.url.appendingPathComponent(name)
-            var modified: Date?
-            do {
-                let metadata = try InstallerFileAccess.snapshotAt(root.fd, name)
-                modified = Date(timeIntervalSince1970: Double(metadata.modifiedSeconds))
-                try protect(name)
-                let manifest = try CleanupFiles.manifest(parent: root, name: name, environment: environment.files,
+            let url = environment.trash.appendingPathComponent(name)
+            progress(.init(phase: .checkingEligibility, finished: index, total: listing.names.count, currentPath: url.path))
+            var manifest: CleanupManifest?, blocker = sharedBlocker
+            if let root, blocker == nil {
+                do {
+                    try protect(name)
+                    let value = try CleanupFiles.manifest(parent: root, name: name, environment: environment.files,
                                                          maximumEntries: remaining, deadline: deadline)
-                try CleanupPermanentRemoval.preflight(manifest)
-                remaining -= manifest.itemCount
-                items.append(.init(url: url, manifest: manifest, modifiedAt: modified, blocker: nil))
+                    try CleanupPermanentRemoval.preflight(value)
+                    remaining -= value.itemCount; manifest = value
+                } catch is CancellationError { throw CancellationError() }
+                catch { blocker = CleanupFiles.inspectionMessage(error, stage: String(localized: "Complete deletion manifest"), url: url) }
+            }
+            items.append(.init(url: url, manifest: manifest, modifiedAt: dates[name], blocker: blocker, sizeEstimate: estimates[name]))
+        }
+        if let root {
+            do {
+                try validate(root)
+                if listing.isComplete {
+                    guard listing.names == (try CleanupFiles.names(root, limit: Self.maximumItems)) else { throw TrashFailure.changed }
+                }
             } catch is CancellationError { throw CancellationError() }
             catch {
-                items.append(.init(url: url, manifest: nil, modifiedAt: modified, blocker: TrashFailure.message(error)))
+                let reason = CleanupFiles.inspectionMessage(error, stage: String(localized: "Final protection validation"), url: environment.trash)
+                sharedBlocker = reason
+                items = items.map { .init(url: $0.url, manifest: nil, modifiedAt: $0.modifiedAt, blocker: reason, sizeEstimate: $0.sizeEstimate) }
             }
         }
-        try validate(root)
-        guard names == (try CleanupFiles.names(root, limit: Self.maximumItems)) else { throw TrashFailure.changed }
-        let display = TrashInspection(id: UUID(), rootURL: root.url, items: items, context: context, observedAt: Date(), rootExists: true)
+        progress(.init(phase: .checkingEligibility, finished: listing.names.count, total: listing.names.count, currentPath: nil))
+        let display = TrashInspection(id: UUID(), rootURL: environment.trash, items: items, context: context, observedAt: Date(), rootExists: true,
+            listingIsComplete: listing.isComplete, issues: [listing.issue, sharedBlocker].compactMap { $0 })
         inspection = .init(display: display, root: root)
         return display
     }
@@ -192,7 +221,7 @@ actor NativeTrashExecutor: TrashExecuting {
         }
         return try TrashJournal(environment: environment, create: false, exclusive: false).records()
     }
-    private func verifiedHome() throws -> InstallerDirectoryAnchor {
+    private func verifiedHome(readOnly: Bool = false) throws -> InstallerDirectoryAnchor {
         guard geteuid() != 0, environment.trash.deletingLastPathComponent().path == environment.home.path,
               !environment.trash.lastPathComponent.isEmpty else { throw TrashFailure.unsupported }
         if environment.enforceProductionPolicy {
@@ -202,7 +231,7 @@ actor NativeTrashExecutor: TrashExecuting {
         }
         let home = try InstallerDirectoryAnchor.open(environment.home)
         guard home.identity.uid == geteuid() else { throw TrashFailure.unsupported }
-        if environment.enforceProductionPolicy { try home.validateTrustedMutationAncestry() }
+        if environment.enforceProductionPolicy && !readOnly { try home.validateTrustedMutationAncestry() }
         return home
     }
     private func validate(_ root: InstallerDirectoryAnchor) throws {

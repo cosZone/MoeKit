@@ -101,6 +101,63 @@ struct CleanupExecutorTests {
         #expect(try Data(contentsOf: a.appendingPathComponent("owned.bin")) == f.marker)
         try f.sentinelUnchanged()
     }
+    @Test("Unreadable unrelated Trash does not prevent cache inspection or preparation")
+    func unrelatedTrashReadDenial() async throws {
+        let f = try CacheFixture(), a = try f.folder("MiniLauncher"), executor = f.executor(), context = f.context
+        try #require(chmod(f.trash.path, 0o000) == 0)
+        defer { _ = chmod(f.trash.path, 0o700) }
+        let blockedOpen = open(f.trash.path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
+        if blockedOpen >= 0 { close(blockedOpen) }
+        try #require(blockedOpen < 0) // This is an unreadable owned fixture, not real Trash.
+        let report = try await executor.inspect(root: f.caches, context: context)
+        let row = try #require(report.candidates.first)
+        #expect(row.isEligible)
+        #expect(row.sizeEstimate?.logicalBytes == Int64(f.marker.count))
+        let plan = try await executor.prepare(inspectionID: report.id, selectedPaths: [a.path], context: context)
+        #expect(plan.targets.count == 1)
+        #expect(!FileManager.default.fileExists(atPath: f.recovery.path))
+        try f.sentinelUnchanged()
+    }
+    @Test("Protected no-follow metadata still rejects direct, containing, and contained overlaps")
+    func protectedMetadataOverlap() throws {
+        let f = try CacheFixture(), a = try f.folder("cache")
+        let nested = a.appendingPathComponent("private")
+        try FileManager.default.createDirectory(at: nested, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o000])
+        defer { _ = chmod(nested.path, 0o700) }
+        for path in [a.path, f.caches.path, nested.path] {
+            #expect(throws: (any Error).self) { try CleanupFiles.protect(a, paths: [path]) }
+        }
+        let alias = f.base.appendingPathComponent("protected-alias")
+        try #require(symlink(nested.path, alias.path) == 0)
+        #expect(throws: (any Error).self) { try CleanupFiles.protect(a, paths: [alias.path]) }
+        try f.sentinelUnchanged()
+    }
+    @Test("A candidate's mutable ACL does not erase its readable size or authorize cleanup")
+    func aclReadOnlySize() async throws {
+        let f = try CacheFixture(), a = try f.folder("readable-cache")
+        let fd = open(a.path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
+        try #require(fd >= 0); defer { close(fd) }
+        let acl = try #require(acl_from_text("!#acl 1\ngroup:ABCDEFAB-CDEF-ABCD-EFAB-CDEF0000000C:::allow:write\n"))
+        defer { acl_free(UnsafeMutableRawPointer(acl)) }
+        try #require(acl_set_fd_np(fd, acl, ACL_TYPE_EXTENDED) == 0)
+        let report = try await f.executor().inspect(root: f.caches, context: f.context)
+        #expect(report.candidates.first?.isEligible == false)
+        #expect(report.candidates.first?.sizeEstimate?.logicalBytes == Int64(f.marker.count))
+        #expect(report.candidates.first?.blocker?.contains(a.path) == true)
+        #expect(!FileManager.default.fileExists(atPath: f.recovery.path))
+    }
+    @Test("A writeable home ancestor affects cleanup eligibility, not metadata size")
+    func ancestryReadOnlySize() async throws {
+        let f = try CacheFixture(), a = try f.folder("readable-cache")
+        try #require(chmod(f.base.path, 0o777) == 0)
+        defer { _ = chmod(f.base.path, 0o700) }
+        let env = CleanupEnvironment(home: f.base, caches: f.caches, recovery: f.recovery, trash: f.trash, enforceProductionPolicy: true)
+        let report = try await NativeCleanupExecutor(environment: env).inspect(root: f.caches, context: f.context)
+        #expect(report.candidates.first?.isEligible == false)
+        #expect(report.candidates.first?.sizeEstimate?.logicalBytes == Int64(f.marker.count))
+        #expect(try Data(contentsOf: a.appendingPathComponent("owned.bin")) == f.marker)
+        #expect(!FileManager.default.fileExists(atPath: f.recovery.path))
+    }
     @Test("Batch moves only selected caches and independently confirmed restore preserves neighbors")
     func batchRestore() async throws {
         let f = try CacheFixture(), a = try f.folder("cache a"), b = try f.folder("cache b"), neighbor = try f.folder("unselected")
@@ -152,7 +209,10 @@ struct CleanupExecutorTests {
     func contextGuards() async throws {
         let f = try CacheFixture(), a = try f.folder("cache"), executor = f.executor()
         let unknown = CleanupContext(generation: UUID(), protectedPaths: [], catalogIsKnown: false)
-        await #expect(throws: (any Error).self) { try await executor.inspect(root: f.caches, context: unknown) }
+        let unknownReport = try await executor.inspect(root: f.caches, context: unknown)
+        #expect(unknownReport.candidates.first?.isEligible == false)
+        #expect(unknownReport.candidates.first?.sizeEstimate?.logicalBytes == Int64(f.marker.count))
+        await #expect(throws: (any Error).self) { try await executor.prepare(inspectionID: unknownReport.id, selectedPaths: [a.path], context: unknown) }
         let protected = CleanupContext(generation: UUID(), protectedPaths: [a.path], catalogIsKnown: true)
         let report = try await executor.inspect(root: f.caches, context: protected)
         #expect(report.candidates.first?.isEligible == false)
@@ -177,7 +237,9 @@ struct CleanupExecutorTests {
         try #require(symlink(f.caches.path, alias.path) == 0)
         await #expect(throws: (any Error).self) { try await executor.inspect(root: alias, context: f.context) }
         try f.marker.write(to: f.base.appendingPathComponent(".git"), options: .withoutOverwriting)
-        await #expect(throws: (any Error).self) { try await executor.inspect(root: f.caches, context: f.context) }
+        let report = try await executor.inspect(root: f.caches, context: f.context)
+        #expect(report.candidates.first?.isEligible == false)
+        #expect(report.candidates.first?.sizeEstimate?.logicalBytes == Int64(f.marker.count))
     }
     @Test("Tagged caches below bare Git repositories remain protected")
     func bareGitAncestor() async throws {
@@ -187,7 +249,9 @@ struct CleanupExecutorTests {
         for name in ["objects", "refs"] {
             try FileManager.default.createDirectory(at: f.base.appendingPathComponent(name), withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
         }
-        await #expect(throws: (any Error).self) { try await executor.inspect(root: f.caches, context: f.context) }
+        let report = try await executor.inspect(root: f.caches, context: f.context)
+        #expect(report.candidates.first?.isEligible == false)
+        #expect(report.candidates.first?.sizeEstimate?.logicalBytes == Int64(f.marker.count + CleanupFiles.cacheSignature.count))
         #expect(try Data(contentsOf: a.appendingPathComponent("owned.bin")) == f.marker)
         #expect(!FileManager.default.fileExists(atPath: f.recovery.path))
     }

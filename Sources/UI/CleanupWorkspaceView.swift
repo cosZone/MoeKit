@@ -37,6 +37,7 @@ struct CleanupWorkspaceView: View {
                         Text("Cancel stops before the next mutation when possible. A started native operation may finish; its actual per-item outcomes and recovery records remain available.")
                             .font(.caption).foregroundStyle(.secondary)
                     }
+                    if let progress = store.scanProgress { DiskInventoryProgressView(progress: progress) }
                     if let error = store.errorMessage { warning(error) }
                     if let inspection = store.inspection { candidates(inspection) }
                     if let plan = store.plan { trashConfirmation(plan) }
@@ -102,6 +103,7 @@ struct CleanupWorkspaceView: View {
             VStack(alignment: .leading, spacing: 10) {
                 Text("2. Select caches").font(.headline)
                 Text(inspection.observedAt, format: .dateTime).font(.caption).foregroundStyle(.secondary)
+                ForEach(inspection.issues, id: \.self) { warning($0) }
                 if inspection.candidates.isEmpty {
                     Text("No eligible cache candidates were found in this folder. This does not prove the folder is empty.")
                         .foregroundStyle(.secondary)
@@ -114,8 +116,8 @@ struct CleanupWorkspaceView: View {
                                 .lineLimit(1).help(InstallerPathDisplay.quoted(candidate.url.path))
                         }.width(min: 130, ideal: 180)
                         TableColumn("Logical size") { candidate in
-                            if let manifest = candidate.manifest { Text(size(manifest.logicalBytes)).monospacedDigit() }
-                            else { Text("Unknown").foregroundStyle(.secondary) }
+                            Text(candidate.displayedSize).monospacedDigit()
+                                .help(candidate.sizeEstimate?.issues.joined(separator: "\n") ?? "")
                         }.width(min: 100, ideal: 130)
                         TableColumn("Review status") { candidate in
                             Label(candidate.blocker ?? candidate.evidence,
@@ -129,6 +131,21 @@ struct CleanupWorkspaceView: View {
                     .accessibilityLabel("Cache candidates, select one or more eligible rows")
                     ForEach(inspection.candidates.filter { store.selectedPaths.contains($0.id) }) { candidate in
                         path("Selected cache", candidate.url)
+                    }
+                }
+                Text("Readable sizes remain available for protected items. Partial sizes include only inspected file metadata; no link targets are followed.")
+                    .font(.caption).foregroundStyle(.secondary)
+                if inspection.candidates.contains(where: { $0.blocker != nil || $0.sizeEstimate?.isComplete == false }) {
+                    DisclosureGroup("Why some items are unavailable") {
+                        LazyVStack(alignment: .leading, spacing: 10) {
+                            ForEach(inspection.candidates.filter { $0.blocker != nil || $0.sizeEstimate?.isComplete == false }) { item in
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(InstallerPathDisplay.quoted(item.url.path)).fontWeight(.medium)
+                                    if let blocker = item.blocker { Text(blocker) }
+                                    ForEach(item.sizeEstimate?.issues ?? [], id: \.self) { Text($0) }
+                                }.textSelection(.enabled)
+                            }
+                        }.font(.caption).padding(.top, 6)
                     }
                 }
                 HStack {

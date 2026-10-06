@@ -32,7 +32,18 @@ enum CleanupFiles {
             throw CleanupFailure.refused(String(localized: "Choose a cache location inside your own home folder."))
         }
         try validateNamespace(root, environment: environment)
-        try root.rejectGitAncestors()
+        var ancestor: InstallerDirectoryAnchor? = root
+        while let node = ancestor {
+            var metadata = stat()
+            if fstatat(node.fd, ".git", &metadata, AT_SYMLINK_NOFOLLOW) == 0 {
+                throw CleanupFailure.refused(String(localized: "Git metadata was found in a containing folder: \(InstallerPathDisplay.quoted(node.url.path)). Cleanup remains protected."))
+            }
+            guard errno == ENOENT else {
+                let reason = NSError(domain: NSPOSIXErrorDomain, code: Int(errno)).localizedDescription
+                throw CleanupFailure.refused(String(localized: "Cannot verify Git ancestry at \(InstallerPathDisplay.quoted(node.url.path)): \(reason)"))
+            }
+            ancestor = node.parent
+        }
         try rejectBareGitAncestors(root)
         try validateObject(root.identity, expectedDevice: root.identity.device, kind: .directory)
         if environment.enforceProductionPolicy { try InstallerFileAccess.validateVolume(root.fd, url: root.url) }
@@ -66,9 +77,9 @@ enum CleanupFiles {
                 guard errno == 0 else { throw CleanupFailure.changed }
                 break
             }
-            var raw = entry.pointee.d_name
-            let bytes = withUnsafeBytes(of: &raw) { Data($0.prefix(while: { $0 != 0 })) }
-            guard let name = String(data: bytes, encoding: .utf8) else {
+            let name: String
+            do { name = try DarwinDirectoryEntry.name(entry) }
+            catch {
                 throw CleanupFailure.refused(String(localized: "A filename could not be displayed without changing its bytes."))
             }
             if name == "." || name == ".." { continue }
@@ -118,16 +129,29 @@ enum CleanupFiles {
             if lstat(url.path, &metadata) != 0 {
                 // Missing protected roots confer no inode, but lexical protection
                 // above remains. Permission errors never silently clear scope.
-                guard errno == ENOENT else { throw CleanupFailure.changed }
+                guard errno == ENOENT else {
+                    let reason = NSError(domain: NSPOSIXErrorDomain, code: Int(errno)).localizedDescription
+                    throw CleanupFailure.refused(String(localized: "Cannot verify protected location \(InstallerPathDisplay.quoted(url.path)): \(reason)"))
+                }
                 continue
             }
-            let protectedDirectory: InstallerDirectoryAnchor
-            if metadata.st_mode & mode_t(S_IFMT) == mode_t(S_IFDIR) {
-                protectedDirectory = try InstallerDirectoryAnchor.open(url)
-            } else {
-                // Protect the parent of metadata files and reject symlink aliases.
-                guard metadata.st_mode & mode_t(S_IFMT) == mode_t(S_IFREG) else { throw CleanupFailure.changed }
-                protectedDirectory = try InstallerDirectoryAnchor.open(url.deletingLastPathComponent())
+            // Comparing overlap requires the protected object's identity, not
+            // permission to enumerate its contents. In particular, macOS may
+            // allow lstat(~/.Trash) while refusing open(~/.Trash). Do not make
+            // every unrelated user cache depend on access to Trash contents.
+            let parent: InstallerDirectoryAnchor
+            do { parent = try InstallerDirectoryAnchor.open(url.deletingLastPathComponent()) }
+            catch { throw CleanupFailure.refused(inspectionMessage(error, stage: String(localized: "Protected location parent"), url: url.deletingLastPathComponent())) }
+            // Keep the descriptor owner alive through the final borrowed-fd
+            // snapshot as well, including optimized Release/ASan builds.
+            defer { withExtendedLifetime(parent) {} }
+            let named = try InstallerFileAccess.snapshotAt(parent.fd, url.lastPathComponent)
+            let protectedIdentity: InstallerFileSnapshot
+            switch named.mode & UInt32(S_IFMT) {
+            case UInt32(S_IFDIR): protectedIdentity = named
+            case UInt32(S_IFREG): protectedIdentity = parent.identity // Metadata file protects its entire containing folder.
+            default:
+                throw CleanupFailure.refused(String(localized: "The protected location is a link or unsupported object: \(InstallerPathDisplay.quoted(url.path))"))
             }
             func containsIdentity(_ chain: InstallerDirectoryAnchor, _ identity: InstallerFileSnapshot) -> Bool {
                 var current: InstallerDirectoryAnchor? = chain
@@ -137,13 +161,30 @@ enum CleanupFiles {
                 }
                 return false
             }
-            guard !containsIdentity(candidate, protectedDirectory.identity), !containsIdentity(protectedDirectory, selectedIdentity) else {
+            guard !containsIdentity(candidate, protectedIdentity),
+                  !containsIdentity(parent, selectedIdentity),
+                  !(named.device == selectedIdentity.device && named.inode == selectedIdentity.inode) else {
                 throw CleanupFailure.refused(String(localized: "A saved project, worktree, or protected control location overlaps this cache."))
             }
-            try protectedDirectory.validate()
+            try parent.validate()
+            let after = try InstallerFileAccess.snapshotAt(parent.fd, url.lastPathComponent)
+            guard named.mode & UInt32(S_IFMT) == UInt32(S_IFDIR) ? named.matchesDirectory(after) : named == after else { throw CleanupFailure.changed }
         }
         try candidate.validate()
     }
+    static func inspectionMessage(_ error: any Error, stage: String, url: URL) -> String {
+        let reason: String
+        if let failure = error as? InstallerTrashFailure {
+            switch failure {
+            case .protected: reason = String(localized: "A Git or protected project location overlaps this folder.")
+            case .changed: reason = String(localized: "The path could not be opened without following links, or its identity changed.")
+            case .unsupported: reason = String(localized: "This check found unsupported ownership, permissions, ACL, file flags, or volume metadata.")
+            default: reason = failure.localizedDescription
+            }
+        } else { reason = error.localizedDescription }
+        return String(localized: "\(stage) at \(InstallerPathDisplay.quoted(url.path)): \(reason)")
+    }
+
     private static func foldedComponent(_ value: String) -> String {
         value.decomposedStringWithCanonicalMapping.folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: Locale(identifier: "en_US_POSIX"))
     }
@@ -157,8 +198,10 @@ enum CleanupFiles {
             try node.validate()
             let before = try InstallerFileAccess.snapshot(node.fd)
             try validateObject(before, expectedDevice: directory.identity.device, kind: .directory)
-            try InstallerFileAccess.rejectMutationGrantingACL(node.fd)
-            try InstallerFileAccess.rejectCloudAttributes(node.fd)
+            do { try InstallerFileAccess.rejectMutationGrantingACL(node.fd) }
+            catch { throw CleanupFailure.refused(inspectionMessage(error, stage: String(localized: "Write-access ACL validation"), url: node.url)) }
+            do { try InstallerFileAccess.rejectCloudAttributes(node.fd) }
+            catch { throw CleanupFailure.refused(inspectionMessage(error, stage: String(localized: "Cloud metadata validation"), url: node.url)) }
             let childNames = try names(node, limit: maximumEntries - entries.count, honorCancellation: honorCancellation)
             // Never delete repository objects, worktree metadata, or a copied
             // credential file merely because a parent says it is a cache.
@@ -185,8 +228,10 @@ enum CleanupFiles {
                     try validateObject(identity, expectedDevice: directory.identity.device, kind: .file)
                     let file = try InstallerFileDescriptor(parent: node, name: name)
                     guard identity == (try InstallerFileAccess.snapshot(file.fd)) else { throw CleanupFailure.changed }
-                    try InstallerFileAccess.rejectMutationGrantingACL(file.fd)
-                    try InstallerFileAccess.rejectCloudAttributes(file.fd)
+                    do { try InstallerFileAccess.rejectMutationGrantingACL(file.fd) }
+                    catch { throw CleanupFailure.refused(inspectionMessage(error, stage: String(localized: "Write-access ACL validation"), url: node.url.appendingPathComponent(name))) }
+                    do { try InstallerFileAccess.rejectCloudAttributes(file.fd) }
+                    catch { throw CleanupFailure.refused(inspectionMessage(error, stage: String(localized: "Cloud metadata validation"), url: node.url.appendingPathComponent(name))) }
                     guard identity == (try InstallerFileAccess.snapshotAt(node.fd, name)) else { throw CleanupFailure.changed }
                     let sum = bytes.addingReportingOverflow(identity.bytes)
                     guard !sum.overflow else { throw CleanupFailure.limit }

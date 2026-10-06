@@ -26,6 +26,7 @@ final class CleanupStore {
         didSet { UpdateInstallationSafety.shared.changed(self) }
     }
     private(set) var isCancelling = false
+    private(set) var scanProgress: DirectoryScanProgress?
     private(set) var errorMessage: String?
     private(set) var lastMutationError: String?
     private(set) var lastOutcome: CleanupOutcome?
@@ -53,8 +54,8 @@ final class CleanupStore {
 
     var candidates: [CleanupCandidate] { inspection?.candidates ?? [] }
     var receipts: [CleanupReceipt] { recoveryItems.compactMap(\.receipt) }
-    var canInspect: Bool { isEnabled && !isBusy && !isDemoEnabled && catalogIsKnown && rootURL != nil }
-    var canPrepare: Bool { canInspect && inspection != nil && !selectedPaths.isEmpty }
+    var canInspect: Bool { isEnabled && !isBusy && !isDemoEnabled && rootURL != nil }
+    var canPrepare: Bool { canInspect && catalogIsKnown && inspection != nil && !selectedPaths.isEmpty }
     var canReadRecovery: Bool { isEnabled && !isBusy && !isDemoEnabled }
 
     /// Read current workspace state before queued work and confirmations too;
@@ -107,7 +108,14 @@ final class CleanupStore {
             do {
                 await priorDiscard?.value
                 try Task.checkCancellation()
-                let result = try await executor.inspect(root: rootURL, context: scope)
+                let result = try await executor.inspect(root: rootURL, context: scope) { [weak self] value in
+                    Task { @MainActor [weak self] in
+                        guard let self else { return }; self.synchronizeContext()
+                        guard self.activeRequest == request, self.revision == expected,
+                              self.context == scope, !self.isDemoEnabled, !self.isCancelling else { return }
+                        self.scanProgress = value
+                    }
+                }
                 try Task.checkCancellation()
                 guard let self else { return }
                 self.synchronizeContext()
@@ -285,6 +293,7 @@ final class CleanupStore {
     }
     private func synchronizeContext() { if let contextProvider { updateContext(contextProvider()) } }
     private func invalidate(clearInspection: Bool) {
+        scanProgress = nil
         revision = UUID(); plan = nil; recoveryPlan = nil
         workloadsStopped = false; contentRegenerable = false; irreversibleDeletionAccepted = false; errorMessage = nil
         if clearInspection { inspection = nil; selectedPaths = [] }
@@ -296,12 +305,12 @@ final class CleanupStore {
     }
     private func expire() { invalidate(clearInspection: false); errorMessage = CleanupFailure.expired.errorDescription }
     private func begin() -> UUID {
-        let id = UUID(); activeRequest = id; isBusy = true; isCancelling = false
+        let id = UUID(); activeRequest = id; isBusy = true; isCancelling = false; scanProgress = nil
         return id
     }
     private func finish(_ id: UUID) {
         guard activeRequest == id else { return }
-        task = nil; activeRequest = nil; isBusy = false; isCancelling = false
+        task = nil; activeRequest = nil; isBusy = false; isCancelling = false; scanProgress = nil
     }
     private func fail(_ error: any Error, request: UUID, expected: UUID) {
         synchronizeContext()

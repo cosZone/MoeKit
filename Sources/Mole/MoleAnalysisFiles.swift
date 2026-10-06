@@ -278,9 +278,9 @@ final class MolePrivateSession {
         }
         defer { closedir(stream) }
         while let entry = readdir(stream) {
-            let name = withUnsafePointer(to: &entry.pointee.d_name) {
-                $0.withMemoryRebound(to: CChar.self, capacity: Int(entry.pointee.d_namlen) + 1) { String(cString: $0) }
-            }
+            let name: String
+            do { name = try DarwinDirectoryEntry.name(entry) }
+            catch { throw MoleAnalysisFailure.cleanupIncomplete }
             if name == "." || name == ".." { continue }
             remaining -= 1
             guard remaining >= 0 else { throw MoleAnalysisFailure.cleanupIncomplete }

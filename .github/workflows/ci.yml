@@ -410,6 +410,8 @@ jobs:
                         -only-testing:MoeKitTests/GitWorktreeFinishStoreTests
                         -only-testing:MoeKitTests/GitRemotePushStoreTests
                         -only-testing:MoeKitTests/GitRemotePushValidationTests
+                        -only-testing:MoeKitTests/DarwinDirectoryEntryTests
+                        -only-testing:MoeKitTests/ReadOnlyDiskInventoryTests
                         -only-testing:MoeKitTests/CleanupExecutorTests
                         -only-testing:MoeKitTests/CleanupStoreTests
                         -only-testing:MoeKitTests/TrashExecutorTests
@@ -464,7 +466,7 @@ jobs:
                       "MoleInstallationDiscoveryTests", "MoleSetupStoreTests",
                       "InstallerFileAccessTests", "InstallerTrashExecutorTests", "InstallerUseEvidenceTests", "InstallerTrashStoreTests",
                       "GitPlainIndexTests", "GitCleanupInspectionTests", "GitCleanupAuthorityTests", "GitCleanupStoreTests", "GitCleanupExecutorTests", "GitWorktreeFinishAuthorityTests", "GitWorktreeFinishExecutorTests", "GitWorktreeFinishStoreTests", "GitRemotePushStoreTests", "GitRemotePushValidationTests",
-                      "CleanupExecutorTests", "CleanupStoreTests", "ProcessTerminationTests", "ProcessTerminationStoreTests", "NativeProcessTerminationTests",
+                      "DarwinDirectoryEntryTests", "ReadOnlyDiskInventoryTests", "CleanupExecutorTests", "CleanupStoreTests", "ProcessTerminationTests", "ProcessTerminationStoreTests", "NativeProcessTerminationTests",
                       "ReleaseVersionTests", "ReleaseCheckStoreTests", "ReleaseTransportTests", "AppEntryPointTests", "MenuBarTests",
                       "SparkleUpdateTests", "UpdateInstallationSafetyTests", "AppUpdateTerminationTests")
           if summary.get("passedTests", 0) < 27 or summary.get("failedTests") != 0 or summary.get("skippedTests") != 0:

@@ -1,4 +1,7 @@
 // Original MoeKit fixed Homebrew Mole operation supervisor. No command strings.
+#ifdef __APPLE__
+#define _DARWIN_C_SOURCE 1
+#endif
 #define _POSIX_C_SOURCE 200809L
 #define _XOPEN_SOURCE 700
 #ifdef __linux__

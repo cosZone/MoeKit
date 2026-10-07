@@ -19,7 +19,7 @@ lock.parent.mkdir(parents=True, exist_ok=True)
 shutil.copyfile(source, lock)
 subprocess.run(["xcodebuild", "-resolvePackageDependencies", "-workspace", str(workspace),
                 "-scheme", "MoeKit", "-onlyUsePackageVersionsFromResolvedFile",
-                "-clonedSourcePackagesDir", str(ROOT / "build/NativeSourcePackages")], check=True, cwd=ROOT)
+                "-clonedSourcePackagesDirPath", str(ROOT / "build/NativeSourcePackages")], check=True, cwd=ROOT)
 resolved = json.loads(lock.read_text())["pins"]
 expected_states = {pin["identity"]: pin["state"] for pin in expected}
 actual_states = {pin["identity"]: pin["state"] for pin in resolved}

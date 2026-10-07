@@ -1,60 +1,71 @@
-# Mole analysis: fixed-code execution design
+# Mole analysis: verified-artifact execution design
 
-Status: shipped in [0.1.0-preview.6](https://github.com/cosZone/MoeKit/releases/tag/v0.1.0-preview.6) from reviewed source `20504353f96aaa135c1ba1eaa551301e8d3eb008`. The [release run](https://github.com/cosZone/MoeKit/actions/runs/37201568085) passed exact-version synthetic execution, Release tests, universal archive and separate app/helper certificate-signing checks. Full native interaction, accessibility and real-user permission acceptance remain unverified. Future changes still require exact-commit tests and independent review; this design does not grant execution or release permission.
+This document describes the expanded analysis, compatibility and controlled upgrade design. Each change requires fresh whole-feature review and exact-head native validation before merge/release. The original fixed V1.57.0 analysis path shipped in [preview.6](https://github.com/cosZone/MoeKit/releases/tag/v0.1.0-preview.6); its historical evidence does not validate later implementation changes.
 
 ## Deliberate boundary
 
-The first executable operation is one ordinary-directory analysis by the unmodified, exact pinned upstream Mole V1.57.0 analyzer. It is not `mo`, a shell command, a package manager, a cleanup command, an arbitrary executable selector, or a general plug-in host. Report import stays separate.
+Analysis means one ordinary directory, a verified direct analyzer, fixed arguments, separate per-run confirmation and an owned bounded lifecycle. It is not `mo`, a shell command, overview mode, arbitrary CLI execution or a cleanup command. Report import, metadata-only tool preparation, online provenance verification and Homebrew upgrade are separate operations. See [compatibility and upgrade](Mole-compatibility-and-upgrade.md) and the [beginner guide](Mole-beginner-setup.md).
 
-The analyzer runs with the user's ordinary permissions. This is **not an OS sandbox** and does not promise that all incidental filesystem metadata reads remain below the selected directory. The trust boundary is the reviewed upstream code at `6bca4812acd6a3d54ffe97291734c3556a174057`, exact executable bytes, fixed argv/environment, explicit confirmation, and a bounded owned process lifecycle. No source from Mole is copied into this repository and no Mole executable is bundled with MoeKit.
+The analyzer has ordinary user permissions. This is **not an OS sandbox**, and it does not promise that every incidental metadata read stays below the selected directory. No Mole GPL application/CLI source is copied into MoeKit, and no Mole executable is bundled with the app.
 
-The main invariant is no user-target mutation or deletion. The audited ordinary JSON path calls scanning, `du`, and `mdfind`; interactive cleanup/Finder/open operations are not reachable with the fixed invocation. Cache writes, expiry and pruning are real side effects and run only inside a fresh private HOME created by MoeKit for this invocation. Existing `~/.cache/mole` is neither read nor modified.
+The reviewed catalog contains original official V1.57.0 and V1.58.0 binaries for arm64 and x86_64, plus one exact Homebrew ARM64 1.58.0 binary. Catalog membership means a specific architecture, size and SHA-256 combination. It is not proof of a successful test of the current app. The artifact table and source references are in the compatibility document.
 
-## Reviewed invocation and provenance
+An additional current Homebrew/core major-1 build at or above 1.56.1 can become eligible only through opt-in full-bottle/member verification. Its version remains untested with MoeKit and requires a separate acknowledgement for every analysis. Provenance verifies origin and installed bytes; it does not establish the behavior of an unreviewed build. The ordinary-permissions model cannot enforce the reviewed code's read-only intent on a different future executable. Unsupported major versions, unknown builds and source builds without exact accepted-byte evidence fail closed.
 
-- Opening the analysis sheet performs bounded, read-only discovery at fixed installation locations and auto-selects only an exact verified analyzer. Missing or incompatible installations receive a copy-only pinned download guide and recheck. Manual analyzer selection remains an advanced option; the user chooses one directory. See [beginner setup](Mole-beginner-setup.md). Neither selection starts execution. The `mo` shell wrapper is rejected without executing it. No version/help probe runs.
-- Only these official upstream release assets are admissible, as published at <https://github.com/tw93/Mole/releases/tag/V1.57.0>:
-  - arm64: `analyze-darwin-arm64`, 3,827,474 bytes; SHA-256 `62c6b5076349081a34e60256a1471979f600d74d8f4990745a37d30d6faa00e1`
-  - x86_64: `analyze-darwin-amd64`, 4,022,992 bytes; SHA-256 `cff7d9da8bd18cb3364d566186944b5b14b01e21e5bb4a3d61579f553ea39ad7`
-- A descriptor-based, non-following bounded read checks regular-file type, file identity, permissions, exact bytes and quarantine. Quarantined or changed binaries fail closed. No quarantine removal, re-signing, Gatekeeper override or automatic download/update/install exists.
-- With explicit confirmation, the original executable bytes and security xattrs are copied into a private session directory, verified again, and executed there; this removes the source-path replacement window. The executable's embedded signature is not changed. A temporary copy is disclosed, not silently described as the installed path being executed in place.
-- Fixed argv is `["--json", absoluteSelectedDirectory]`. No overview, interactive mode, command string, `MO_ANALYZE_PATH`, inherited `MOLE_*`, inherited `DYLD_*`, user PATH, shell, custom options or configuration file is accepted.
-- Environment starts empty and supplies only reviewed fixed values: private HOME/TMPDIR, `LC_ALL=C`, `PATH=/usr/bin:/bin`, and bounded Go runtime settings. The two reachable helper basenames resolve to macOS-owned `/usr/bin/du` and `/usr/bin/mdfind`; no project helper or user executable is searched.
-- A fresh HOME changes Mole's special-case home exclusions. Results describe this invocation's filtered scope, not necessarily the output of a terminal invocation with the real HOME.
+## Discovery, provenance and preparation
 
-## Confirmation and report semantics
+- Opening the analysis window triggers only bounded read-only checks of fixed installation locations. Existing managed installations take priority over parallel standalone downloads. Discovery does not search PATH, walk directories, run a wrapper/version/help probe, make network requests or create an analyzer process.
+- Version declarations come from bounded static package metadata or the fixed official wrapper's literal version assignment. They are display hints, not executable identity. Old Homebrew 1.50.0 is detected as installed but lacks the live report coverage contract introduced in 1.56.1.
+- Descriptor-based reads check regular-file type, owner, permissions, identity, size, SHA-256 and quarantine. Final symlinks and unsafe/changed files are rejected. Homebrew ancestor aliases must resolve into the fixed Cellar layout. No quarantine removal, re-signing or Gatekeeper override exists.
+- Online verification is a separate opt-in request to fixed public Homebrew services. It accepts only current core metadata matching the observed keg revision, validates the complete bottle SHA-256 and complete archive, and compares one exact regular analyzer member with a fresh installed observation. Nothing is extracted or executed. Proof is memory-only and expires after one hour; recheck, replacement or mode changes invalidate the selected context.
+- Preparation requires an eligible artifact and chosen directory, binds both identities and creates an immutable review. Analysis confirmation expires after five minutes. Execution repeats identity, artifact eligibility, digest, quarantine and scope checks. Selection and preparation alone do not run anything.
 
-The confirmation shows the selected canonical directory, pinned version/hash, executable source, private session location and limits. It explicitly discloses ordinary user permissions, target-read intent, private executable/cache/temp creation and cleanup, and no cleanup/deletion operation on selected content. Cancel or closing the confirmation creates no process.
+## Fixed invocation and side effects
 
-Each request binds the directory identity and executable observation. Both are checked again at execution. Root-directory/overview requests, scope/cache overlap, stale selections, invalid paths and unsupported versions fail closed.
+With explicit analysis confirmation, verified executable bytes and security xattrs are copied into a fresh private session and verified again before execution. The embedded signature is unchanged. The confirmation discloses the temporary executable, private cache/temp writes and cleanup; it must not imply that the installed path is executed in place.
 
-Completed stdout must be bounded, decode successfully, be non-overview, match the selected root exactly, and contain only canonical direct-child entry paths and descendant large-file paths. Unknown coverage is rejected for live execution, although it remains supported for imports. Duplicates, invalid paths, scope escapes and changed/symlink result identities cannot be shown as a successful live report. Partial or unavailable coverage remains visibly partial/unavailable; it is never silently upgraded to complete. The report is a non-atomic upstream filtered observation, not physical disk use or reclaimable space.
+Fixed argv is `["--json", absoluteSelectedDirectory]`. No overview, interactive mode, command string, custom options, inherited `MOLE_*`, inherited `DYLD_*`, user PATH, shell or user configuration is accepted. The environment starts empty and supplies a private HOME/TMPDIR, `LC_ALL=C`, `PATH=/usr/bin:/bin` and bounded Go runtime settings. The reviewed ordinary JSON path reaches macOS-owned `du` and `mdfind` through that fixed PATH. Existing `~/.cache/mole` is neither read nor intentionally modified by this design; cache expiry/pruning stays within the private HOME.
 
-## Owned lifecycle and cleanup
+A private HOME changes Mole's special home exclusions. Output describes this invocation's filtered scope, not necessarily a terminal invocation with the real HOME. The intended invariant is no selected-content mutation or deletion. Because execution is unsandboxed, a provenance-verified but unreviewed future build does not gain a stronger confinement guarantee.
 
-A bundled original supervisor owns exactly one analyzer child and its dedicated process group. It retains the child PID while group termination is requested, so PID reuse cannot redirect cancellation. It never finds/signals arbitrary processes by name, parentage or unrelated PID. Cancellation, app pipe closure, timeout, output overflow and abnormal exit are terminal and cannot publish a successful report. The supervisor reaps its direct child; it requests SIGKILL for remaining owned group members and drains inherited pipes. It cannot waitpid grandchildren. Synthetic native tests must verify no group helper remains running, and it reports precise terminal failure. It passes closed stdin to the analyzer; interactive input cannot be supplied.
+Root-directory/overview requests, overlap with session storage, stale selections, unsupported artifacts and invalid paths are rejected. Cancel or dismissal before confirmation creates no analyzer process.
 
-Limits include stdout, stderr, elapsed time and CPU time. Child helpers inherit applicable resource limits. Resource limits must be tested for the real Go binary; unsupported hard bounds are documented, never invented. Work runs off MainActor; generation/selection/Demo changes discard stale results and hold ownership until cleanup finishes.
+## Report semantics and downstream authority
 
-Only app-created, descriptor-anchored session files may be removed. Cleanup verifies identities, does not follow symlinks, and refuses uncertainty. No broad path-based recursive removal, user cache pruning or target deletion is implemented by MoeKit.
+Successful process exit alone is insufficient. Bounded stdout must decode as non-overview JSON, match the exact selected root, provide known coverage, and contain canonical direct-child entry paths and descendant large-file paths. Duplicates, scope escapes, invalid paths and changed/symlink result identities cannot become a successful live report. Missing coverage remains unknown for imports; it is rejected for live analysis. Partial/unavailable measurements remain visibly partial/unavailable, never zero or complete.
+
+A report is a non-atomic, filtered observation, not physical disk use or reclaimable space. A result from an acknowledged untested build is view-only: `MoleAnalysisStore` does not issue its live-result UUID and cannot authorize a downstream selected-entry operation. Importing another report, changing selection or rechecking revokes earlier live-result authority, even for identical paths. Reviewed-catalog output does not itself approve any mutation; an independently supported native adapter still needs its own fresh checks and confirmation.
+
+## Owned analyzer lifecycle and cleanup
+
+The original bundled supervisor owns one analyzer child and dedicated process group, retaining the child PID until group termination is requested so reuse cannot redirect cancellation. It never finds or signals arbitrary processes by name. Cancellation, parent pipe closure, time/CPU/output limits and abnormal exit are terminal and cannot publish success. The supervisor reaps its direct child and requests termination of remaining owned group members; it cannot `waitpid` grandchildren or claim control over a descendant that deliberately leaves its group.
+
+Stdin is closed for analysis. Work runs off MainActor. Cancellation, closing the window and Demo/selection generations invalidate late results, while task ownership remains until cleanup truly settles. Filesystem waits can outlast a cooperative cancellation request; fixed read budgets are not a promised hard timeout for every filesystem syscall.
+
+Only app-created, descriptor-anchored session files may be removed. Cleanup checks identity, refuses links/cross-device changes and retains uncertainty. No broad path-recursive removal, real-user cache pruning or selected-content deletion is performed by MoeKit's analyzer adapter. Same-user/root adversarial changes are outside its confinement guarantee.
+
+## Separate upgrade terminal
+
+Homebrew upgrade is intentionally a different, mutating adapter with real HOME and installed package-manager state. It shows the exact fixed executable plus `update`, followed by the same executable plus `upgrade --formula mole`. Only a fresh focused Return/keypad Enter consumes the review and starts the owned PTY supervisor. Opening, pasting, programmatic terminal input and repeated Return events cannot authorize launch. No shell-string execution, sudo, automatic retry, resume, rollback or downgrade is available.
+
+`brew update` may replace Homebrew itself; a stable and safe fresh executable is revalidated before the upgrade phase. This does not independently attest all of Homebrew's dependencies or eliminate the documented final pathname-validation-to-exec race. Cancellation cannot undo already completed package changes. Reliable helper completion is followed by installation recheck; it is not proof of a compatible analyzer. Full details are in [Sources/Terminal/README.md](../Sources/Terminal/README.md) and [Helpers/OperationTerminal/README.md](../Helpers/OperationTerminal/README.md).
 
 ## Why App Sandbox is not claimed
 
-Apple documents that user-selected access does not grant external executable launch, and that spawned helpers inherit static entitlements rather than dynamic PowerBox rights. The unmodified Go analyzer cannot consume Cocoa bookmarks. A speculative XPC wrapper therefore is not sufficient proof of confinement. We do not use private sandbox APIs, deprecated `sandbox-exec` profiles, entitlement expansion, re-signing third-party executables, or claim the existing unsandboxed app is sandboxed.
+User-selected file access does not establish permission to launch an external executable with dynamic PowerBox rights, and the unmodified Go analyzer does not consume Cocoa bookmarks. A speculative XPC wrapper is not confinement evidence. MoeKit does not use private sandbox APIs, deprecated `sandbox-exec`, entitlement expansion or third-party executable re-signing.
 
-- <https://developer.apple.com/documentation/security/accessing-files-from-the-macos-app-sandbox>
-- <https://developer.apple.com/library/archive/documentation/Miscellaneous/Reference/EntitlementKeyReference/Chapters/EnablingAppSandbox.html>
-- <https://developer.apple.com/documentation/xcode/embedding-a-helper-tool-in-a-sandboxed-app>
+- [Apple: accessing files from App Sandbox](https://developer.apple.com/documentation/security/accessing-files-from-the-macos-app-sandbox)
+- [Apple: App Sandbox entitlements](https://developer.apple.com/library/archive/documentation/Miscellaneous/Reference/EntitlementKeyReference/Chapters/EnablingAppSandbox.html)
+- [Apple: embedding a helper tool](https://developer.apple.com/documentation/xcode/embedding-a-helper-tool-in-a-sandboxed-app)
 
-## Activation evidence required
+## Activation evidence still required
 
-1. Design and exact diff reviewed independently; no cleanup call reachable from UI or runner.
-2. Exact-commit macOS Swift builds/tests and signing of the nested supervisor; parent entitlements unchanged.
-3. Synthetic helper tests cover real execution, zero/partial/unavailable/invalid JSON, forged outside paths, stdout/stderr floods, CPU/time limits, cancel, parent disconnect, child-helper exit and no unrelated PID signaling.
-4. Synthetic filesystem tests cover source/scope/session replacement and symlink races, quarantine, wrong hash/architecture, metadata retention, scope/cache overlap, strict anchored session cleanup and untouched original inputs.
-5. Official pinned upstream binary tested only on unique temporary fixture directories in macOS CI: expected report arrives, target sentinel content/identity remains unchanged, existing Mole cache sentinel remains unchanged, and no real user directory is scanned.
-6. User-visible confirmation, partial/failure/cancel, repeated starts, Demo transitions, navigation and app closure covered. No claim of completed native/manual testing until exact evidence exists.
+1. Independent review of the complete feature diff, including catalog/provenance policy, view-only authority, command gating, native helper, build resources and signing allowlists.
+2. Exact-head Debug/Release macOS builds and tests, both architectures, nested-helper signing/archive checks and unchanged app entitlements. Python checks and Linux C fixtures cannot replace these.
+3. Synthetic analyzer fixtures covering valid/partial/unavailable/unknown/forged reports, source/scope replacement, links/quarantine, output/CPU/time limits, cancellation, disconnect and owned cleanup with untouched input/cache sentinels.
+4. Exact official 1.57/1.58 artifacts and the pinned ARM64 Homebrew 1.58 artifact executed only on unique private macOS CI fixtures, never real user directories. Merely downloading these fixtures is not execution-test evidence.
+5. Online verifier fixtures covering metadata/revision/source conflicts, full bottle and gzip/tar validation, malformed/duplicate/link members, limits/cancel/redirects, changed local bytes, expired proof and untested acknowledgement/authority.
+6. Terminal fixtures covering genuine focused Enter and negative launch paths, Return repeat consumption, phase-tagged input, resize/copy/paste/Ctrl-C, output filters, status spoofing, cancel/close/Demo/reopen, snapshot changes, alias checks and reliable versus uncertain settlement.
+7. Native rendering and keyboard/VoiceOver review in English and Simplified Chinese, both appearances and small/large windows. Synthetic render existence alone is not manual interaction acceptance.
 
-The ordinary permissions model cannot prevent a malicious same-user process from replacing ancestors or moving foreign content into app-owned storage. Descriptor anchoring, identity checks, private ownership/mode and source freezing reduce accidental/racy path misuse; they do not create adversarial filesystem confinement. Cross-device cleanup is refused.
-
-No release or merge follows from this design alone.
+This design alone does not establish release readiness or an actual user upgrade result.

@@ -8,6 +8,8 @@ struct MoleAnalysisView: View {
     @State private var showsAdvanced: Bool
     @State private var showsInstallation: Bool
     @State private var showsInstallerActions = false
+    @State private var showsUpgradeTerminal = false
+    @State private var acknowledgedUntestedPlanID: UUID?
     private var analysis: MoleAnalysisStore { workspace.moleAnalysis }
 
     init(showsAdvanced: Bool = false, showsInstallation: Bool = false) {
@@ -41,7 +43,10 @@ struct MoleAnalysisView: View {
                             MoleInstallationGuidanceView(
                                 onRecheck: { analysis.discoverInstalledAnalyzer() },
                                 isRecheckDisabled: analysis.isBusy,
-                                isRechecking: analysis.isDiscovering
+                                isRechecking: analysis.isDiscovering,
+                                installedSource: installedCandidate?.source,
+                                upgradeExplanation: setupExplanation,
+                                showsDownloadInstructions: analysis.installation?.state == .missing
                             ).padding(.top, 10)
                         }
                     }
@@ -68,6 +73,15 @@ struct MoleAnalysisView: View {
             guard date != nil else { return }
             revealNextSetupStep()
         }
+        .onChange(of: analysis.plan?.id) { _, _ in
+            acknowledgedUntestedPlanID = nil
+        }
+        .sheet(isPresented: $showsUpgradeTerminal) {
+            MoleUpgradeTerminalView(store: analysis.upgradeTerminal) {
+                showsUpgradeTerminal = false
+                analysis.closeUpgradeReview()
+            }
+        }
         .onChange(of: workspace.installerTrash.selectedPath) { _, path in
             if path != nil { showsInstallerActions = true }
         }
@@ -77,12 +91,13 @@ struct MoleAnalysisView: View {
     private func revealNextSetupStep() {
         guard let installation = analysis.installation else { return }
         switch installation.state {
-        case .missing, .incompatible: showsInstallation = true
+        case .missing: showsInstallation = true
+        case .incompatible: showsInstallation = false
         case .unverified:
             // Show the reason first, especially when macOS has blocked a file.
             // A second download must not be presented as a security bypass.
             showsInstallation = false
-            showsAdvanced = true
+            showsAdvanced = false
         case .usable: showsInstallation = false
         }
     }
@@ -105,6 +120,10 @@ struct MoleAnalysisView: View {
                         .disabled(analysis.isBusy || analysis.isDemoEnabled)
                         .accessibilityIdentifier("mole.setup.recheck")
                 }
+                if !analysis.isDemoEnabled, !analysis.isDiscovering {
+                    installationFacts
+                    installationActions
+                }
                 if let report = analysis.installation, !analysis.isDiscovering {
                     HStack(spacing: 4) {
                         Text(m("Last checked"))
@@ -113,6 +132,100 @@ struct MoleAnalysisView: View {
                 }
             }.frame(maxWidth: .infinity, alignment: .leading).padding(6)
         }
+    }
+
+    private var installationFacts: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 28) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(m("Current version")).font(.caption).foregroundStyle(.secondary)
+                    Text(verbatim: currentVersion ?? m("Unknown"))
+                        .font(.callout.weight(.medium)).textSelection(.enabled)
+                        .accessibilityIdentifier("mole.setup.current-version")
+                }
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(m("Tested / recommended")).font(.caption).foregroundStyle(.secondary)
+                    Text(verbatim: MoleAnalyzerRelease.latestTestedVersion)
+                        .font(.callout.weight(.medium))
+                        .accessibilityIdentifier("mole.setup.tested-version")
+                }
+                Spacer(minLength: 0)
+            }
+            if let candidate = installedCandidate, !isManualSelection {
+                if candidate.verifiedRelease == nil && candidate.declaredVersion != nil {
+                    Text(m("Version from installation metadata; file verification is separate."))
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(m("Installation source")).foregroundStyle(.secondary)
+                    Text(candidate.source)
+                }.font(.caption)
+                Text(InstallerPathDisplay.quoted(candidate.path)).font(.caption.monospaced())
+                    .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("mole.setup.installed-path")
+            } else if let executable = analysis.executable {
+                Text(m("Selected manually")).font(.caption).foregroundStyle(.secondary)
+                Text(InstallerPathDisplay.quoted(executable.path)).font(.caption.monospaced())
+                    .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("mole.setup.installed-path")
+            }
+        }.padding(.top, 4)
+    }
+
+    @ViewBuilder
+    private var installationActions: some View {
+        if analysis.canVerifyHomebrewInstallation {
+            VStack(alignment: .leading, spacing: 5) {
+                Button(m("Verify official Homebrew build")) {
+                    analysis.verifyHomebrewInstallation()
+                }
+                .disabled(analysis.isBusy)
+                .accessibilityIdentifier("mole.setup.verify-homebrew")
+                Text(m("Downloads official Homebrew metadata and a bottle to compare this file. It does not run or install Mole."))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        if analysis.canReviewUpgrade {
+            VStack(alignment: .leading, spacing: 5) {
+                Button(upgradeTitle) {
+                    analysis.reviewUpgrade()
+                    showsUpgradeTerminal = true
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(analysis.isBusy)
+                .accessibilityIdentifier("mole.setup.upgrade")
+                Text(m("Review the command in the terminal, then press Return to run it."))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var installedCandidate: MoleInstallationCandidate? {
+        guard let candidate = analysis.installation?.selectedCandidate, candidate.state != .missing else { return nil }
+        return candidate
+    }
+
+    private var currentVersion: String? {
+        isManualSelection ? analysis.plan?.release.normalizedVersion : installedCandidate?.currentVersion
+    }
+
+    private var upgradeTitle: String {
+        if let origin = installedCandidate?.origin, case .homebrew = origin {
+            return m("Upgrade with Homebrew…")
+        }
+        return m("Upgrade Mole…")
+    }
+
+    private var setupExplanation: String? {
+        guard let candidate = installedCandidate else { return nil }
+        if candidate.verifiedRelease?.requiresUntestedConsent == true {
+            return m("The official source is verified, but this version has not been tested with MoeKit. Each analysis needs an extra acknowledgement.")
+        }
+        if let text = candidate.currentVersion, let version = MoleVersion(text),
+           let tested = MoleVersion(MoleAnalyzerRelease.latestTestedVersion), version > tested {
+            return m("This version is newer than the tested release. Keep it installed; MoeKit will not offer a downgrade.")
+        }
+        return nil
     }
 
     private var folderSelection: some View {
@@ -170,8 +283,11 @@ struct MoleAnalysisView: View {
                             HStack(alignment: .top) {
                                 Text(candidate.source).fontWeight(.medium)
                                 Spacer()
-                                Text(stateTitle(candidate.state)).foregroundStyle(.secondary)
+                                Text(candidate.issue?.title ?? stateTitle(candidate.state)).foregroundStyle(.secondary)
                             }.font(.caption)
+                            if let version = candidate.currentVersion {
+                                Text(verbatim: version).font(.caption.weight(.medium))
+                            }
                             Text(InstallerPathDisplay.quoted(candidate.path)).font(.caption.monospaced())
                                 .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
                             Text(candidate.explanation).font(.caption).foregroundStyle(.secondary)
@@ -184,23 +300,37 @@ struct MoleAnalysisView: View {
         }
     }
 
+    private var hasUntestedRelease: Bool {
+        let release = isManualSelection ? analysis.plan?.release : analysis.installation?.selectedCandidate?.verifiedRelease
+        return release?.requiresUntestedConsent == true
+    }
+
     private var isManualSelection: Bool {
         analysis.executable != nil && analysis.executable != analysis.installation?.verifiedExecutable
     }
 
     private var statusTitle: String {
         if analysis.isDemoEnabled { return m("Setup is unavailable in Demo") }
+        if analysis.isVerifyingHomebrewInstallation { return m("Verifying the official Homebrew build…") }
         if analysis.isDiscovering { return m("Checking for Mole…") }
+        if hasUntestedRelease { return m("Official source verified · not yet tested") }
         if isManualSelection {
             return m(analysis.plan == nil ? "Selected manually · unverified" : "Analyzer verified for this review")
         }
-        guard let state = analysis.installation?.state else { return m("Installation not checked") }
-        return stateTitle(state)
+        guard let report = analysis.installation else { return m("Installation not checked") }
+        if let issue = report.selectedCandidate?.issue { return issue.title }
+        return stateTitle(report.state)
     }
 
     private var statusExplanation: String {
         if analysis.isDemoEnabled { return m("Exit Demo to set up Mole and analyze your folders.") }
         if analysis.isDiscovering { return m("Checking known locations and verifying the analyzer. Mole is not running.") }
+        if analysis.isVerifyingHomebrewInstallation {
+            return m("Comparing this analyzer with the official Homebrew bottle. Mole is not running.")
+        }
+        if hasUntestedRelease {
+            return m("The official source is verified, but this version has not been tested with MoeKit. Each analysis needs an extra acknowledgement.")
+        }
         if isManualSelection {
             return m(analysis.plan == nil
                 ? "A file was selected manually. Choose a folder, then use Review analysis to verify that file."
@@ -209,17 +339,20 @@ struct MoleAnalysisView: View {
         guard let state = analysis.installation?.state else {
             return m("Choose Recheck to look for a supported analyzer. This check does not run Mole or install anything.")
         }
+        if let candidate = analysis.installation?.selectedCandidate {
+            if candidate.issue != nil || state != .usable { return candidate.explanation }
+        }
         switch state {
-        case .usable: return m("Mole V1.57.0 is verified. Choose a folder below.")
+        case .usable: return m("Your installed analyzer is verified. Choose a folder below.")
         case .missing: return m("Not found in the checked locations. Follow the setup guide, or choose your file in Advanced details.")
-        case .incompatible: return m("This file is incompatible. Use the official V1.57.0 analyzer in the guide below.")
-        case .unverified: return m("Verification failed. Read the reason in Advanced details before continuing.")
+        case .incompatible, .unverified: return m("The analyzer is not ready. Review its version, source and verification details.")
         }
     }
 
     private var statusSymbol: String {
         if analysis.isDemoEnabled { return "info.circle" }
-        if analysis.isDiscovering { return "magnifyingglass" }
+        if analysis.isDiscovering || analysis.isVerifyingHomebrewInstallation { return "magnifyingglass" }
+        if hasUntestedRelease { return "checkmark.shield" }
         if isManualSelection { return analysis.plan == nil ? "questionmark.circle" : "checkmark.shield" }
         switch analysis.installation?.state {
         case .some(.usable): return "checkmark.circle.fill"
@@ -231,7 +364,8 @@ struct MoleAnalysisView: View {
     }
 
     private var statusColor: Color {
-        if analysis.isDemoEnabled || analysis.isDiscovering { return .secondary }
+        if analysis.isDemoEnabled || analysis.isDiscovering || analysis.isVerifyingHomebrewInstallation { return .secondary }
+        if hasUntestedRelease { return .orange }
         if isManualSelection { return analysis.plan == nil ? .orange : .green }
         switch analysis.installation?.state {
         case .some(.usable): return .green
@@ -242,6 +376,7 @@ struct MoleAnalysisView: View {
 
     private var activityTitle: String {
         if analysis.isCancelling { return m("Stopping the current operation…") }
+        if analysis.isVerifyingHomebrewInstallation { return m("Verifying the official Homebrew build…") }
         if analysis.isDiscovering { return m("Checking installation…") }
         return analysis.isPreparing ? String(localized: "Verifying analyzer…") : String(localized: "Analyzing selected folder…")
     }
@@ -250,7 +385,7 @@ struct MoleAnalysisView: View {
         switch state {
         case .usable: return m("Ready to analyze")
         case .missing: return m("Analyzer not found")
-        case .incompatible: return m("Analyzer is incompatible")
+        case .incompatible: return m("Analyzer needs attention")
         case .unverified: return m("Analyzer not verified")
         }
     }
@@ -262,8 +397,23 @@ struct MoleAnalysisView: View {
             VStack(alignment: .leading, spacing: 9) {
                 Text("Confirm folder analysis").font(.headline)
                 Text(InstallerPathDisplay.quoted(plan.directory.path)).textSelection(.enabled)
-                Text("Mole runs with your normal user permissions, without an OS sandbox. The reviewed analysis command does not delete or change selected-folder content; incidental metadata reads may extend beyond it.")
-                Text("MoeKit will create a verified temporary analyzer copy and a fresh private cache/temp directory below the location shown here, then remove only that session after the process stops. Your existing Mole cache is not used.")
+                if plan.release.requiresUntestedConsent {
+                    Text(m("This official build has not been tested with MoeKit. It runs with your user permissions, without an OS sandbox. MoeKit cannot guarantee that this untested build will leave files unchanged."))
+                        .foregroundStyle(.orange)
+                    Toggle(m("I understand this version is untested and want to use it for this analysis."),
+                           isOn: Binding(
+                            get: { acknowledgedUntestedPlanID == plan.id },
+                            set: { acknowledgedUntestedPlanID = $0 ? plan.id : nil }
+                           ))
+                        .accessibilityIdentifier("mole.analysis.acknowledge-untested")
+                } else {
+                    Text("Mole runs with your normal user permissions, without an OS sandbox. The reviewed analysis command does not delete or change selected-folder content; incidental metadata reads may extend beyond it.")
+                }
+                if plan.release.requiresUntestedConsent {
+                    Text(m("MoeKit supplies a private HOME and temporary directory, verifies a temporary analyzer copy, and cleans only its own session after the process stops. This does not restrict the untested program's filesystem access."))
+                } else {
+                    Text("MoeKit will create a verified temporary analyzer copy and a fresh private cache/temp directory below the location shown here, then remove only that session after the process stops. Your existing Mole cache is not used.")
+                }
                 Text(InstallerPathDisplay.quoted(plan.privateSessionParent.path)).font(.caption.monospaced()).textSelection(.enabled)
                 Text("Reports may be incomplete. Reported sizes are not space you can necessarily free.")
                 DisclosureGroup(m("Analyzer verification details")) {
@@ -277,7 +427,11 @@ struct MoleAnalysisView: View {
                 HStack {
                     Button("Cancel") { analysis.dismissPlan() }
                     Spacer()
-                    Button("Start analysis") { analysis.confirm(planID: plan.id) }.buttonStyle(.borderedProminent)
+                    Button("Start analysis") {
+                        analysis.confirm(planID: plan.id, acknowledgeUntestedBuild: acknowledgedUntestedPlanID == plan.id)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(plan.release.requiresUntestedConsent && acknowledgedUntestedPlanID != plan.id)
                 }
             }.padding(6)
         }
@@ -308,8 +462,13 @@ struct MoleAnalysisView: View {
                 TableColumn("Read status") { entry in Text(entry.coverage.title).foregroundStyle(.secondary) }
             }.frame(minHeight: 200)
             Text("\(result.report.entries.count) entries · empty rows do not prove an empty disk").font(.caption).foregroundStyle(.secondary)
-            Text("Only a directly listed .dmg in the current live Downloads analysis can be selected for independent native Trash review. Imported and Demo entries cannot be used.")
-                .font(.caption).foregroundStyle(.secondary)
+            if result.release.requiresUntestedConsent {
+                Text(m("Reports from an untested build are view-only. Installer actions require a tested analyzer."))
+                    .font(.caption).foregroundStyle(.secondary)
+            } else {
+                Text("Only a directly listed .dmg in the current live Downloads analysis can be selected for independent native Trash review. Imported and Demo entries cannot be used.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
         }
     }
 

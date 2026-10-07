@@ -21,6 +21,23 @@ struct InstallerTrashStoreTests {
         #expect(!disabled.isEnabled && !disabled.canPrepare && !disabled.canReadRecovery)
     }
 
+    @Test("An untested official analysis cannot create installer Trash authority even with a supplied live ID")
+    func untestedReportIsViewOnly() async throws {
+        let executor = TrashFixture()
+        let store = InstallerTrashStore(executor: executor, downloadsURL: downloads)
+        let known = try reportResult(directory: downloads)
+        let digest = String(repeating: "a", count: 64)
+        let release = MoleAnalyzerRelease(version: "V1.59.0", architecture: MoleAnalyzerRelease.nativeArchitecture,
+            byteCount: 12, sha256: digest, origin: .verifiedHomebrewBottle,
+            onlineProof: .init(verifiedAt: Date(), bottleSHA256: digest, bottleURL: MoleHomebrewVerifier.bottleURL(digest)))
+        let result = MoleAnalysisResult(report: known.report, directory: known.directory, release: release,
+            startedAt: known.startedAt, finishedAt: known.finishedAt)
+        store.updateContext(liveAnalysisID: UUID(), result: result, isDemoEnabled: false, protectedPaths: [], catalogIsKnown: true)
+        store.select(path: selected); store.prepare(); await settle(store)
+        #expect(store.liveAnalysisID == nil && store.eligibleEntries.isEmpty && !store.canPrepare)
+        #expect(await executor.prepareCount == 0)
+    }
+
     @Test("Enabled native initialization performs no evidence read, Trash call or journal write")
     func nativeInitializationIsInert() async throws {
         let owned = FileManager.default.temporaryDirectory.appendingPathComponent("MoeKit-inert-native-\(UUID())", isDirectory: true)

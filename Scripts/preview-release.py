@@ -38,7 +38,17 @@ GIT_TRANSPORT_HELPER_PATH = "Contents/MacOS/GitRemoteTransport"
 GIT_TRANSPORT_HELPER_ID = BUNDLE_ID + ".GitRemoteTransport"
 # Exact reviewed original helpers only. Never broaden this from bundle discovery.
 HELPERS = ((HELPER_PATH, HELPER_ID), (GIT_HELPER_PATH, GIT_HELPER_ID),
-           (GIT_TRANSPORT_HELPER_PATH, GIT_TRANSPORT_HELPER_ID))
+           (GIT_TRANSPORT_HELPER_PATH, GIT_TRANSPORT_HELPER_ID),
+           ("Contents/MacOS/OperationTerminal", BUNDLE_ID + ".OperationTerminal"))
+# SwiftTerm is statically linked. Its sole native-SPM resource bundle is data,
+# not another signable executable. Keep an exact inventory, never a .bundle glob.
+SWIFTTERM_BUNDLE = "Contents/Resources/SwiftTerm_SwiftTerm.bundle"
+SWIFTTERM_DIRECTORIES = frozenset({SWIFTTERM_BUNDLE, SWIFTTERM_BUNDLE + "/Contents",
+                                 SWIFTTERM_BUNDLE + "/Contents/Resources"})
+SWIFTTERM_INFO = SWIFTTERM_BUNDLE + "/Contents/Info.plist"
+SWIFTTERM_METAL = SWIFTTERM_BUNDLE + "/Contents/Resources/default.metallib"
+SWIFTTERM_FILES = frozenset({SWIFTTERM_INFO, SWIFTTERM_METAL})
+
 SPARKLE_ROOT = "Contents/Frameworks/Sparkle.framework"
 SPARKLE_VERSION_ROOT = SPARKLE_ROOT + "/Versions/B"
 SPARKLE_CODE = (
@@ -348,6 +358,24 @@ def verify_sparkle_inventory(files: set[str], links: set[str]) -> None:
                 "Optional Sparkle header or module link is dangling.")
 
 
+def verify_swiftterm_inventory(files: set[str], links: set[str]) -> None:
+    require(SWIFTTERM_FILES <= files, "The exact SwiftTerm resource bundle is required.")
+    require({path for path in files if path.startswith(SWIFTTERM_BUNDLE + "/")} == SWIFTTERM_FILES,
+            "Unexpected SwiftTerm resource content.")
+    require(not any(path.startswith(SWIFTTERM_BUNDLE + "/") for path in links),
+            "SwiftTerm resources cannot contain symlinks.")
+
+
+def verify_swiftterm_info(data: bytes) -> None:
+    require(len(data) <= 65536, "SwiftTerm resource metadata exceeds its limit.")
+    try:
+        info = plistlib.loads(data)
+    except Exception as error:
+        raise ReleaseError("Invalid SwiftTerm resource metadata.") from error
+    require(isinstance(info, dict) and info.get("CFBundlePackageType") == "BNDL" and
+            "CFBundleExecutable" not in info, "SwiftTerm resource bundle must not declare executable code.")
+
+
 def verify_upstream_sparkle(app: Path) -> None:
     """Before our re-signing, prove copied vendor bytes match the pinned archive.
 
@@ -363,7 +391,7 @@ def verify_upstream_sparkle(app: Path) -> None:
 
 
 def verify_bundle_entry(relative: str, *, directory: bool, mode: int, magic: bytes) -> None:
-    """The release contains the app, two original helpers and pinned Sparkle.
+    """The release contains exact original helpers, pinned Sparkle and one data-only SwiftTerm resource bundle.
 
     Apply the same layout policy before signing and before unpacking ZIP input.
     Paths here have already been checked for traversal and canonical spelling.
@@ -372,6 +400,14 @@ def verify_bundle_entry(relative: str, *, directory: bool, mode: int, magic: byt
     require(bool(parts) and parts[0] == "Contents", "Unexpected app bundle root entry.")
     if len(parts) == 1:
         require(directory, "App Contents must be a directory.")
+        return
+    if relative == SWIFTTERM_BUNDLE or relative.startswith(SWIFTTERM_BUNDLE + "/"):
+        require((directory and relative in SWIFTTERM_DIRECTORIES) or
+                (not directory and relative in SWIFTTERM_FILES), "Unexpected SwiftTerm resource bundle path.")
+        if not directory:
+            require(not mode & 0o111 and magic not in MACHO_MAGICS, "Executable SwiftTerm resource is forbidden.")
+            if relative == SWIFTTERM_METAL:
+                require(magic == b"MTLB", "Expected the compiled SwiftTerm Metal resource.")
         return
     if relative == "Contents/Frameworks":
         require(directory, "Frameworks must be a directory.")
@@ -426,6 +462,11 @@ def verify_app(app: Path, context: dict[str, str], *, provenance: bool = True) -
         verify_bundle_entry(relative, directory=stat.S_ISDIR(mode), mode=mode, magic=magic)
     require(EXECUTABLE_PATHS <= files, "The app and reviewed helper executables are required.")
     verify_sparkle_inventory(files, links)
+    verify_swiftterm_inventory(files, links)
+    require((app / SWIFTTERM_INFO).stat().st_size <= 65536 and
+            16 <= (app / SWIFTTERM_METAL).stat().st_size <= 32 * 1024 * 1024,
+            "SwiftTerm resources exceed their explicit bounds.")
+    verify_swiftterm_info((app / SWIFTTERM_INFO).read_bytes())
     info = plistlib.loads((app / "Contents/Info.plist").read_bytes())
     if provenance:
         verify_provenance(info, context)
@@ -567,6 +608,11 @@ def inspect_zip(path: Path, context: dict[str, str], *, upstream: bool = False) 
                 verify_bundle_entry(relative, directory=item.is_dir(), mode=item.external_attr >> 16, magic=magic)
         require(EXECUTABLE_PATHS <= files.keys(), "ZIP must contain the app and reviewed helper executables.")
         verify_sparkle_inventory(set(files) - links, links)
+        verify_swiftterm_inventory(set(files) - links, links)
+        require(archive.getinfo("MoeKit.app/" + SWIFTTERM_INFO).file_size <= 65536 and
+                16 <= archive.getinfo("MoeKit.app/" + SWIFTTERM_METAL).file_size <= 32 * 1024 * 1024,
+                "ZIP SwiftTerm resources exceed their explicit bounds.")
+        verify_swiftterm_info(archive.read("MoeKit.app/" + SWIFTTERM_INFO))
         if upstream:
             for relative, expected in SPARKLE_FILES.items():
                 if relative in SPARKLE_OPTIONAL and relative not in files:

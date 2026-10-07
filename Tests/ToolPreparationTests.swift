@@ -23,12 +23,12 @@ struct ToolPreparationTests {
 
     @Test("Manual downloads use exactly the analyzer allowlist and verify before chmod")
     func compatibleDownloadGuidance() throws {
-        for release in [MoleAnalyzerRelease.arm64, .x86_64] {
+        for release in [MoleAnalyzerRelease.arm64, .x86_64, .legacyArm64, .legacyX86_64] {
             let command = release.manualDownloadCommand
             let asset = release.architecture == "arm64" ? "analyze-darwin-arm64" : "analyze-darwin-amd64"
             #expect(release.assetName == asset)
-            #expect(release.assetURL.absoluteString == "https://github.com/tw93/Mole/releases/download/V1.57.0/" + asset)
-            #expect(release.releaseURL.absoluteString == "https://github.com/tw93/Mole/releases/tag/V1.57.0")
+            #expect(release.assetURL.absoluteString == "https://github.com/tw93/Mole/releases/download/" + release.version + "/" + asset)
+            #expect(release.releaseURL.absoluteString == "https://github.com/tw93/Mole/releases/tag/" + release.version)
             #expect(command.contains("umask 077 &&"))
             #expect(command.contains(#"/usr/bin/mktemp -d "$HOME/MoeKit-Mole-download.XXXXXX""#))
             #expect(command.contains("/usr/bin/curl -q --fail --location --show-error --proto '=https' --proto-redir '=https'"))
@@ -52,6 +52,9 @@ struct ToolPreparationTests {
                 #expect(!command.contains(forbidden))
             }
         }
+        #expect(MoleAnalyzerRelease.native.normalizedVersion == MoleAnalyzerRelease.latestTestedVersion)
+        #expect(MoleAnalyzerRelease.legacyArm64.installationDirectoryName != MoleAnalyzerRelease.arm64.installationDirectoryName)
+        #expect(MoleAnalyzerRelease.legacyX86_64.installationDirectoryName != MoleAnalyzerRelease.x86_64.installationDirectoryName)
         let home = URL(fileURLWithPath: "/synthetic-home")
         #expect(PreparedTool.mole.conventionalLocations(home: home).count <= NativeToolCandidateInspector.maximumLocations)
         #expect(PreparedTool.mole.conventionalLocationLabel(home.appendingPathComponent(".config/mole/bin/analyze-go"), home: home) == "~/.config/mole/bin/analyze-go")

@@ -15,6 +15,14 @@ private let sparkleConfiguration = try JSONDecoder().decode(
 
 let project = Project(
     name: "MoeKit",
+    // Native SPM preserves SwiftTerm's required build-tool plugin and Metal resource.
+    // Exact revisions are additionally enforced by resolve-native-packages.py.
+    packages: [
+        .remote(url: "https://github.com/migueldeicaza/SwiftTerm", requirement: .exact("1.20.0")),
+        .remote(url: "https://github.com/apple/swift-argument-parser", requirement: .exact("1.6.1")),
+        .remote(url: "https://github.com/apple/swift-docc-plugin", requirement: .exact("1.4.3")),
+        .remote(url: "https://github.com/swiftlang/swift-docc-symbolkit", requirement: .exact("1.0.0")),
+    ],
     settings: .settings(base: [
         "SWIFT_VERSION": "6.0",
         "SWIFT_STRICT_CONCURRENCY": "complete",
@@ -92,8 +100,17 @@ let project = Project(
                 inputPaths: ["$(GIT_TRANSPORT_SOURCE_DIR)/GitRemoteTransport"],
                 outputPaths: ["$(TARGET_BUILD_DIR)/$(EXECUTABLE_FOLDER_PATH)/GitRemoteTransport"],
                 basedOnDependencyAnalysis: true
+            ), .post(
+                script: """
+                set -eu
+                /bin/cp -p "${SCRIPT_INPUT_FILE_0}" "${SCRIPT_OUTPUT_FILE_0}"
+                """,
+                name: "Embed controlled operation terminal",
+                inputPaths: ["$(OPERATION_TERMINAL_SOURCE_DIR)/OperationTerminal"],
+                outputPaths: ["$(TARGET_BUILD_DIR)/$(EXECUTABLE_FOLDER_PATH)/OperationTerminal"],
+                basedOnDependencyAnalysis: true
             )],
-            dependencies: [.target(name: "MoleAnalysisSupervisor"), .target(name: "GitObjectInspector"), .target(name: "GitRemoteTransport"), .external(name: "Sparkle")],
+            dependencies: [.target(name: "OperationTerminal"), .package(product: "SwiftTerm", type: .runtime), .target(name: "MoleAnalysisSupervisor"), .target(name: "GitObjectInspector"), .target(name: "GitRemoteTransport"), .external(name: "Sparkle")],
             settings: .settings(base: [
                 "ASSETCATALOG_COMPILER_APPICON_NAME": "AppIcon",
                 "ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME": "",
@@ -109,6 +126,9 @@ let project = Project(
                 "GIT_TRANSPORT_SOURCE_DIR": "$(GIT_TRANSPORT_SOURCE_DIR_$(DEPLOYMENT_LOCATION))",
                 "GIT_TRANSPORT_SOURCE_DIR_NO": "$(BUILT_PRODUCTS_DIR)",
                 "GIT_TRANSPORT_SOURCE_DIR_YES": "$(UNINSTALLED_PRODUCTS_DIR)/$(PLATFORM_NAME)",
+                "OPERATION_TERMINAL_SOURCE_DIR": "$(OPERATION_TERMINAL_SOURCE_DIR_$(DEPLOYMENT_LOCATION))",
+                "OPERATION_TERMINAL_SOURCE_DIR_NO": "$(BUILT_PRODUCTS_DIR)",
+                "OPERATION_TERMINAL_SOURCE_DIR_YES": "$(UNINSTALLED_PRODUCTS_DIR)/$(PLATFORM_NAME)",
             ])
         ),
         .target(
@@ -146,6 +166,20 @@ let project = Project(
             bundleId: "com.yusixian.MoeKit.GitRemoteTransport",
             deploymentTargets: .macOS("15.0"),
             sources: ["Helpers/GitRemoteTransport/main.c"],
+            settings: .settings(base: [
+                "SKIP_INSTALL": "YES",
+                "CODE_SIGN_INJECT_BASE_ENTITLEMENTS": "NO",
+                "OTHER_CFLAGS": "$(inherited) -Wall -Wextra -Werror",
+                "OTHER_CODE_SIGN_FLAGS": "$(inherited) -i $(PRODUCT_BUNDLE_IDENTIFIER)",
+            ])
+        ),
+        .target(
+            name: "OperationTerminal",
+            destinations: .macOS,
+            product: .commandLineTool,
+            bundleId: "com.yusixian.MoeKit.OperationTerminal",
+            deploymentTargets: .macOS("15.0"),
+            sources: ["Helpers/OperationTerminal/main.c"],
             settings: .settings(base: [
                 "SKIP_INSTALL": "YES",
                 "CODE_SIGN_INJECT_BASE_ENTITLEMENTS": "NO",

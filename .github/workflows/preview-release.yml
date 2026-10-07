@@ -59,14 +59,20 @@ jobs:
           xcodebuild -version
           tuist install --cache-path "$(mktemp -d "$RUNNER_TEMP/moekit-swiftpm-cache.XXXXXX")"
           tuist generate --no-open
+          python3 Scripts/resolve-native-packages.py
       - name: Prepare official Mole synthetic fixture without private signing secrets
         run: |
           python3 Scripts/prepare-mole-ci-fixture.py
           tuist generate --no-open
+          python3 Scripts/resolve-native-packages.py
       - name: Build and run Release-configuration unit tests without private signing secrets
+        env:
+          TEST_RUNNER_MOEKIT_MOLE_NATIVE_FIXTURE: '1'
+          TEST_RUNNER_GITHUB_ACTIONS: 'true'
+          TEST_RUNNER_RUNNER_ENVIRONMENT: github-hosted
         run: |
           set -euo pipefail
-          args=(-workspace MoeKit.xcworkspace -scheme MoeKit -configuration Release
+          args=(-skipPackagePluginValidation -disableAutomaticPackageResolution -workspace MoeKit.xcworkspace -scheme MoeKit -configuration Release
                 -destination 'platform=macOS' -derivedDataPath DerivedDataTests
                 ENABLE_TESTABILITY=YES CODE_SIGN_STYLE=Manual
                 CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM=)
@@ -79,7 +85,7 @@ jobs:
           python3 Scripts/preview-release.py build-settings > "$RUNNER_TEMP/moekit-release-build-settings.json"
           build_number="$(python3 -c 'import json,os; print(json.load(open(os.environ["RUNNER_TEMP"] + "/moekit-release-build-settings.json"))["build_number"])')"
           public_key="$(python3 -c 'import json,os; print(json.load(open(os.environ["RUNNER_TEMP"] + "/moekit-release-build-settings.json"))["public_key"])')"
-          xcodebuild archive -workspace MoeKit.xcworkspace -scheme MoeKit \
+          xcodebuild -skipPackagePluginValidation -disableAutomaticPackageResolution archive -workspace MoeKit.xcworkspace -scheme MoeKit \
             -configuration Release -destination 'generic/platform=macOS' \
             -derivedDataPath DerivedDataArchive -archivePath build/MoeKit.xcarchive \
             'ARCHS=arm64 x86_64' ONLY_ACTIVE_ARCH=NO \

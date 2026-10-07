@@ -11986,6 +11986,796 @@
           }
         }
       }
+    },
+    "A command or wrapper exists. Its presence does not prove an analyzer version or compatible file; no wrapper was run.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发现命令或包装脚本，但这不能证明分析器的版本或兼容性；未运行任何包装脚本。"
+          }
+        }
+      }
+    },
+    "Analysis stopped, but MoeKit could not verify cleanup of its private session. Review the diagnostics before continuing.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分析已停止，但 MoeKit 无法确认私有会话目录已清理。请先查看诊断信息再继续。"
+          }
+        }
+      }
+    },
+    "Analyzer architecture does not match this app": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分析器架构与本应用不匹配"
+          }
+        }
+      }
+    },
+    "Analyzer file or permissions need attention": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分析器文件或权限需要检查"
+          }
+        }
+      }
+    },
+    "Click inside the terminal and press Return to run the displayed commands": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点击终端内部并按回车，运行显示的命令"
+          }
+        }
+      }
+    },
+    "Copy commands": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复制命令"
+          }
+        }
+      }
+    },
+    "Custom Homebrew source": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自定义 Homebrew 来源"
+          }
+        }
+      }
+    },
+    "Executing the reviewed plan…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在执行已复查的方案…"
+          }
+        }
+      }
+    },
+    "Finished; recheck required": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已完成；需要重新检查"
+          }
+        }
+      }
+    },
+    "Homebrew changed after this review. This plan was not run. Recheck the installation before a new review.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复查后 Homebrew 已发生变化，本方案未执行。请重新检查安装状态，再复查新方案。"
+          }
+        }
+      }
+    },
+    "Homebrew does not currently publish a supported Mole bottle for this app's architecture. Nothing was run.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Homebrew 目前未发布适用于本应用架构的受支持 Mole 预编译包。未运行任何工具。"
+          }
+        }
+      }
+    },
+    "Homebrew finished successfully. Recheck Mole to verify the installed version and analyzer before analysis.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Homebrew 已成功完成。分析前请重新检查 Mole，验证安装版本与分析器。"
+          }
+        }
+      }
+    },
+    "Homebrew installation is missing its analyzer": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Homebrew 安装缺少分析器"
+          }
+        }
+      }
+    },
+    "Homebrew may install a newer version than the recommendation. This does not pin a version or downgrade Mole. Cancelling can leave partial changes; MoeKit does not retry or roll them back.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Homebrew 可能安装比推荐版本更新的版本，此操作不锁定版本，也不会降级 Mole。取消可能留下部分更改；MoeKit 不会重试或回滚。"
+          }
+        }
+      }
+    },
+    "Homebrew metadata is present but its direct analyzer is missing. Review the existing installation instead of installing an older parallel copy.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发现 Homebrew 安装信息，但缺少直接分析器。请检查现有安装，不要另外安装旧版副本。"
+          }
+        }
+      }
+    },
+    "Homebrew's response did not identify a valid official Mole bottle. The installation remains unverified.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Homebrew 的响应未提供有效的官方 Mole 预编译包信息，安装仍未通过验证。"
+          }
+        }
+      }
+    },
+    "Installation changed during verification": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "验证过程中安装发生变化"
+          }
+        }
+      }
+    },
+    "Installation could not be read": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法读取安装信息"
+          }
+        }
+      }
+    },
+    "Installation version records disagree": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "安装版本记录不一致"
+          }
+        }
+      }
+    },
+    "Installed build needs verification": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已安装构建需要验证"
+          }
+        }
+      }
+    },
+    "Installed file differs from the official bottle": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已安装文件与官方预编译包不一致"
+          }
+        }
+      }
+    },
+    "Installed version": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已安装版本"
+          }
+        }
+      }
+    },
+    "Installed version is unknown": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已安装版本未知"
+          }
+        }
+      }
+    },
+    "MoeKit does not remove quarantine or bypass macOS protection. Review the system warning; another download is not a security bypass.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MoeKit 不会移除隔离标记或绕过 macOS 保护。请查看系统警告，不要通过换下载途径绕过安全限制。"
+          }
+        }
+      }
+    },
+    "Mole command found · analyzer not verified": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "找到 Mole 命令 · 分析器未验证"
+          }
+        }
+      }
+    },
+    "Mole upgrade terminal": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mole 升级终端"
+          }
+        }
+      }
+    },
+    "No reliable version declaration was found. MoeKit does not execute an unknown file to ask for its version.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未找到可靠的版本声明。MoeKit 不会通过执行未知文件来查询其版本。"
+          }
+        }
+      }
+    },
+    "Nothing has run. Press Return in this terminal to execute these commands.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚未运行任何命令。在此终端中按回车才会执行这些命令。"
+          }
+        }
+      }
+    },
+    "Nothing was started.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未启动任何操作。"
+          }
+        }
+      }
+    },
+    "Official build verified · version not yet tested": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "官方构建已验证 · 版本尚未测试"
+          }
+        }
+      }
+    },
+    "Only if step 1 succeeds": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅在第 1 步成功后"
+          }
+        }
+      }
+    },
+    "Operation ended": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "操作已结束"
+          }
+        }
+      }
+    },
+    "Operation running": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "操作进行中"
+          }
+        }
+      }
+    },
+    "Preparing review": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在准备复查"
+          }
+        }
+      }
+    },
+    "Recommended version": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "推荐版本"
+          }
+        }
+      }
+    },
+    "Send Ctrl-C": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发送 Ctrl-C"
+          }
+        }
+      }
+    },
+    "Stop and close": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "停止并关闭"
+          }
+        }
+      }
+    },
+    "Stop operation": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "停止操作"
+          }
+        }
+      }
+    },
+    "Stopping": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在停止"
+          }
+        }
+      }
+    },
+    "Stopping the owned operation and waiting for its processes to settle…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在停止本次操作，并等待其进程结束…"
+          }
+        }
+      }
+    },
+    "That input was not sent. The command may not be ready for input, or the input was too large.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "该输入未发送。命令可能尚未准备接收输入，或输入内容过大。"
+          }
+        }
+      }
+    },
+    "The Homebrew keg and receipt report different versions. Recheck or review the installation before choosing an upgrade.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Homebrew 版本目录与安装凭据记录的版本不一致。选择升级前，请重新检查或复查安装。"
+          }
+        }
+      }
+    },
+    "The analyzer matches a tested official build. It will be verified again before analysis.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分析器与经过测试的官方构建匹配。分析前会再次验证。"
+          }
+        }
+      }
+    },
+    "The analyzer must be a readable regular executable owned by you or root, without group/world write access or a final symbolic link.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分析器必须是可读的常规可执行文件，由你或 root 拥有，不能允许用户组或其他用户写入，且文件本身不能是符号链接。"
+          }
+        }
+      }
+    },
+    "The bundled upgrade helper is unavailable. Nothing was started.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内置升级辅助程序不可用，未启动任何操作。"
+          }
+        }
+      }
+    },
+    "The bytes match an official Homebrew bottle, but this version has not been tested with MoeKit. Separate acknowledgement is required before each analysis.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件内容与官方 Homebrew 预编译包匹配，但该版本尚未经过 MoeKit 测试。每次分析前都需要单独确认。"
+          }
+        }
+      }
+    },
+    "The current user's home directory could not be verified. Nothing was started.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法验证当前用户的主目录，未启动任何操作。"
+          }
+        }
+      }
+    },
+    "The downloaded bottle did not match Homebrew's published checksum. It was rejected; this does not establish whether the installed file is modified.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下载的预编译包与 Homebrew 发布的校验和不匹配，已被拒绝。这不能证明已安装文件是否被修改。"
+          }
+        }
+      }
+    },
+    "The file changed during the check. Recheck to get a fresh observation.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查期间文件发生变化。请重新检查以获取最新结果。"
+          }
+        }
+      }
+    },
+    "The file does not match any verified current Homebrew bottle for this architecture. It may be modified or built from source. No analyzer was run.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "该文件与已验证的当前架构 Homebrew 预编译包均不匹配，可能被修改或由源码构建。未运行分析器。"
+          }
+        }
+      }
+    },
+    "The installation could not be safely read. This does not mean it is missing.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法安全读取安装信息，这不代表未安装。"
+          }
+        }
+      }
+    },
+    "The installed analyzer differs from every checked official Homebrew bottle. It may be a source build or a modified file. It has not been approved for analysis.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已安装分析器与所有已检查的官方 Homebrew 预编译包均不一致，可能是源码构建或被修改的文件，尚不能用于分析。"
+          }
+        }
+      }
+    },
+    "The official Homebrew verification service could not be reached or did not return a usable response. Try verification again later.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法连接官方 Homebrew 验证服务，或服务未返回可用响应。请稍后重新验证。"
+          }
+        }
+      }
+    },
+    "The official bottle could not be safely inspected as a complete archive with one regular analyzer file. The installation remains unverified.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法确认官方预编译包是包含一个常规分析器文件的完整归档，安装仍未通过验证。"
+          }
+        }
+      }
+    },
+    "The operation has no verified successful result. Changes may be partial. Keep this output and recheck the installation before trying anything else.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法确认操作成功，可能已有部分更改。请保留输出，并先重新检查安装状态。"
+          }
+        }
+      }
+    },
+    "The operation stopped. Homebrew or Mole may already have changed. Recheck the installation; nothing was rolled back.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "操作已停止，Homebrew 或 Mole 可能已发生更改。请重新检查安装状态；未执行回滚。"
+          }
+        }
+      }
+    },
+    "The standard Homebrew executable is missing, a link, or has unsafe ownership or permissions. Nothing was started.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "标准位置的 Homebrew 可执行文件缺失、为不受支持的链接，或其所有权和权限不安全。未启动任何操作。"
+          }
+        }
+      }
+    },
+    "The upgrade did not finish. Changes may be partial. No retry or rollback was attempted.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "升级未完成，可能已有部分更改。未尝试重试或回滚。"
+          }
+        }
+      }
+    },
+    "The upgrade helper did not establish a reliable result. Check the output and recheck the installation; changes may be partial.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "升级辅助程序未能确认可靠结果。请查看输出并重新检查安装状态，可能已有部分更改。"
+          }
+        }
+      }
+    },
+    "The version may support analysis, but this file has not been matched to an official build. Verify its Homebrew bottle before running it.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "该版本可能支持分析，但此文件尚未与官方构建匹配。运行前请先验证其 Homebrew 预编译包。"
+          }
+        }
+      }
+    },
+    "This Mole major version needs a newer adapter": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此 Mole 主版本需要更新的适配器"
+          }
+        }
+      }
+    },
+    "This analyzer build has not been verified. Check its version and source before continuing. No tool was run.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "该分析器构建尚未通过验证。继续前请检查版本与来源。未运行任何工具。"
+          }
+        }
+      }
+    },
+    "This first updates Homebrew's metadata and Homebrew itself, then upgrades the Mole formula and any required dependencies. It uses your existing Homebrew installation and your user account, without sudo.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此操作先更新 Homebrew 的软件信息与 Homebrew 本身，再升级 Mole 配方及所需依赖。使用现有 Homebrew 安装和你的用户账户，不使用 sudo。"
+          }
+        }
+      }
+    },
+    "This installation comes from a different Homebrew tap. The automatic core-bottle verifier and upgrade command are unavailable for this source.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此安装来自其他 Homebrew tap，不能使用官方 core 预编译包验证器和升级命令。"
+          }
+        }
+      }
+    },
+    "This installation reports a version older than 1.56.1, which lacks the scan-coverage fields required for live analysis. Upgrade the existing installation; imported reports can still be viewed.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此安装报告的版本早于 1.56.1，缺少实时分析所需的扫描覆盖范围字段。请升级现有安装；仍可查看导入的报告。"
+          }
+        }
+      }
+    },
+    "This installation's reported version, architecture or file information cannot be verified. Nothing was run.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法验证此安装声明的版本、架构或文件信息。未运行任何工具。"
+          }
+        }
+      }
+    },
+    "This major version has not been adapted for Mole analysis. Keep the installed version and check for a MoeKit update; do not downgrade automatically.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚未适配此主版本的 Mole 分析。请保留已安装版本并检查 MoeKit 更新，不要自动降级。"
+          }
+        }
+      }
+    },
+    "This official build has not been tested with MoeKit. Review and acknowledge the untested-version warning before analysis.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "该官方构建尚未经过 MoeKit 测试。分析前请阅读并确认未测试版本警告。"
+          }
+        }
+      }
+    },
+    "This review was closed. Nothing was started.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本次复查已关闭，未启动任何操作。"
+          }
+        }
+      }
+    },
+    "This upgrade review expired. Nothing was started. Recheck the installation before a new review.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本次升级复查已过期，未启动任何操作。请重新检查安装状态，再复查新方案。"
+          }
+        }
+      }
+    },
+    "This version needs a newer report format": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此版本需要更新的报告格式"
+          }
+        }
+      }
+    },
+    "Upgrade Mole": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "升级 Mole"
+          }
+        }
+      }
+    },
+    "Use an analyzer matching the architecture of the running MoeKit app. No version probe or analyzer was run.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请使用与当前运行的 MoeKit 应用架构匹配的分析器。未运行版本探测或分析器。"
+          }
+        }
+      }
+    },
+    "Verification encountered an unexpected address or redirect and stopped. The installation remains unverified.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "验证时遇到意外地址或重定向，已停止。安装仍未通过验证。"
+          }
+        }
+      }
+    },
+    "Verification exceeded its download, archive or file limits and stopped. The installation remains unverified.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "验证超出下载、归档或文件限制，已停止。安装仍未通过验证。"
+          }
+        }
+      }
+    },
+    "Verification reached its time limit and stopped. Try again later.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "验证超时并已停止，请稍后重试。"
+          }
+        }
+      }
+    },
+    "Waiting for Return": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "等待按回车"
+          }
+        }
+      }
+    },
+    "macOS has quarantined this file": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "macOS 已隔离此文件"
+          }
+        }
+      }
+    },
+    "Homebrew currently publishes Mole %@. This installation reports a different version, so the current bottle cannot verify it.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Homebrew 当前发布 Mole %@。此安装报告的版本不同，无法用当前预编译包验证。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

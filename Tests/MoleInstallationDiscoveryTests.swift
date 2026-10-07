@@ -10,9 +10,10 @@ struct MoleInstallationDiscoveryTests {
     func fixedLocations() {
         let home = URL(fileURLWithPath: "/Synthetic/Home")
         let locations = MoleInstallationLocation.standard(home: home)
-        #expect(locations.count == MoleInstallationDiscovery.maximumLocations)
-        #expect(locations[0].url.path == home.path + "/" + MoleAnalyzerRelease.native.installationDirectoryName + "/analyze-go")
-        #expect(locations[1].url.path == "/Synthetic/Home/.config/mole/bin/analyze-go")
+        #expect(locations.count == 11)
+        #expect(locations.count <= MoleInstallationDiscovery.maximumLocations)
+        #expect(locations.contains { $0.url.path == home.path + "/" + MoleAnalyzerRelease.native.installationDirectoryName + "/analyze-go" })
+        #expect(locations.contains { $0.url.path == "/Synthetic/Home/.config/mole/bin/analyze-go" })
         #expect(locations.contains { $0.url.path == "/opt/homebrew/opt/mole/libexec/bin/analyze-go" })
         #expect(locations.contains { $0.url.path == "/usr/local/opt/mole/libexec/bin/analyze-go" })
         #expect(locations.filter { $0.kind == .wrapper }.count == 6)
@@ -26,12 +27,12 @@ struct MoleInstallationDiscoveryTests {
         let bad = try file(base, "bad", Data(repeating: 0, count: bytes.count))
         let locations = [good, bad, base.appendingPathComponent("missing")].map { MoleInstallationLocation(url: $0, kind: .analyzer) }
         let report = try await MoleInstallationDiscovery(locations: locations, release: pin(bytes)).discover()
-        #expect(report.candidates.map(\.state) == [.usable, .incompatible, .missing])
+        #expect(report.candidates.map(\.state) == [.usable, .unverified, .missing])
         #expect(report.state == .usable)
         #expect(report.verifiedExecutable == good)
         #expect(try Data(contentsOf: good) == bytes)
         let unsupported = try await MoleInstallationDiscovery(locations: [locations[1]]).discover()
-        #expect(unsupported.state == .incompatible && unsupported.verifiedExecutable == nil)
+        #expect(unsupported.state == .unverified && unsupported.verifiedExecutable == nil)
     }
 
     @Test("Commands, final links, FIFO and directories remain unverified and are never run")
@@ -68,7 +69,7 @@ struct MoleInstallationDiscoveryTests {
         let report = try await MoleInstallationDiscovery(locations: [location], release: pin(bytes)).discover()
         #expect(report.verifiedExecutable == analyzer)
         // A real Homebrew build differs: a recognized location never grants trust.
-        #expect(try await MoleInstallationDiscovery(locations: [location]).discover().state == .incompatible)
+        #expect(try await MoleInstallationDiscovery(locations: [location]).discover().state == .unverified)
         let outside = MoleInstallationLocation(url: analyzer, kind: .homebrew(cellar: base))
         #expect(try await MoleInstallationDiscovery(locations: [outside], release: pin(bytes)).discover().state == .unverified)
     }
@@ -91,7 +92,7 @@ struct MoleInstallationDiscoveryTests {
             MoleInstallationLocation(url: $0, kind: .analyzer)
         }
         let report = try await MoleInstallationDiscovery(locations: locations, release: pin(bytes)).discover()
-        #expect(report.candidates.map(\.state) == [.unverified, .incompatible, .incompatible, .unverified])
+        #expect(report.candidates.map(\.state) == [.unverified, .unverified, .unverified, .unverified])
         #expect(report.verifiedExecutable == nil)
         #expect(fgetxattr(fd, "com.apple.quarantine", nil, 0, 0, 0) == attr.count)
     }
@@ -101,7 +102,7 @@ struct MoleInstallationDiscoveryTests {
         let invalid = MoleInstallationLocation(url: URL(string: "https://example.invalid/analyze-go")!, kind: .analyzer)
         #expect(try await MoleInstallationDiscovery(locations: [invalid]).discover().state == .unverified)
         await #expect(throws: MoleAnalysisFailure.invalidSelection) {
-            try await MoleInstallationDiscovery(locations: Array(repeating: invalid, count: 11)).discover()
+            try await MoleInstallationDiscovery(locations: Array(repeating: invalid, count: 13)).discover()
         }
     }
 
@@ -113,7 +114,7 @@ struct MoleInstallationDiscoveryTests {
         let discovery = MoleInstallationDiscovery(locations: [.init(url: analyzer, kind: .analyzer)], release: pin(bytes))
         #expect(try await discovery.discover().state == .usable)
         try Data("fixture-two".utf8).write(to: analyzer)
-        #expect(try await discovery.discover().state == .incompatible)
+        #expect(try await discovery.discover().state == .unverified)
     }
 
     private func fixture() throws -> URL {

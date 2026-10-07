@@ -33,5 +33,14 @@ for pin in expected:
     head = subprocess.check_output(["git", "-C", str(matches[0]), "rev-parse", "HEAD"], text=True).strip()
     if head != pin["state"]["revision"]:
         raise SystemExit("Native package source revision differs: " + pin["identity"])
+# The Release optimization audit invokes xcodebuild with -project/-alltargets.
+# Xcode requires the same reviewed lock in that generated project's own
+# workspace too when automatic resolution is disabled.
+project = ROOT / "MoeKit.xcodeproj"
+if not project.is_dir():
+    raise SystemExit("The generated MoeKit.xcodeproj is required.")
+project_lock = project / "project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
+project_lock.parent.mkdir(parents=True, exist_ok=True)
+shutil.copyfile(lock, project_lock)
 print("Verified exact SwiftTerm 1.20.0 and native-SPM dependency source revisions.")
 print("Only its pinned build-info plugin is used; DocC and CLI products are not linked.")

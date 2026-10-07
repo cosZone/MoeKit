@@ -61,10 +61,16 @@ struct OperationTerminalRepresentable: NSViewRepresentable {
                          NSWindow.didUpdateNotification] {
                 windowObservers.append(NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) {
                     [weak self, weak terminal] notification in
-                    MainActor.assumeIsolated {
-                        guard let self, let terminal, let window = notification.object as? NSWindow,
-                              terminal.window === window else { return }
-                        self.presentationBecameAvailable(terminal)
+                    guard let notifiedWindow = notification.object as? NSWindow else { return }
+                    let notifiedWindowID = ObjectIdentifier(notifiedWindow)
+                    // Notification is not Sendable. Carry only immutable identity
+                    // into the main-actor check, retaining the window for this call.
+                    withExtendedLifetime(notifiedWindow) {
+                        MainActor.assumeIsolated {
+                            guard let self, let terminal, let window = terminal.window,
+                                  ObjectIdentifier(window) == notifiedWindowID else { return }
+                            self.presentationBecameAvailable(terminal)
+                        }
                     }
                 })
             }

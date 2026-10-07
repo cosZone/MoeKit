@@ -53,7 +53,7 @@ struct MoleAnalysisView: View {
                     folderSelection
                     if let error = analysis.errorMessage {
                         Label(error, systemImage: "exclamationmark.triangle")
-                            .foregroundStyle(.orange).textSelection(.enabled)
+                            .foregroundStyle(.primary).textSelection(.enabled)
                     }
                     if let plan = analysis.plan { confirmation(plan) }
                     if let result = analysis.result { resultView(result) }
@@ -399,7 +399,7 @@ struct MoleAnalysisView: View {
                 Text(InstallerPathDisplay.quoted(plan.directory.path)).textSelection(.enabled)
                 if plan.release.requiresUntestedConsent {
                     Text(m("This official build has not been tested with MoeKit. It runs with your user permissions, without an OS sandbox. MoeKit cannot guarantee that this untested build will leave files unchanged."))
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(.primary)
                     Toggle(m("I understand this version is untested and want to use it for this analysis."),
                            isOn: Binding(
                             get: { acknowledgedUntestedPlanID == plan.id },

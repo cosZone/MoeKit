@@ -151,7 +151,7 @@ final class OperationTerminalViewTests: XCTestCase {
     @MainActor
     func testReviewArmsAfterLateWindowAttachmentWithoutAnotherModelUpdate() async throws {
         _ = NSApplication.shared
-        let fixture = OperationTerminalFixture()
+        let fixture = OperationTerminalAttachmentFixture()
         let store = MoleUpgradeTerminalStore(executor: fixture)
         store.prepare(source: .appleSiliconHomebrew, currentVersion: "1.50.0", recommendedVersion: "1.58.0")
         try await wait { store.isReady }
@@ -167,6 +167,7 @@ final class OperationTerminalViewTests: XCTestCase {
         let beforeAttachment = await fixture.starts
         XCTAssertEqual(beforeAttachment, 0)
         XCTAssertTrue(store.isReady)
+        XCTAssertFalse(coordinator.hasDisplayedReview(planID: planID, in: terminal))
 
         let window = OperationTerminalCaptureWindow(contentRect: terminal.frame, styleMask: [.titled], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false; window.contentView = terminal
@@ -174,13 +175,37 @@ final class OperationTerminalViewTests: XCTestCase {
         window.makeKeyAndOrderFront(nil)
         XCTAssertTrue(window.makeFirstResponder(terminal))
         NSApp.updateWindows() // real AppKit key/visibility/update notifications, no coordinator.update()
+        func enterEvent() throws -> NSEvent {
+            try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [],
+                timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                context: nil, characters: "\r", charactersIgnoringModifiers: "\r", isARepeat: false, keyCode: 36))
+        }
+        if !coordinator.hasDisplayedReview(planID: planID, in: terminal) {
+            // Early input must remain inert; it must not force-display and launch.
+            XCTAssertTrue(coordinator.handleKeyEvent(try enterEvent(), terminal: terminal))
+            XCTAssertTrue(store.isReady)
+            let prematureStarts = await fixture.starts
+            XCTAssertEqual(prematureStarts, 0)
+        }
+        // Window visibility/layout notifications can finish on a later AppKit
+        // turn. Observe their receipt without drawing, updating, or sending input.
+        try await wait { coordinator.hasDisplayedReview(planID: planID, in: terminal) }
+        guard coordinator.hasDisplayedReview(planID: planID, in: terminal) else {
+            store.cancel(); await fixture.complete(.cancelled)
+            return // the bounded wait already recorded the missing presentation
+        }
         XCTAssertEqual(store.plan?.id, planID)
         XCTAssertTrue(store.isReady)
-        let enter = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [],
-            timestamp: 0, windowNumber: window.windowNumber, context: nil, characters: "\r",
-            charactersIgnoringModifiers: "\r", isARepeat: false, keyCode: 36))
-        XCTAssertTrue(coordinator.handleKeyEvent(enter, terminal: terminal))
-        await fixture.waitForStart()
+        let beforeFreshEnter = await fixture.starts
+        XCTAssertEqual(beforeFreshEnter, 0)
+        XCTAssertTrue(coordinator.handleKeyEvent(try enterEvent(), terminal: terminal))
+        XCTAssertEqual(store.phase, .running) // plan consumption is synchronous
+        for _ in 0..<600 {
+            if await fixture.isWaitingForCompletion { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let waitingForCompletion = await fixture.isWaitingForCompletion
+        XCTAssertTrue(waitingForCompletion, "The accepted Return did not start the synthetic executor")
         let afterPresentation = await fixture.starts
         XCTAssertEqual(afterPresentation, 1)
         store.cancel(); await fixture.complete(.cancelled)
@@ -240,4 +265,28 @@ final class OperationTerminalViewTests: XCTestCase {
 
 @MainActor private final class OperationTerminalCaptureWindow: NSWindow {
     override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect { frameRect }
+}
+
+/// Explicit start/completion handshake for the late-attachment scheduling test.
+/// A completion requested before run() is remembered, never silently discarded.
+private actor OperationTerminalAttachmentFixture: MoleUpgradeExecuting {
+    private let planFactory = OperationTerminalFixture()
+    private(set) var starts = 0
+    private var completion: CheckedContinuation<OperationTerminalOutcome, Never>?
+    private var result: OperationTerminalOutcome?
+    var isWaitingForCompletion: Bool { completion != nil }
+
+    func prepare(source: MoleUpgradeSource, currentVersion: String?, recommendedVersion: String) async -> MoleUpgradePlan {
+        await planFactory.prepare(source: source, currentVersion: currentVersion, recommendedVersion: recommendedVersion)
+    }
+    func run(_ plan: MoleUpgradePlan, input: OperationTerminalInput,
+             onOutput: @escaping @Sendable (Data) async -> Void) async -> OperationTerminalOutcome {
+        starts += 1
+        if let result { return result }
+        return await withCheckedContinuation { completion = $0 }
+    }
+    func complete(_ result: OperationTerminalOutcome) {
+        self.result = result
+        completion?.resume(returning: result); completion = nil
+    }
 }

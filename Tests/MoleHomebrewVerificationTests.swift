@@ -281,21 +281,41 @@ struct MoleHomebrewVerificationTests {
         expectArchiveFailure(gzip(tar([member(Data("irrelevant".utf8), path: "mole/1.58.0/README.md")])))
     }
 
-    @Test("Gzip CRC, length, reserved flags, truncation and concatenated members are rejected")
-    func gzipIntegrity() {
+    @Test("Malformed gzip framing is rejected", arguments: [
+        "CRC mismatch", "ISIZE mismatch", "reserved flags", "truncated trailer", "oversized filename"
+    ])
+    func gzipIntegrity(corruption: String) {
         let valid = gzip(tar([member(analyzer)]))
-        var crc = valid; crc[crc.count - 8] ^= 1
-        expectArchiveFailure(crc)
-        var size = valid; size[size.count - 4] ^= 1
-        expectArchiveFailure(size)
-        var flags = valid; flags[3] = 0xe0
-        expectArchiveFailure(flags)
-        expectArchiveFailure(Data(valid.dropLast()))
-        expectArchiveFailure(valid + valid)
-        var garbage = valid; garbage.insert(0, at: garbage.count - 8)
-        expectArchiveFailure(garbage)
-        let longName = gzip(tar([member(analyzer)]), filename: String(repeating: "a", count: 5000))
-        expectArchiveFailure(longName)
+        var malformed = valid
+        switch corruption {
+        case "CRC mismatch": malformed[malformed.count - 8] ^= 1
+        case "ISIZE mismatch": malformed[malformed.count - 4] ^= 1
+        case "reserved flags": malformed[3] = 0xe0
+        case "truncated trailer": malformed = Data(valid.dropLast())
+        case "oversized filename": malformed = gzip(tar([member(analyzer)]), filename: String(repeating: "a", count: 5000))
+        default: Issue.record("Unknown gzip corruption fixture"); return
+        }
+        #expect(throws: MoleHomebrewVerificationFailure.malformedArchive) {
+            try MoleHomebrewArchive.analyzer(in: malformed, version: version)
+        }
+    }
+
+    @Test("Concatenated identical gzip members are rejected even when both trailers match")
+    func gzipConcatenatedMembers() {
+        let valid = gzip(tar([member(analyzer)]))
+        #expect(throws: MoleHomebrewVerificationFailure.malformedArchive) {
+            try MoleHomebrewArchive.analyzer(in: valid + valid, version: version)
+        }
+    }
+
+    @Test("Bytes after DEFLATE and before the intact gzip trailer are rejected", arguments: [1, 2, 65_536])
+    func gzipTrailingDeflateBytes(count: Int) {
+        let valid = gzip(tar([member(analyzer)]))
+        var malformed = valid
+        malformed.insert(contentsOf: repeatElement(UInt8(0), count: count), at: malformed.count - 8)
+        #expect(throws: MoleHomebrewVerificationFailure.malformedArchive) {
+            try MoleHomebrewArchive.analyzer(in: malformed, version: version)
+        }
     }
 
     @Test("Uncompressed, member count, cancellation and elapsed time have explicit bounds")

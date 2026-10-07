@@ -195,7 +195,8 @@ struct OperationTerminalRepresentable: NSViewRepresentable {
                   window.isVisible, store.transcript == review, fedBytes == review.count else { return }
             displayedPlanID = planID; displayedReview = review; displayedWindow = window
         }
-        private func hasDisplayedReview(planID: UUID, in terminal: TerminalView) -> Bool {
+        /// Read-only presentation evidence; querying this never draws or authorizes execution.
+        func hasDisplayedReview(planID: UUID, in terminal: TerminalView) -> Bool {
             guard store.isReady, let plan = store.plan, plan.id == planID,
                   renderedPlanID == planID, displayedPlanID == planID,
                   let window = terminal.window, displayedWindow === window,

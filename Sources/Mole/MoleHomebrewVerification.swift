@@ -1,4 +1,4 @@
-import Compression
+import zlib
 import CryptoKit
 import Foundation
 
@@ -400,9 +400,10 @@ struct MoleHomebrewArchiveMember: Equatable, Sendable {
     let sha256: String
 }
 
-/// Original bounded gzip/ustar reader. SDK COMPRESSION_ZLIB consumes raw
-/// RFC 1951 DEFLATE; this reader separately validates RFC 1952 framing and CRC.
-/// https://developer.apple.com/documentation/compression/compression_zlib
+/// Original bounded gzip/ustar reader. SDK zlib decodes raw RFC 1951 DEFLATE
+/// with exact consumed-input accounting; this reader separately validates
+/// RFC 1952 framing and CRC. No package or downloaded decoder is used.
+/// https://zlib.net/manual.html (inflate / inflateInit2)
 /// https://www.rfc-editor.org/rfc/rfc1952
 /// No extraction, subprocess, permissions,
 /// executable mapping, or code-signature normalization. Only the exact regular
@@ -432,30 +433,48 @@ enum MoleHomebrewArchive {
             var tar = TarReader(version: version, maximumMembers: maximumMembers)
             let output = UnsafeMutablePointer<UInt8>.allocate(capacity: 65_536)
             defer { output.deallocate() }
-            var stream = compression_stream(dst_ptr: output, dst_size: 65_536,
-                src_ptr: input.baseAddress!.advanced(by: payloadStart), src_size: footer - payloadStart, state: nil)
-            guard compression_stream_init(&stream, COMPRESSION_STREAM_DECODE, COMPRESSION_ZLIB) != COMPRESSION_STATUS_ERROR else {
+            let compressedCount = footer - payloadStart
+            // zlib retains this address in its internal state. A separately
+            // allocated, initialized stream stays stable across every C call.
+            let stream = UnsafeMutablePointer<z_stream>.allocate(capacity: 1)
+            stream.initialize(to: z_stream())
+            defer {
+                stream.deinitialize(count: 1)
+                stream.deallocate()
+            }
+            // zlib's legacy C signature is mutable; inflate never writes input.
+            stream.pointee.next_in = UnsafeMutablePointer(mutating: input.baseAddress!.advanced(by: payloadStart))
+            stream.pointee.avail_in = uInt(compressedCount) // bounded to 32 MiB above
+            guard inflateInit2_(stream, -MAX_WBITS, ZLIB_VERSION, Int32(MemoryLayout<z_stream>.size)) == Z_OK else {
                 throw MoleHomebrewVerificationFailure.malformedArchive
             }
-            defer { compression_stream_destroy(&stream) }
-            stream.src_ptr = input.baseAddress!.advanced(by: payloadStart)
-            stream.src_size = footer - payloadStart
+            // LIFO defers end zlib before destroying or freeing the stream.
+            defer { _ = inflateEnd(stream) }
             while true {
                 try MoleHomebrewVerifier.checkpoint(deadline)
-                stream.dst_ptr = output; stream.dst_size = 65_536
-                let previousInput = stream.src_size
-                let status = compression_stream_process(&stream, Int32(COMPRESSION_STREAM_FINALIZE.rawValue))
-                let count = 65_536 - stream.dst_size
+                stream.pointee.next_out = output; stream.pointee.avail_out = 65_536
+                let previousInput = stream.pointee.total_in
+                let status = inflate(stream, Z_NO_FLUSH)
+                let count = 65_536 - Int(stream.pointee.avail_out)
                 guard count <= maximumOutput - total else { throw MoleHomebrewVerificationFailure.resourceLimit }
                 total += count
                 let bytes = UnsafeBufferPointer(start: output, count: count)
                 crc.update(bytes)
                 try tar.consume(bytes)
-                if status == COMPRESSION_STATUS_END {
-                    guard stream.src_size == 0 else { throw MoleHomebrewVerificationFailure.malformedArchive }
+                if status == Z_STREAM_END {
+                    // A decoder may buffer beyond the final DEFLATE block.
+                    // zlib returns unread whole bytes in avail_in and counts
+                    // actual consumed bytes in total_in. Never reset/continue
+                    // into another member or accept bytes before the trailer.
+                    guard stream.pointee.avail_in == 0, stream.pointee.total_in == uLong(compressedCount),
+                          stream.pointee.total_out == uLong(total) else {
+                        throw MoleHomebrewVerificationFailure.malformedArchive
+                    }
                     break
                 }
-                guard status == COMPRESSION_STATUS_OK, count > 0 || stream.src_size < previousInput else {
+                // All input is already supplied. No progress means truncation;
+                // Z_BUF_ERROR cannot be repaired by fetching more input here.
+                guard status == Z_OK, count > 0 || stream.pointee.total_in > previousInput else {
                     throw MoleHomebrewVerificationFailure.malformedArchive
                 }
             }

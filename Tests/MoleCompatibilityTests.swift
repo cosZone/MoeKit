@@ -27,7 +27,7 @@ struct MoleCompatibilityTests {
         #expect(candidate.issue == .unsupportedFormat)
         #expect(candidate.isHomebrewCore && candidate.canUpgradeHomebrew)
         #expect(!candidate.canVerifyHomebrew && candidate.verifiedRelease == nil)
-        #expect(candidate.origin == .homebrew(prefix: base))
+        #expect(candidate.origin == .homebrew(prefix: URL(fileURLWithPath: base.path, isDirectory: true)))
     }
 
     @Test("A current source build is unverified, not blanket incompatible")

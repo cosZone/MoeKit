@@ -267,7 +267,7 @@ struct MoleOfficialFixtureTests {
         try Data("unrelated input stays".utf8).write(to: unrelated)
         let discovery = MoleInstallationDiscovery(locations: [
             MoleInstallationLocation(url: binary, kind: .analyzer)
-        ])
+        ], releases: MoleAnalyzerRelease.reviewedArtifacts)
         let discovered = try await discovery.discover()
         let verified = try #require(discovered.verifiedExecutable)
         #expect(discovered.state == .usable)

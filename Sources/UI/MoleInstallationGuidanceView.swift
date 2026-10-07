@@ -1,13 +1,18 @@
 import AppKit
 import SwiftUI
 
-/// Display and clipboard guidance only. No installation or shell action is wired
-/// to this view; the same steps are used by analysis and tool preparation.
+/// Setup guidance never starts an installation. A supplied action opens the
+/// reviewed terminal flow; the user still decides whether to submit its command.
 @MainActor
 struct MoleInstallationGuidanceView: View {
     let onRecheck: (() -> Void)?
     let isRecheckDisabled: Bool
     let isRechecking: Bool
+    let installedSource: String?
+    let upgradeTitle: String?
+    let upgradeExplanation: String?
+    let onUpgrade: (() -> Void)?
+    let showsDownloadInstructions: Bool
     @State private var copiedCommand: String?
     @State private var showsCommand: Bool
     @State private var showsDetails: Bool
@@ -16,10 +21,20 @@ struct MoleInstallationGuidanceView: View {
          isRecheckDisabled: Bool = false,
          isRechecking: Bool = false,
          showsCommand: Bool = false,
-         showsDetails: Bool = false) {
+         showsDetails: Bool = false,
+         installedSource: String? = nil,
+         upgradeTitle: String? = nil,
+         upgradeExplanation: String? = nil,
+         showsDownloadInstructions: Bool = false,
+         onUpgrade: (() -> Void)? = nil) {
         self.onRecheck = onRecheck
         self.isRecheckDisabled = isRecheckDisabled
         self.isRechecking = isRechecking
+        self.installedSource = installedSource
+        self.upgradeTitle = upgradeTitle
+        self.upgradeExplanation = upgradeExplanation
+        self.onUpgrade = onUpgrade
+        self.showsDownloadInstructions = showsDownloadInstructions
         _showsCommand = State(initialValue: showsCommand)
         _showsDetails = State(initialValue: showsDetails)
     }
@@ -27,64 +42,60 @@ struct MoleInstallationGuidanceView: View {
     private var release: MoleAnalyzerRelease { .native }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(m("Set up the analyzer")).font(.headline)
-            Text(m("Use the official V1.57.0 file for this Mac. Homebrew and source builds are not compatible."))
+        VStack(alignment: .leading, spacing: 12) {
+            Text(m(installedSource == nil ? "Set up Mole" : "Use your installed Mole"))
+                .font(.headline)
+            Text(m("MoeKit reuses a verified installed analyzer. Keep the same installation source when upgrading."))
                 .font(.callout).foregroundStyle(.secondary)
-            Text("MoeKit rejects quarantined files. Neither MoeKit nor this command removes macOS protection. Do not switch download routes to bypass a security warning.")
-                .font(.caption).foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            step(1, m("Review the official download")) {
-                Link("Official Mole V1.57.0 release", destination: release.releaseURL)
-                Text(m("Read the release notes and review the command in step 3. The command downloads one official file, checks it, and makes it ready for MoeKit. It does not run Mole or ask for an administrator password."))
-                    .foregroundStyle(.secondary)
+            if let installedSource {
+                LabeledContent(m("Installation source"), value: installedSource)
+                    .font(.callout)
             }
-            step(2, m("Open Terminal")) {
-                Text(m("Press ⌘ Space to open Spotlight, type Terminal, then press Return."))
-                    .foregroundStyle(.secondary)
+            HStack(alignment: .firstTextBaseline) {
+                Text(m("Recommended version"))
+                Text(verbatim: MoleAnalyzerRelease.latestTestedVersion).fontWeight(.medium)
+                Spacer(minLength: 12)
+                Link(m("Official release notes"), destination: release.releaseURL)
+            }.font(.callout)
+
+            if let upgradeExplanation {
+                Text(upgradeExplanation).font(.callout).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            step(3, m("Copy, paste and run the command")) {
-                DisclosureGroup("Review download command", isExpanded: $showsCommand) {
-                    ToolDownloadCommandView(command: release.manualDownloadCommand).padding(.top, 6)
-                }
-                Button(copiedCommand == release.manualDownloadCommand
-                       ? String(localized: "Copied") : String(localized: "Copy download command")) {
-                    let command = release.manualDownloadCommand
-                    NSPasteboard.general.clearContents()
-                    if NSPasteboard.general.setString(command, forType: .string) { copiedCommand = command }
-                }.accessibilityIdentifier("mole.setup.copy-command")
-                Text(m("Copy, paste into Terminal with ⌘V, then press Return. The command downloads from GitHub into new folders in your home directory. Existing installations stay unchanged."))
-                    .foregroundStyle(.secondary)
-                Text(m("Wait for this success message before continuing:"))
-                    .foregroundStyle(.secondary)
-                Text(verbatim: "Mole analyzer ready").font(.callout.monospaced())
-                    .textSelection(.enabled)
-                Text(m("If an error appears, stop and read it. Existing files and download folders are kept. Try Recheck first."))
+            if let onUpgrade, let upgradeTitle {
+                Button(upgradeTitle, action: onUpgrade)
+                    .buttonStyle(.borderedProminent)
+                    .disabled(isRecheckDisabled)
+                    .accessibilityIdentifier("mole.setup.upgrade")
+                Text(m("Opens a controlled terminal with the command ready to review. Only pressing Return there runs it."))
                     .font(.caption).foregroundStyle(.secondary)
+            } else if onRecheck == nil {
+                Text(m("Open Mole → Space → Analyze with Mole… to check your version and see the next step."))
+                    .font(.callout).foregroundStyle(.secondary)
             }
-            step(4, m("Return to MoeKit and recheck")) {
-                Text(m(onRecheck == nil
-                    ? "Open Mole → Space → Analyze with Mole…, then choose Recheck. When Ready to analyze appears, choose a folder and review the analysis."
-                    : "Return here and choose Recheck. When Ready to analyze appears, choose a folder below and review the analysis."))
-                    .foregroundStyle(.secondary)
-                if let onRecheck {
+
+            if showsDownloadInstructions {
+                missingInstallationSteps
+            }
+
+            if let onRecheck {
+                HStack(alignment: .center, spacing: 12) {
                     Button(m(isRechecking ? "Checking installation…" : "Recheck"), action: onRecheck)
                         .disabled(isRecheckDisabled)
                         .accessibilityIdentifier("mole.setup.installation.recheck")
+                    Text(m("After installation or an upgrade, recheck before choosing a folder."))
+                        .font(.caption).foregroundStyle(.secondary)
                 }
             }
-            DisclosureGroup(m("Advanced download details"), isExpanded: $showsDetails) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Asset for this app: \(release.assetName)")
-                    Link("View the exact analyzer download", destination: release.assetURL)
-                    Text("Expected size: \(release.byteCount) bytes")
-                    Text("SHA-256: \(release.sha256)")
-                    Text(m("The guided download is detected at:"))
-                    Text(verbatim: "~/\(release.installationDirectoryName)/analyze-go")
-                    Text(m("The official Mole script's usual analyzer location is also checked:"))
-                    Text(verbatim: "~/.config/mole/bin/analyze-go")
-                    Text(m("A matching path alone is not enough. MoeKit verifies the file again before every analysis."))
-                }.font(.caption.monospaced()).textSelection(.enabled)
+
+            DisclosureGroup(m("Installation details"), isExpanded: $showsDetails) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Link(m("Official Mole installation instructions"),
+                         destination: URL(string: "https://github.com/tw93/Mole#quick-start")!)
+                    Text(m("A newer version is not automatically downgraded. Verified source and tested compatibility are separate checks."))
+                    Text(m("MoeKit checks the analyzer again before each run. Analysis still needs your separate folder confirmation."))
+                    Text(m("If macOS blocks a file, review its warning first. Do not change download routes to bypass it."))
+                }.font(.caption).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.top, 6)
@@ -92,19 +103,27 @@ struct MoleInstallationGuidanceView: View {
         }.frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func step<Content: View>(_ number: Int, _ title: String,
-                                    @ViewBuilder content: () -> Content) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            Text(verbatim: String(number)).font(.caption.weight(.semibold))
-                .frame(width: 22, height: 22)
-                .background(Color.accentColor.opacity(0.12), in: Circle())
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 7) {
-                Text(title).fontWeight(.semibold)
-                content()
-            }.font(.callout).fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
+    private var missingInstallationSteps: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(m("No existing analyzer found"))
+                .font(.callout.weight(.semibold))
+            Text(m("Already installed somewhere else? Choose that analyzer in Advanced details. Otherwise, download the recommended official analyzer below."))
+                .font(.callout).foregroundStyle(.secondary)
+            DisclosureGroup(m("Review download command"), isExpanded: $showsCommand) {
+                ToolDownloadCommandView(command: release.manualDownloadCommand).padding(.top, 6)
+            }
+            Button(m(copiedCommand == release.manualDownloadCommand ? "Copied" : "Copy download command")) {
+                let command = release.manualDownloadCommand
+                NSPasteboard.general.clearContents()
+                if NSPasteboard.general.setString(command, forType: .string) { copiedCommand = command }
+            }.accessibilityIdentifier("mole.setup.copy-command")
+            Text(m("Press ⌘ Space, open Terminal, then paste with ⌘V. Review the command and press Return to download."))
+            Text(m("This downloads and checks one official analyzer in a new folder in your home directory. It does not run Mole, replace an installation or ask for an administrator password."))
+            Text(m("Wait for “Mole analyzer ready”, then choose Recheck. If an error appears, stop and read it."))
+            Text(InstallerPathDisplay.quoted("~/" + release.installationDirectoryName + "/analyze-go"))
+                .font(.caption.monospaced()).textSelection(.enabled)
+        }.font(.caption).foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
     }
 
     private func m(_ key: String) -> String { MoleSetupText.localized(key) }

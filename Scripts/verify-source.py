@@ -85,7 +85,7 @@ for path in sources:
                     r"(?<![.\w])system\s*\(", r"\b(?:Darwin|Glibc)\.system\s*\(",
                     r'"/bin/(?:sh|bash|zsh)"', r"\bAuthorizationExecuteWithPrivileges\b",
                     r"\b(?:kill|killpg|raise|proc_signal|proc_signal_with_audittoken)\s*\("):
-        allowed_adapter = (path.relative_to(ROOT).as_posix() in {"Sources/Mole/MoleAnalysisExecutor.swift", "Sources/Installer/InstallerUseEvidence.swift", "Sources/GitCleanup/GitObjectSnapshot.swift", "Sources/GitCleanup/GitRemoteTransportSession.swift"}
+        allowed_adapter = (path.relative_to(ROOT).as_posix() in {"Sources/Mole/MoleAnalysisExecutor.swift", "Sources/Terminal/OperationTerminalSession.swift", "Sources/Installer/InstallerUseEvidence.swift", "Sources/GitCleanup/GitObjectSnapshot.swift", "Sources/GitCleanup/GitRemoteTransportSession.swift"}
                            and pattern == r"\b(?:Process|NSTask|NSAppleScript)\s*\("
                            and not re.search(r"\b(?:NSTask|NSAppleScript)\s*\(", text))
         allowed_signal = (path.relative_to(ROOT).as_posix() == "Sources/Services/NativeProcessTerminationSystem.swift"
@@ -162,6 +162,32 @@ if package_path.is_file():
             "location": "https://github.com/sparkle-project/Sparkle",
             "state": {"revision": "eef1a539a373c1f1a320624b1130fc5de7b2e100", "version": "2.10.0"}}],
             "Sparkle lockfile differs from the reviewed immutable revision")
+
+# SwiftTerm requires native SPM so its pinned build-info plugin/resource survive.
+# Build-only transitive package pins are explicit; only SwiftTerm is linked.
+native_expected = {
+    "swiftterm": ("1.20.0", "5d14406844143538cd8f8851d2d8a67c1fe443e5"),
+    "swift-argument-parser": ("1.6.1", "309a47b2b1d9b5e991f36961c983ecec72275be3"),
+    "swift-docc-plugin": ("1.4.3", "85e4bb4e1cd62cec64a4b8e769dcefdf0c5b9d64"),
+    "swift-docc-symbolkit": ("1.0.0", "b45d1f2ed151d057b54504d653e0da5552844e34"),
+}
+try:
+    native = json.loads((ROOT / "Configurations/NativePackages.resolved").read_text())["pins"]
+    require(all(p["identity"] == p["location"].rstrip("/").rsplit("/", 1)[-1].removesuffix(".git").lower()
+                for p in native), "Native package identities must match their canonical URL basename")
+    require({p["identity"]: (p["state"]["version"], p["state"]["revision"]) for p in native} == native_expected,
+            "Native SwiftTerm/build-only package pins differ from reviewed revisions")
+    project = project_path.read_text()
+    require('.package(product: "SwiftTerm", type: .runtime)' in project,
+            "SwiftTerm must use native SPM with its required build plugin")
+    require(project.count('.remote(url:') == 4, "Unexpected native package dependency")
+    require('sources: ["Helpers/OperationTerminal/main.c"]' in project,
+            "Production terminal helper must exclude its fixture program")
+    terminal = (ROOT / "Sources/Terminal/OperationTerminalSession.swift").read_text()
+    require(terminal.count("Process()") == 1 and 'url(forAuxiliaryExecutable: "OperationTerminal")' in terminal,
+            "Terminal adapter may launch only its one reviewed helper")
+except (OSError, KeyError, ValueError) as error:
+    errors.append("Invalid native package policy: " + str(error))
 
 if errors:
     print("Source checks failed:", file=sys.stderr)

@@ -6,8 +6,18 @@ import Testing
 struct MoleAnalysisModelsTests {
     @Test("Official pins are architecture-specific without version execution")
     func pins() {
-        #expect(MoleAnalyzerRelease.arm64.byteCount == 3_827_474)
-        #expect(MoleAnalyzerRelease.x86_64.byteCount == 4_022_992)
+        #expect(MoleAnalyzerRelease.arm64.byteCount == 3_860_946)
+        #expect(MoleAnalyzerRelease.x86_64.byteCount == 4_056_192)
+        #expect(MoleAnalyzerRelease.legacyArm64.byteCount == 3_827_474)
+        #expect(MoleAnalyzerRelease.legacyX86_64.byteCount == 4_022_992)
+        #expect(MoleAnalyzerRelease.homebrewArm64.byteCount == 4_348_258)
+        #expect(MoleAnalyzerRelease.latestTestedVersion == "1.58.0")
+        #expect(MoleAnalyzerRelease.nativeArtifacts.count == (MoleAnalyzerRelease.nativeArchitecture == "arm64" ? 3 : 2))
+        #expect(MoleAnalyzerRelease.reviewedArtifacts.count == 5)
+        #expect(Set(MoleAnalyzerRelease.reviewedArtifacts.map(\.sha256)).count == 5)
+        #expect(MoleAnalyzerRelease.reviewedArtifacts.allSatisfy { $0.isReviewed && !$0.requiresUntestedConsent })
+        #expect(MoleAnalyzerRelease.homebrewArm64.origin == .homebrewBottle)
+        #expect(MoleAnalyzerRelease.homebrewArm64.sha256 == "d32d92f4c32d8079d464c496312fa616a9af6580457d40ffe7bfd28213f93866")
         #expect(MoleAnalyzerRelease.arm64.sha256.count == 64)
         #expect(MoleAnalyzerRelease.arm64.sha256 != MoleAnalyzerRelease.x86_64.sha256)
     }

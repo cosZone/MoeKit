@@ -64,7 +64,7 @@ final class InstallerTrashStore {
         self.protectedPaths = protectedPaths
         self.catalogIsKnown = catalogIsKnown
         self.liveAnalysisID = nil; liveDirectory = nil; entryPaths = []; eligibleEntries = []
-        guard !isDemoEnabled, let liveAnalysisID, let result, let downloadsURL,
+        guard !isDemoEnabled, let liveAnalysisID, let result, result.release.isReviewed, let downloadsURL,
               result.directory.path == downloadsURL.path, result.report.path == downloadsURL.path,
               !result.report.overview, result.report.coverage == .known || result.report.coverage == .partial else { return }
         self.liveAnalysisID = liveAnalysisID

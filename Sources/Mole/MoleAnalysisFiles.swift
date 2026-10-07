@@ -45,6 +45,46 @@ enum MoleAnalysisFiles {
         return MoleFileIdentity(device: UInt64(truncatingIfNeeded: info.st_dev), inode: UInt64(info.st_ino))
     }
 
+    struct AnalyzerObservation: Equatable, Sendable {
+        let identity: MoleFileIdentity
+        let byteCount: Int
+        let sha256: String
+    }
+
+    /// Bounded byte observation; does not authorize or execute an unknown file.
+    static func observeAnalyzer(_ fd: Int32) throws -> AnalyzerObservation {
+        var before = stat()
+        guard fstat(fd, &before) == 0, before.st_mode & S_IFMT == S_IFREG,
+              before.st_mode & 0o111 != 0, before.st_mode & 0o022 == 0,
+              before.st_size > 0, before.st_size <= 8 * 1024 * 1024,
+              before.st_uid == geteuid() || before.st_uid == 0 else { throw MoleAnalysisFailure.unsupportedBinary }
+        try refuseQuarantine(fd)
+        guard lseek(fd, 0, SEEK_SET) == 0 else { throw MoleAnalysisFailure.unsupportedBinary }
+        var hash = SHA256(), count = 0
+        var buffer = [UInt8](repeating: 0, count: 64 * 1024)
+        while true {
+            try Task.checkCancellation()
+            let amount = read(fd, &buffer, buffer.count)
+            if amount < 0, errno == EINTR { continue }
+            guard amount >= 0 else { throw MoleAnalysisFailure.unsupportedBinary }
+            if amount == 0 { break }
+            count += amount
+            guard count <= before.st_size else { throw MoleAnalysisFailure.changedSelection }
+            hash.update(data: Data(buffer.prefix(amount)))
+        }
+        var after = stat()
+        guard fstat(fd, &after) == 0, count == before.st_size,
+              before.st_dev == after.st_dev, before.st_ino == after.st_ino,
+              before.st_size == after.st_size, before.st_mode == after.st_mode, before.st_uid == after.st_uid,
+              before.st_mtimespec.tv_sec == after.st_mtimespec.tv_sec,
+              before.st_mtimespec.tv_nsec == after.st_mtimespec.tv_nsec,
+              before.st_ctimespec.tv_sec == after.st_ctimespec.tv_sec,
+              before.st_ctimespec.tv_nsec == after.st_ctimespec.tv_nsec else { throw MoleAnalysisFailure.changedSelection }
+        try refuseQuarantine(fd)
+        return AnalyzerObservation(identity: try identity(fd), byteCount: count,
+            sha256: hash.finalize().map { String(format: "%02x", $0) }.joined())
+    }
+
     static func verifyAnalyzer(_ fd: Int32, release: MoleAnalyzerRelease) throws -> MoleFileIdentity {
         var before = stat()
         guard fstat(fd, &before) == 0, before.st_mode & S_IFMT == S_IFREG,

@@ -1105,6 +1105,436 @@
           }
         }
       }
+    },
+    "A newer version is not automatically downgraded. Verified source and tested compatibility are separate checks.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不会自动降级较新版本。来源验证与兼容性测试是两项独立检查。"
+          }
+        }
+      }
+    },
+    "After installation or an upgrade, recheck before choosing a folder.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "安装或升级后，请先重新检查，再选择文件夹。"
+          }
+        }
+      }
+    },
+    "Already installed somewhere else? Choose that analyzer in Advanced details. Otherwise, download the recommended official analyzer below.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已安装在其他位置？请在“高级详情”中选择该分析器。否则，可按下方指引下载推荐的官方分析器。"
+          }
+        }
+      }
+    },
+    "Analyzer needs attention": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分析器需要检查"
+          }
+        }
+      }
+    },
+    "Comparing this analyzer with the official Homebrew bottle. Mole is not running.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在将此分析器与官方 Homebrew 预编译包比对，尚未运行 Mole。"
+          }
+        }
+      }
+    },
+    "Copied": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已复制"
+          }
+        }
+      }
+    },
+    "Copy download command": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复制下载命令"
+          }
+        }
+      }
+    },
+    "Current version": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前版本"
+          }
+        }
+      }
+    },
+    "Downloads official Homebrew metadata and a bottle to compare this file. It does not run or install Mole.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下载官方 Homebrew 软件信息与预编译包来比对此文件，不会运行或安装 Mole。"
+          }
+        }
+      }
+    },
+    "I understand this version is untested and want to use it for this analysis.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "我了解此版本尚未经过测试，并愿意在本次分析中使用。"
+          }
+        }
+      }
+    },
+    "If macOS blocks a file, review its warning first. Do not change download routes to bypass it.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "如果 macOS 阻止某个文件，请先查看警告，不要通过换下载途径绕过限制。"
+          }
+        }
+      }
+    },
+    "Installation details": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "安装详情"
+          }
+        }
+      }
+    },
+    "Installation source": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "安装来源"
+          }
+        }
+      }
+    },
+    "MoeKit checks the analyzer again before each run. Analysis still needs your separate folder confirmation.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MoeKit 在每次运行前都会重新验证分析器，分析仍需单独确认文件夹范围。"
+          }
+        }
+      }
+    },
+    "MoeKit reuses a verified installed analyzer. Keep the same installation source when upgrading.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MoeKit 复用已验证的本机分析器。升级时请沿用原安装来源。"
+          }
+        }
+      }
+    },
+    "MoeKit supplies a private HOME and temporary directory, verifies a temporary analyzer copy, and cleans only its own session after the process stops. This does not restrict the untested program's filesystem access.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MoeKit 提供私有 HOME 和临时目录，验证临时分析器副本，并在进程停止后仅清理自己的会话。这不会限制未测试程序访问文件系统的范围。"
+          }
+        }
+      }
+    },
+    "No existing analyzer found": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未找到已有分析器"
+          }
+        }
+      }
+    },
+    "Official Mole installation instructions": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mole 官方安装说明"
+          }
+        }
+      }
+    },
+    "Official release notes": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "官方发布说明"
+          }
+        }
+      }
+    },
+    "Official source verified · not yet tested": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "官方来源已验证 · 尚未测试"
+          }
+        }
+      }
+    },
+    "Open Mole → Space → Analyze with Mole… to check your version and see the next step.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开 Mole → 空间 → 使用 Mole 分析…，检查版本并查看下一步。"
+          }
+        }
+      }
+    },
+    "Opens a controlled terminal with the command ready to review. Only pressing Return there runs it.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开受控终端供你复查命令，只有在该终端中按回车才会运行。"
+          }
+        }
+      }
+    },
+    "Press ⌘ Space, open Terminal, then paste with ⌘V. Review the command and press Return to download.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按 ⌘ 空格打开“终端”，再按 ⌘V 粘贴。检查命令后按回车下载。"
+          }
+        }
+      }
+    },
+    "Recommended version": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "推荐版本"
+          }
+        }
+      }
+    },
+    "Reports from an untested build are view-only. Installer actions require a tested analyzer.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未测试构建的报告仅供查看，安装包操作需要使用已测试的分析器。"
+          }
+        }
+      }
+    },
+    "Review download command": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看下载命令"
+          }
+        }
+      }
+    },
+    "Review the command in the terminal, then press Return to run it.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在终端中复查命令，再按回车运行。"
+          }
+        }
+      }
+    },
+    "Selected manually": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已手动选择"
+          }
+        }
+      }
+    },
+    "Tested / recommended": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已测试 / 推荐"
+          }
+        }
+      }
+    },
+    "The analyzer is not ready. Review its version, source and verification details.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分析器尚未就绪，请查看版本、来源与验证详情。"
+          }
+        }
+      }
+    },
+    "The official source is verified, but this version has not been tested with MoeKit. Each analysis needs an extra acknowledgement.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "官方来源已验证，但该版本尚未经过 MoeKit 测试。每次分析都需要额外确认。"
+          }
+        }
+      }
+    },
+    "This downloads and checks one official analyzer in a new folder in your home directory. It does not run Mole, replace an installation or ask for an administrator password.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此命令会在个人主目录的新文件夹中下载并校验一个官方分析器，不会运行 Mole、替换已有安装，也不需要管理员密码。"
+          }
+        }
+      }
+    },
+    "This official build has not been tested with MoeKit. It runs with your user permissions, without an OS sandbox. MoeKit cannot guarantee that this untested build will leave files unchanged.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此官方构建尚未经过 MoeKit 测试。它以你的用户权限运行，没有操作系统沙箱。MoeKit 无法保证此未测试构建不会修改文件。"
+          }
+        }
+      }
+    },
+    "This version is newer than the tested release. Keep it installed; MoeKit will not offer a downgrade.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此版本比已测试版本更新。请保留现有安装，MoeKit 不会提供降级操作。"
+          }
+        }
+      }
+    },
+    "Unknown": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未知"
+          }
+        }
+      }
+    },
+    "Upgrade Mole…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "升级 Mole…"
+          }
+        }
+      }
+    },
+    "Upgrade with Homebrew…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "通过 Homebrew 升级…"
+          }
+        }
+      }
+    },
+    "Use your installed Mole": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用已安装的 Mole"
+          }
+        }
+      }
+    },
+    "Verify official Homebrew build": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "验证官方 Homebrew 构建"
+          }
+        }
+      }
+    },
+    "Verifying the official Homebrew build…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在验证官方 Homebrew 构建…"
+          }
+        }
+      }
+    },
+    "Version from installation metadata; file verification is separate.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "版本来自安装信息，文件验证需单独进行。"
+          }
+        }
+      }
+    },
+    "Wait for “Mole analyzer ready”, then choose Recheck. If an error appears, stop and read it.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "等待出现“Mole analyzer ready”，再点击“重新检查”。如有报错，请先停下来阅读提示。"
+          }
+        }
+      }
+    },
+    "Your installed analyzer is verified. Choose a folder below.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已安装分析器已通过验证，请在下方选择文件夹。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

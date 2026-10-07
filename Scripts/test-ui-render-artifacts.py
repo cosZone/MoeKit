@@ -35,6 +35,8 @@ class RenderArtifactTests(unittest.TestCase):
         scenarios += ["settings-real", "settings-demo"]
         scenarios += ["tool-preparation-" + state for state in ("unchecked", "observed", "demo", "mole-guidance", "git-guidance", "mole-command")]
         scenarios += ["mole-analysis-" + state for state in ("initial", "ready", "missing", "incompatible", "unverified", "advanced", "guide", "confirmation", "partial", "failure")]
+        scenarios += ["mole-analysis-" + state for state in ("homebrew-ready", "current-unverified", "unsupported-format", "unsupported-architecture", "unknown-version", "untested-confirmation", "untested-result")]
+        scenarios += ["mole-upgrade-" + state for state in ("pending", "active", "success", "failure", "cancel")]
         scenarios += ["installer-" + state for state in ("disabled", "trash-confirmation", "restore-confirmation", "incomplete-recovery")]
         scenarios += ["installer-" + state + "-compact" for state in ("trash-confirmation", "restore-confirmation")]
         scenarios += ["process-stop-graceful", "process-stop-force"]
@@ -47,6 +49,10 @@ class RenderArtifactTests(unittest.TestCase):
                 sizes = ((580, 520), (680, 720))
             if scenario.startswith("mole-analysis-"):
                 sizes = ((720, 1400),) if scenario == "mole-analysis-guide" else ((720, 560), (900, 800))
+            if scenario in ("mole-analysis-untested-confirmation", "mole-analysis-untested-result"):
+                sizes = ((720, 1400), (900, 1600))
+            if scenario.startswith("mole-upgrade-"):
+                sizes = ((900, 760),)
             if scenario.startswith("installer-"):
                 sizes = ((720, 560),) if scenario.endswith("-compact") else ((720, 1600),)
             if scenario.startswith("updates-"):
@@ -72,6 +78,11 @@ class RenderArtifactTests(unittest.TestCase):
                     if scenario.startswith("mole-analysis-"):
                         with (root / text).open("a") as stream:
                             stream.write(f"Setup ready title: {'可以开始分析' if language == 'zh-Hans' else 'Ready to analyze'}\n")
+                    if scenario.startswith("mole-upgrade-"):
+                        with (root / text).open("a") as stream:
+                            stream.write("Real processes launched: 0\nNative Homebrew/Mole mutation: none\n")
+                            stream.write("Actual SwiftTerm TerminalView bounds: (0, 0, 850, 420)\n")
+                            stream.write("Fixed commands: /opt/homebrew/bin/brew update; /opt/homebrew/bin/brew upgrade --formula mole\n")
                     if scenario.startswith("updates-"):
                         with (root / text).open("a") as stream:
                             stream.write(f"Update action title: {'检查更新…' if language == 'zh-Hans' else 'Check for updates…'}\n")
@@ -102,7 +113,7 @@ class RenderArtifactTests(unittest.TestCase):
         return manifest
 
     def test_complete_english_and_chinese(self):
-        for language, count in [("en", 148), ("zh-Hans", 140)]:
+        for language, count in [("en", 186), ("zh-Hans", 178)]:
             with self.subTest(language=language), tempfile.TemporaryDirectory() as path:
                 root = Path(path)
                 self.fixture(root, language)
@@ -133,11 +144,11 @@ class RenderArtifactTests(unittest.TestCase):
             manifest = self.fixture(root, "zh-Hans")
             manifest[0]["attachments"].pop()
             (root / "manifest.json").write_text(json.dumps(manifest))
-            with self.assertRaisesRegex(ValueError, "Expected 140"):
+            with self.assertRaisesRegex(ValueError, "Expected 178"):
                 module.verify(root, "zh-Hans")
 
     def test_rejects_missing_installer_image_or_scope(self):
-        for language, count in (("en", 148), ("zh-Hans", 140)):
+        for language, count in (("en", 186), ("zh-Hans", 178)):
             for suffix in (".png", ".txt"):
                 with self.subTest(language=language, suffix=suffix), tempfile.TemporaryDirectory() as path:
                     root = Path(path)
@@ -150,7 +161,7 @@ class RenderArtifactTests(unittest.TestCase):
                         module.verify(root, language)
 
     def test_rejects_missing_compact_installer_image_or_scope(self):
-        for language, count in (("en", 148), ("zh-Hans", 140)):
+        for language, count in (("en", 186), ("zh-Hans", 178)):
             for suffix in (".png", ".txt"):
                 with self.subTest(language=language, suffix=suffix), tempfile.TemporaryDirectory() as path:
                     root = Path(path)
@@ -175,7 +186,7 @@ class RenderArtifactTests(unittest.TestCase):
                     module.verify(root, "en")
 
     def test_accepts_installer_retina_bitmap_for_every_scenario(self):
-        for language, count in (("en", 148), ("zh-Hans", 140)):
+        for language, count in (("en", 186), ("zh-Hans", 178)):
             with self.subTest(language=language), tempfile.TemporaryDirectory() as path:
                 root = Path(path)
                 manifest = self.fixture(root, language)
@@ -227,7 +238,8 @@ class RenderArtifactTests(unittest.TestCase):
     def test_png_dimension_bound_does_not_expand_to_full_width_and_height(self):
         self.assertEqual(module.png_dimensions(png(2560, 1600)), (2560, 1600))
         self.assertEqual(module.png_dimensions(png(1440, 3200)), (1440, 3200))
-        for dimensions in ((2560, 3200), (1441, 3200), (1440, 3201), (2561, 1600)):
+        self.assertEqual(module.png_dimensions(png(1800, 3200)), (1800, 3200))
+        for dimensions in ((2560, 3200), (1801, 3200), (1440, 3201), (2561, 1600)):
             with self.subTest(dimensions=dimensions), self.assertRaisesRegex(ValueError, "dimensions"):
                 module.png_dimensions(png(*dimensions))
 

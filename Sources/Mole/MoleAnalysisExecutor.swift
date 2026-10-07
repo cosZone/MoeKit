@@ -4,14 +4,30 @@ import Foundation
 protocol MoleAnalysisExecuting: Sendable {
     func prepare(executable: URL, directory: URL) async throws -> MoleAnalysisPlan
     func run(_ plan: MoleAnalysisPlan) async throws -> MoleAnalysisResult
+    func prepare(executable: URL, directory: URL, verifiedArtifact: MoleAnalyzerRelease?) async throws -> MoleAnalysisPlan
+    func run(_ plan: MoleAnalysisPlan, acknowledgeUntestedBuild: Bool) async throws -> MoleAnalysisResult
 }
 
-/// Fixed-code adapter. It executes only the exact pinned official analyzer,
-/// through the bundled bounded supervisor. This is not an OS sandbox.
+extension MoleAnalysisExecuting {
+    func prepare(executable: URL, directory: URL, verifiedArtifact: MoleAnalyzerRelease?) async throws -> MoleAnalysisPlan {
+        try await prepare(executable: executable, directory: directory)
+    }
+    func run(_ plan: MoleAnalysisPlan, acknowledgeUntestedBuild: Bool) async throws -> MoleAnalysisResult {
+        guard !plan.release.requiresUntestedConsent || acknowledgeUntestedBuild else { throw MoleAnalysisFailure.untestedConsentRequired }
+        return try await run(plan)
+    }
+}
+
+/// Executes exact reviewed artifacts, or freshly bottle-verified official
+/// builds with separate per-run untested acknowledgement. The bundled
+/// supervisor bounds lifecycle/output; this is not an OS sandbox.
 actor MoleAnalysisExecutor: MoleAnalysisExecuting {
     private let sessionParentOverride: URL?
     init(privateSessionParent: URL? = nil) { sessionParentOverride = privateSessionParent }
     func prepare(executable: URL, directory: URL) async throws -> MoleAnalysisPlan {
+        try await prepare(executable: executable, directory: directory, verifiedArtifact: nil)
+    }
+    func prepare(executable: URL, directory: URL, verifiedArtifact: MoleAnalyzerRelease?) async throws -> MoleAnalysisPlan {
         try Task.checkCancellation()
         try MoleAnalysisFiles.validateLocalURL(executable)
         try MoleAnalysisFiles.validateLocalURL(directory)
@@ -29,7 +45,9 @@ actor MoleAnalysisExecutor: MoleAnalysisExecuting {
               !MoleLiveReportValidator.overlaps(binary, parent) else { throw MoleAnalysisFailure.invalidSelection }
         let binaryFD = try MoleAnalysisFiles.openPath(binary, directory: false)
         defer { close(binaryFD) }
-        let release = MoleAnalyzerRelease.native
+        let observation = try MoleAnalysisFiles.observeAnalyzer(binaryFD)
+        let known = MoleAnalyzerRelease.nativeArtifacts.first { $0.sha256 == observation.sha256 && $0.byteCount == observation.byteCount }
+        guard let release = known ?? verifiedArtifact, release.isEligible else { throw MoleAnalysisFailure.unsupportedBinary }
         let executableIdentity = try MoleAnalysisFiles.verifyAnalyzer(binaryFD, release: release)
         let scopeFD = try MoleAnalysisFiles.openDirectory(scope)
         defer { close(scopeFD) }
@@ -40,8 +58,12 @@ actor MoleAnalysisExecutor: MoleAnalysisExecuting {
     }
 
     func run(_ plan: MoleAnalysisPlan) async throws -> MoleAnalysisResult {
+        try await run(plan, acknowledgeUntestedBuild: false)
+    }
+    func run(_ plan: MoleAnalysisPlan, acknowledgeUntestedBuild: Bool) async throws -> MoleAnalysisResult {
         try Task.checkCancellation()
-        guard plan.release == .native, Date().timeIntervalSince(plan.preparedAt) < 300,
+        guard !plan.release.requiresUntestedConsent || acknowledgeUntestedBuild else { throw MoleAnalysisFailure.untestedConsentRequired }
+        guard plan.release.isEligible, Date().timeIntervalSince(plan.preparedAt) < 300,
               !MoleLiveReportValidator.overlaps(plan.directory, plan.privateSessionParent) else {
             throw MoleAnalysisFailure.changedSelection
         }

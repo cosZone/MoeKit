@@ -49,10 +49,10 @@ def png_dimensions(data: bytes) -> tuple[int, int]:
     if not channels or depth not in (8, 16) or compression or filtering or interlace:
         raise ValueError("Unsupported AppKit PNG format")
     # Existing views reach 2560×1600 at 2× backing. Installer confirmation
-    # reaches 1440×3200; increasing height alone would also admit a much larger
-    # 2560×3200 raster. Keep width, height AND pixel area bounded before inflate.
+    # reaches 1440×3200 and the untested Mole warning reaches1800×3200.
+    # Keep width, height AND pixel area bounded before inflate; reject2560×3200.
     # verify() still accepts only each scenario's exact 1× or 2× dimensions.
-    if not 0 < width <= 2560 or not 0 < height <= 3200 or width * height > 1440 * 3200:
+    if not 0 < width <= 2560 or not 0 < height <= 3200 or width * height > 1800 * 3200:
         raise ValueError("Unexpected bitmap dimensions")
     row_bytes = width * channels * (depth // 8)
     expected_bytes = (row_bytes + 1) * height
@@ -106,6 +106,17 @@ def verify(directory: Path, language: str) -> int:
     })
     expected.update({
         f"mole-analysis-guide-{language}-{appearance}-720x1400": (720, 1400)
+        for appearance in ("light", "dark")
+    })
+    expected.update({
+        f"mole-analysis-{scenario}-{language}-{appearance}-{width}x{height}": (width, height)
+        for scenario in ("homebrew-ready", "current-unverified", "unsupported-format", "unsupported-architecture", "unknown-version", "untested-confirmation", "untested-result")
+        for appearance in ("light", "dark")
+        for width, height in (((720, 1400), (900, 1600)) if scenario.startswith("untested-") else ((720, 560), (900, 800)))
+    })
+    expected.update({
+        f"mole-upgrade-{state}-{language}-{appearance}-900x760": (900, 760)
+        for state in ("pending", "active", "success", "failure", "cancel")
         for appearance in ("light", "dark")
     })
     expected.update({
@@ -192,6 +203,13 @@ def verify(directory: Path, language: str) -> int:
                 "Evidence source: public SwiftUI bounds anchors on displayed views"})
         if name.startswith("mole-analysis-"):
             required.add(f"Setup ready title: {'可以开始分析' if language == 'zh-Hans' else 'Ready to analyze'}")
+        if name.startswith("mole-upgrade-"):
+            required.update({"Real processes launched: 0", "Native Homebrew/Mole mutation: none"})
+            if not any(line.startswith("Actual SwiftTerm TerminalView bounds: ") for line in lines):
+                raise ValueError(f"Missing actual native terminal bounds: {name}")
+            if not any(line.startswith("Fixed commands: ") and "brew" in line and "update" in line and
+                       "upgrade" in line and "--formula" in line and "mole" in line for line in lines):
+                raise ValueError(f"Missing fixed upgrade command evidence: {name}")
         if name.startswith("tool-preparation-"):
             required.add(f"Download copy title: {'复制下载命令' if language == 'zh-Hans' else 'Copy download command'}")
             required.add(f"Tool candidate title: {'已找到 · 未验证' if language == 'zh-Hans' else 'Found · unverified'}")

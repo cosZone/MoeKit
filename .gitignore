@@ -31,3 +31,9 @@ Unsigned/
 
 # Generated only for secret-free native Mole fixture tests
 Tests/Resources/MoleAnalyzerFixturePath.txt
+
+Tests/Resources/MoleAnalyzerFixtures.json
+
+# Isolated Intel contract-test build output
+DerivedDataIntel/
+IntelMoleResults.xcresult/

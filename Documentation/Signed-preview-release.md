@@ -36,9 +36,10 @@ MoeKit 工作流直接读取上述三个名字，**不要求创建 `Prod` enviro
 - 无私有签名 secrets 的独立 job 运行 Release 配置单元测试（`ENABLE_TESTABILITY=YES`），随后从相同源码单独 archive universal Release；测试只运行 runner 的当前 CPU 架构
 - 归档 `.app` 同时包含 arm64、x86_64，Bundle ID 固定为 `com.yusixian.MoeKit`，最低 macOS 15.0
 - 签名 job 不编译源码、执行应用或运行第三方安装器；它只验证同次 run/attempt 的产物，用临时 keychain 内唯一的 Apple Development 身份重新签名，核对证书指纹、预期 Team ID、两种架构、bundle 信息与 provenance
-- Hardened Runtime 开启；无额外 entitlements、无 get-task-allow、无 App Sandbox、无 provisioning profile。preview.12 包含三个显式列出的原创辅助程序 `Contents/MacOS/MoleAnalysisSupervisor`、`Contents/MacOS/GitObjectInspector` 和 `Contents/MacOS/GitRemoteTransport`，标识分别固定为 `com.yusixian.MoeKit.MoleAnalysisSupervisor`、`com.yusixian.MoeKit.GitObjectInspector` 和 `com.yusixian.MoeKit.GitRemoteTransport`；第三个 helper 随 preview.12 交付，本版核对九份代码对象；preview.10／preview.11 的历史安装包仍为八份；另允许固定 Sparkle 2.10.0 框架及其四个精确嵌套 helper；仅允许官方 manifest 的精确相对链接。其他 helper/framework/XPC 与可执行资源一律拒绝
-- 先用同一个现有 Apple Development 身份显式逐个签名三个原创 helper、Sparkle 的四个嵌套 helper、Sparkle.framework，再签名父 App；不使用 `--deep` 签名或继承旧 entitlements。九份代码每个 arm64／x86_64 slice 均验证精确标识、Hardened Runtime、空 entitlements、Apple trust anchor、预期 Team ID 与导入证书指纹；ZIP 往返与 DMG 内再次逐个核验代码，全部文件内容（含 helper 与签名）必须相同
-- 这三个 helper 均由本仓库原创 C 源码构建。第三方 Mole 分析器和 Apple Git 不随 App 分发，不进入发布签名流程，也不会被重新签名；发布 allowlist 显式拒绝额外的 `Contents/MacOS/git`
+- Hardened Runtime 开启；无额外 entitlements、无 get-task-allow、无 App Sandbox、无 provisioning profile。preview.14 源码包含四个显式列出的原创辅助程序 `Contents/MacOS/MoleAnalysisSupervisor`、`Contents/MacOS/GitObjectInspector`、`Contents/MacOS/GitRemoteTransport` 和 `Contents/MacOS/OperationTerminal`，标识分别固定为 `com.yusixian.MoeKit.MoleAnalysisSupervisor`、`com.yusixian.MoeKit.GitObjectInspector`、`com.yusixian.MoeKit.GitRemoteTransport` 和 `com.yusixian.MoeKit.OperationTerminal`；本版核对十份代码对象。历史 preview.10／preview.11 为八份，preview.12／preview.13 为九份；另允许固定 Sparkle 2.10.0 框架及其四个精确嵌套 helper，仅允许官方 manifest 的精确相对链接。其他 helper/framework/XPC 与可执行资源一律拒绝
+- 先用同一个现有 Apple Development 身份显式逐个签名四个原创 helper、Sparkle 的四个嵌套 helper、Sparkle.framework，再签名父 App；不使用 `--deep` 签名或继承旧 entitlements。十份代码每个 arm64／x86_64 slice 均验证精确标识、Hardened Runtime、空 entitlements、Apple trust anchor、预期 Team ID 与导入证书指纹；ZIP 往返与 DMG 内再次逐个核验代码，全部文件内容（含 helper 与签名）必须相同
+- 这四个 helper 均由本仓库原创 C 源码构建；`OperationTerminal` 负责固定 Homebrew Mole 升级操作的 PTY 与进程组监管。第三方 Mole 分析器和 Apple Git 不随 App 分发，不进入发布签名流程，也不会被重新签名；发布 allowlist 显式拒绝额外的 `Contents/MacOS/git`
+- SwiftTerm 1.20.0 静态链接；其唯一资源包 `Contents/Resources/SwiftTerm_SwiftTerm.bundle` 仅包含 `Contents/Info.plist` 和 `Contents/Resources/default.metallib`，不属于上述十份可签名代码对象。资源包不得声明 `CFBundleExecutable`，资源文件不得有可执行权限或 Mach-O 内容，不允许符号链接及额外文件；Metal 资源必须具有 `MTLB` 标识
 - 不使用公证或安全时间戳；证书过期／撤销可能影响后续校验。代码签名并不承诺长期分发可用性
 - Release 精确包含五个文件：`MoeKit-v<version>-macOS.dmg`、`MoeKit-v<version>-macOS.zip`、`SHA256SUMS.txt`、`BUILD_INFO.json`、已签名 `appcast.xml`。两种安装包均为 universal，包含 arm64 与 x86_64；不另发芯片专用包
 - ZIP 中是 `MoeKit.app`（如有 `ditto` 的 AppleDouble 元数据，只允许对应 App 的数据）；DMG 根目录严格只有 `MoeKit.app` 和指向 `/Applications` 的 `Applications` 快捷方式，不包含 App 之外的安装器或其他可执行文件；Sparkle 更新组件位于受审 App 内
@@ -56,7 +57,7 @@ MoeKit 工作流直接读取上述三个名字，**不要求创建 `Prod` enviro
 
 挂载点位于签名临时目录之外。正常、失败、部分挂载和超时路径均通过 `finally` 尝试 detach；工作流的 `always` 清理会再次检查。不会 force-detach；卸载失败会阻止发布并保留独立挂载目录供 runner 销毁，同时仍清除签名凭据。挂载点只允许 `rmdir`，绝不递归删除它或一个可能包含它的父目录。
 
-`Scripts/test-preview-release.py` 包含无需凭据的 macOS 集成测试：用 Xcode 编译九个合成的 universal code objects，按 helper → App 顺序 ad-hoc 签名后实际执行 ZIP／DMG 创建与只读校验，最后验证卸载；另检查 helper 标识错误、缺少 runtime、额外 entitlements、篡改、缺少架构和未签名均失败。**不执行这些程序**。它随 Native CI 与发布的无 secrets 测试阶段运行，Linux 上显式跳过。便携单元测试不能代替这项原生验证。
+`Scripts/test-preview-release.py` 包含无需凭据的 macOS 集成测试：用 Xcode 编译十个合成的 universal code objects，按 helper → App 顺序 ad-hoc 签名后实际执行 ZIP／DMG 创建与只读校验，最后验证卸载；另检查 helper 标识错误、缺少 runtime、额外 entitlements、篡改、缺少架构和未签名均失败。**不执行这些程序**。它随 Native CI 与发布的无 secrets 测试阶段运行，Linux 上显式跳过。便携单元测试不能代替这项原生验证。
 
 ### 版本说明的唯一来源
 

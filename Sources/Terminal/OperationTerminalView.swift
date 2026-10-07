@@ -42,6 +42,7 @@ struct OperationTerminalRepresentable: NSViewRepresentable {
         private let store: MoleUpgradeTerminalStore
         private var monitor: Any?
         private var windowObservers: [NSObjectProtocol] = []
+        private weak var installedTerminal: TerminalView?
         private var isRecordingDisplay = false
         private var fedBytes = 0
         private var renderedPlanID: UUID?
@@ -55,22 +56,29 @@ struct OperationTerminalRepresentable: NSViewRepresentable {
 
         func install(_ terminal: TerminalView) {
             removeMonitor()
+            installedTerminal = terminal
+            let lifetime = presentationLifetime
+            // Construct the actor-isolated callback here, while all UI references
+            // are on MainActor. The observer carries only this Sendable function
+            // and immutable identity; it never captures weak UI references itself.
+            let handleWindowEvent: @MainActor @Sendable (ObjectIdentifier) -> Void = { [weak self] windowID in
+                guard let self, self.presentationLifetime == lifetime,
+                      let terminal = self.installedTerminal, let window = terminal.window,
+                      ObjectIdentifier(window) == windowID else { return }
+                self.presentationBecameAvailable(terminal)
+            }
             // makeNSView/update can both precede sheet attachment. AppKit's own
             // window lifecycle provides bounded rechecks, without a polling timer.
             for name in [NSWindow.didBecomeKeyNotification, NSWindow.didChangeOcclusionStateNotification,
                          NSWindow.didUpdateNotification] {
                 windowObservers.append(NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) {
-                    [weak self, weak terminal] notification in
+                    [handleWindowEvent] notification in
                     guard let notifiedWindow = notification.object as? NSWindow else { return }
                     let notifiedWindowID = ObjectIdentifier(notifiedWindow)
                     // Notification is not Sendable. Carry only immutable identity
                     // into the main-actor check, retaining the window for this call.
                     withExtendedLifetime(notifiedWindow) {
-                        MainActor.assumeIsolated {
-                            guard let self, let terminal, let window = terminal.window,
-                                  ObjectIdentifier(window) == notifiedWindowID else { return }
-                            self.presentationBecameAvailable(terminal)
-                        }
+                        MainActor.assumeIsolated { handleWindowEvent(notifiedWindowID) }
                     }
                 })
             }
@@ -113,6 +121,7 @@ struct OperationTerminalRepresentable: NSViewRepresentable {
             monitor = nil
             for observer in windowObservers { NotificationCenter.default.removeObserver(observer) }
             windowObservers.removeAll()
+            installedTerminal = nil
             presentationLifetime = UUID()
             focusRequestedPlanID = nil; launchKeyAwaitingRelease = nil
             revokeDisplayReceipt()

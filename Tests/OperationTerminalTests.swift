@@ -12,7 +12,7 @@ struct OperationTerminalTests {
         let store = MoleUpgradeTerminalStore(executor: runner)
         #expect(await runner.starts == 0)
         store.prepare(source: .appleSiliconHomebrew, currentVersion: "1.50.0", recommendedVersion: "1.58.0")
-        await settlePreparation(store)
+        try await settlePreparation(store)
         let plan = try #require(store.plan)
         #expect(store.isReady)
         #expect(plan.commands == ["/opt/homebrew/bin/brew update", "/opt/homebrew/bin/brew upgrade --formula mole"])
@@ -22,17 +22,17 @@ struct OperationTerminalTests {
         #expect(await runner.starts == 0)
         store.handleUserReturn(planID: plan.id)
         store.handleUserReturn(planID: plan.id)
-        await runner.waitForStart()
+        try await runner.waitForStart()
         #expect(await runner.starts == 1)
         #expect(store.blocksAppUpdate)
-        await runner.complete(.completed); await settleRun(store)
+        await runner.complete(.completed); try await settleRun(store)
         #expect(store.outcome == .completed)
         #expect(!store.blocksAppUpdate)
         store.handleUserReturn(planID: plan.id)
         #expect(await runner.starts == 1)
         #expect(store.plan?.id == plan.id)
         store.prepare(source: .intelHomebrew, currentVersion: "1.50.0", recommendedVersion: "1.58.0")
-        await settlePreparation(store)
+        try await settlePreparation(store)
         #expect(store.plan?.id != plan.id)
         store.handleUserReturn(planID: plan.id)
         #expect(await runner.starts == 1)
@@ -43,7 +43,7 @@ struct OperationTerminalTests {
         let runner = OperationTerminalFixture()
         let store = MoleUpgradeTerminalStore(executor: runner)
         store.prepare(source: .intelHomebrew, currentVersion: nil, recommendedVersion: "1.58.0")
-        await settlePreparation(store)
+        try await settlePreparation(store)
         let plan = try #require(store.plan)
         store.cancel()
         store.handleUserReturn(planID: plan.id)
@@ -56,16 +56,16 @@ struct OperationTerminalTests {
         let runner = OperationTerminalFixture()
         let store = MoleUpgradeTerminalStore(executor: runner)
         store.prepare(source: .appleSiliconHomebrew, currentVersion: "1.50.0", recommendedVersion: "1.58.0")
-        await settlePreparation(store)
+        try await settlePreparation(store)
         store.handleUserReturn(planID: try #require(store.plan?.id))
-        await runner.waitForStart()
+        try await runner.waitForStart()
         store.send(Data([3]))
         #expect(await runner.takeInput().contains(3))
         let count = store.transcript.count
         store.cancel(); store.cancel()
         #expect(store.phase == .cancelling && store.isBusy && store.blocksAppUpdate)
         #expect(await runner.wasCancelled)
-        await runner.complete(.cancelled); await settleRun(store)
+        await runner.complete(.cancelled); try await settleRun(store)
         #expect(store.outcome == .cancelled)
         #expect(store.transcript.count > count)
         #expect(String(decoding: store.transcript, as: UTF8.self).contains("synthetic output"))
@@ -81,28 +81,28 @@ struct OperationTerminalTests {
         // No mode switch itself starts a review or process.
         let real = MoleUpgradeTerminalStore(executor: runner)
         real.prepare(source: .appleSiliconHomebrew, currentVersion: nil, recommendedVersion: "1.58.0")
-        await settlePreparation(real)
-        real.handleUserReturn(planID: try #require(real.plan?.id)); await runner.waitForStart()
+        try await settlePreparation(real)
+        real.handleUserReturn(planID: try #require(real.plan?.id)); try await runner.waitForStart()
         real.setDemoEnabled(true); real.setDemoEnabled(false)
         #expect(real.isBusy)
         await runner.emit("stale success output")
-        await runner.complete(.completed); await settleRun(real)
+        await runner.complete(.completed); try await settleRun(real)
         #expect(real.outcome == .cancelled)
         #expect(real.transcript.isEmpty)
         #expect(await runner.starts == 1)
     }
 
     @Test("Cancelling preparation retains ownership and rejects a delayed review")
-    func cancelPreparation() async {
+    func cancelPreparation() async throws {
         let fixture = OperationTerminalFixture(pausePreparation: true)
         let store = MoleUpgradeTerminalStore(executor: fixture)
         store.prepare(source: .appleSiliconHomebrew, currentVersion: nil, recommendedVersion: "1.58.0")
-        await fixture.waitForPreparation()
+        try await fixture.waitForPreparation()
         store.cancel()
         #expect(store.isBusy && store.phase == .cancelling)
         store.prepare(source: .intelHomebrew, currentVersion: nil, recommendedVersion: "1.58.0")
         await fixture.completePreparation()
-        await settleRun(store)
+        try await settleRun(store)
         #expect(store.plan == nil)
         #expect(store.outcome == .cancelled)
         #expect(await fixture.preparations == 1)
@@ -115,9 +115,9 @@ struct OperationTerminalTests {
         let safety = UpdateInstallationSafety()
         var store: MoleUpgradeTerminalStore? = MoleUpgradeTerminalStore(executor: fixture, updateSafety: safety)
         store?.prepare(source: .appleSiliconHomebrew, currentVersion: nil, recommendedVersion: "1.58.0")
-        await settlePreparation(try #require(store))
+        try await settlePreparation(try #require(store))
         store?.handleUserReturn(planID: try #require(store?.plan?.id))
-        await fixture.waitForStart()
+        try await fixture.waitForStart()
         #expect(!safety.canTerminate)
         weak var observed = store
         store = nil
@@ -126,10 +126,7 @@ struct OperationTerminalTests {
         // The independently retained operation lease must outlive the store.
         #expect(!safety.canTerminate)
         await fixture.complete(.cancelled)
-        for _ in 0..<1000 {
-            if safety.canTerminate { break }
-            await Task.yield()
-        }
+        try await waitUntil("operation lifetime lease") { safety.canTerminate }
         #expect(safety.canTerminate)
     }
 
@@ -150,13 +147,19 @@ struct OperationTerminalTests {
         }
     }
 
-    private func settlePreparation(_ store: MoleUpgradeTerminalStore) async {
-        for _ in 0..<1000 { if store.phase != .preparing { return }; await Task.yield() }
-        Issue.record("Synthetic preparation did not settle")
+    private func settlePreparation(_ store: MoleUpgradeTerminalStore) async throws {
+        try await waitUntil("store preparation") { store.phase != .preparing }
     }
-    private func settleRun(_ store: MoleUpgradeTerminalStore) async {
-        for _ in 0..<1000 { if !store.isBusy { return }; await Task.yield() }
-        Issue.record("Synthetic operation did not settle")
+    private func settleRun(_ store: MoleUpgradeTerminalStore) async throws {
+        try await waitUntil("store operation") { !store.isBusy }
+    }
+    private func waitUntil(_ stage: String, _ predicate: () -> Bool) async throws {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: .seconds(6))
+        while !predicate() {
+            guard clock.now < deadline else { throw OperationTerminalFixtureFailure.timedOut(stage) }
+            try await Task.sleep(for: .milliseconds(10))
+        }
     }
 }
 
@@ -224,19 +227,112 @@ struct OperationTerminalTransportTests {
     }
 }
 
+@Suite("Operation terminal fixture readiness")
+struct OperationTerminalFixtureTests {
+    @Test("Completion before run is delivered at the completion boundary")
+    func earlyCompletionIsRemembered() async throws {
+        let fixture = OperationTerminalFixture()
+        let plan = await fixture.prepare(source: .appleSiliconHomebrew, currentVersion: nil, recommendedVersion: "1.58.0")
+        await fixture.complete(.completed)
+        let invocation = Task {
+            await fixture.run(plan, input: OperationTerminalInput()) { _ in }
+        }
+        try await fixture.waitForStart()
+        #expect(await fixture.completionBoundaryReached)
+        let stillWaiting = await fixture.isWaitingForCompletion
+        #expect(!stillWaiting)
+        if stillWaiting { await fixture.complete(.cancelled) } // bounded failure cleanup
+        #expect(await invocation.value == .completed)
+    }
+
+    @Test("Run count does not signal readiness while output delivery is suspended")
+    func completionDuringOutputIsRemembered() async throws {
+        let fixture = OperationTerminalFixture()
+        let plan = await fixture.prepare(source: .appleSiliconHomebrew, currentVersion: nil, recommendedVersion: "1.58.0")
+        let outputGate = OperationTerminalFixtureOutputGate()
+        let invocation = Task {
+            await fixture.run(plan, input: OperationTerminalInput()) { _ in await outputGate.suspend() }
+        }
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: .seconds(6))
+        while !(await outputGate.entered) {
+            guard clock.now < deadline else {
+                await outputGate.release(); await fixture.complete(.cancelled)
+                throw OperationTerminalFixtureFailure.timedOut("blocked output entry")
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(await fixture.starts == 1)
+        #expect(await fixture.completionBoundaryReached == false)
+        await fixture.complete(.completed)
+        #expect(await fixture.completionBoundaryReached == false)
+        await outputGate.release()
+        try await fixture.waitForStart()
+        let stillWaiting = await fixture.isWaitingForCompletion
+        #expect(!stillWaiting)
+        if stillWaiting { await fixture.complete(.cancelled) }
+        #expect(await invocation.value == .completed)
+    }
+
+    @Test("A missing start throws instead of returning apparent success")
+    func missingStartThrows() async throws {
+        let fixture = OperationTerminalFixture()
+        do {
+            try await fixture.waitForStart(timeout: .milliseconds(20))
+            Issue.record("A fixture that never started reported readiness")
+        } catch let error as OperationTerminalFixtureFailure {
+            #expect(error == .timedOut("completion boundary"))
+        }
+        #expect(await fixture.starts == 0)
+        #expect(await fixture.completionBoundaryReached == false)
+    }
+}
+
+private actor OperationTerminalFixtureOutputGate {
+    private var continuation: CheckedContinuation<Void, Never>?
+    private var released = false
+    private(set) var entered = false
+    func suspend() async {
+        entered = true
+        if released { return }
+        await withCheckedContinuation { continuation = $0 }
+    }
+    func release() { released = true; continuation?.resume(); continuation = nil }
+}
+
+enum OperationTerminalFixtureFailure: Error, Equatable, CustomStringConvertible {
+    case timedOut(String)
+    var description: String {
+        switch self { case .timedOut(let stage): "Timed out waiting for synthetic terminal \(stage)" }
+    }
+}
+
 actor OperationTerminalFixture: MoleUpgradeExecuting {
     var preparations = 0
     var starts = 0
     private let pausePreparation: Bool
     private var preparation: CheckedContinuation<Void, Never>?
+    private var preparationReleasedEarly = false
+    private var preparationBoundaryReached = false
     init(pausePreparation: Bool = false) { self.pausePreparation = pausePreparation }
     private var input: OperationTerminalInput?
     private var output: (@Sendable (Data) async -> Void)?
     private var completion: CheckedContinuation<OperationTerminalOutcome, Never>?
+    private var pendingCompletion: OperationTerminalOutcome?
+    private(set) var completionBoundaryReached = false
+    var isWaitingForCompletion: Bool { completion != nil }
     var wasCancelled: Bool { input?.isCancelled == true }
     func prepare(source: MoleUpgradeSource, currentVersion: String?, recommendedVersion: String) async -> MoleUpgradePlan {
         preparations += 1
-        if pausePreparation { await withCheckedContinuation { preparation = $0 } }
+        if pausePreparation {
+            await withCheckedContinuation { continuation in
+                preparationBoundaryReached = true
+                if preparationReleasedEarly {
+                    preparationReleasedEarly = false
+                    continuation.resume()
+                } else { preparation = continuation }
+            }
+        }
         return MoleUpgradePlan(id: UUID(), source: source, executable: source.executable, currentVersion: currentVersion,
             recommendedVersion: recommendedVersion,
             executableSnapshot: OperationExecutableSnapshot(device: 1, inode: 2, owner: 501, mode: 0o100755,
@@ -247,21 +343,54 @@ actor OperationTerminalFixture: MoleUpgradeExecuting {
     func run(_ plan: MoleUpgradePlan, input: OperationTerminalInput,
              onOutput: @escaping @Sendable (Data) async -> Void) async -> OperationTerminalOutcome {
         starts += 1; self.input = input; input.setPhase(1); output = onOutput
+        completionBoundaryReached = false
         await onOutput(Data("\u{1b}[32msynthetic output\u{1b}[0m\r\n".utf8))
-        return await withCheckedContinuation { completion = $0 }
+        return await withCheckedContinuation { continuation in
+            // Starting run() is not readiness: its MainActor output callback may
+            // still be pending. Publish readiness only at continuation setup.
+            completionBoundaryReached = true
+            if let result = pendingCompletion {
+                pendingCompletion = nil
+                continuation.resume(returning: result)
+            } else { completion = continuation }
+        }
     }
-    func waitForPreparation() async {
-        for _ in 0..<1000 { if preparation != nil { return }; await Task.yield() }
-        Issue.record("Synthetic preparation did not start")
+    func waitForPreparation(timeout: Duration = .seconds(6)) async throws {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: timeout)
+        while !preparationBoundaryReached {
+            guard clock.now < deadline else {
+                completePreparation()
+                throw OperationTerminalFixtureFailure.timedOut("preparation boundary")
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
     }
-    func completePreparation() { preparation?.resume(); preparation = nil }
+    func completePreparation() {
+        if let continuation = preparation {
+            preparation = nil; continuation.resume()
+        } else { preparationReleasedEarly = true }
+    }
     func takeInput() -> Data { input?.takePending() ?? Data() }
     func emit(_ text: String) async { await output?(Data(text.utf8)) }
-    func waitForStart() async {
-        for _ in 0..<1000 { if completion != nil { return }; await Task.yield() }
-        Issue.record("Synthetic terminal did not start")
+    func waitForStart(timeout: Duration = .seconds(6)) async throws {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: timeout)
+        while !completionBoundaryReached {
+            guard clock.now < deadline else {
+                complete(.cancelled)
+                throw OperationTerminalFixtureFailure.timedOut("completion boundary")
+            }
+            // Real suspension lets the AppKit/MainActor output callback run.
+            // A fixed number of Task.yield() calls is not a readiness timeout.
+            try await Task.sleep(for: .milliseconds(10))
+        }
     }
-    func complete(_ result: OperationTerminalOutcome) { completion?.resume(returning: result); completion = nil }
+    func complete(_ result: OperationTerminalOutcome) {
+        if let continuation = completion {
+            completion = nil; continuation.resume(returning: result)
+        } else { pendingCompletion = result }
+    }
 }
 
 @Suite("Operation executable snapshot reads")

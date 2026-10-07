@@ -19,7 +19,7 @@ final class OperationTerminalViewTests: XCTestCase {
                 let plan = try XCTUnwrap(store.plan)
                 if state != "pending" {
                     store.handleUserReturn(planID: plan.id)
-                    await fixture.waitForStart()
+                    try await fixture.waitForStart()
                     switch state {
                     case "success": await fixture.complete(.completed)
                     case "failure": await fixture.complete(.failed(step: "update", exitCode: 7, signal: nil))
@@ -141,7 +141,8 @@ final class OperationTerminalViewTests: XCTestCase {
 
         coordinator.update(terminal)
         XCTAssertTrue(coordinator.handleKeyEvent(enter, terminal: terminal))
-        await fixture.waitForStart()
+        XCTAssertEqual(store.phase, .running) // distinguish accepted input from fixture scheduling
+        try await fixture.waitForStart()
         let afterCurrentDisplay = await fixture.starts
         XCTAssertEqual(afterCurrentDisplay, 1)
         store.cancel(); await fixture.complete(.cancelled)
@@ -151,7 +152,7 @@ final class OperationTerminalViewTests: XCTestCase {
     @MainActor
     func testReviewArmsAfterLateWindowAttachmentWithoutAnotherModelUpdate() async throws {
         _ = NSApplication.shared
-        let fixture = OperationTerminalAttachmentFixture()
+        let fixture = OperationTerminalFixture()
         let store = MoleUpgradeTerminalStore(executor: fixture)
         store.prepare(source: .appleSiliconHomebrew, currentVersion: "1.50.0", recommendedVersion: "1.58.0")
         try await wait { store.isReady }
@@ -190,20 +191,13 @@ final class OperationTerminalViewTests: XCTestCase {
         // Window visibility/layout notifications can finish on a later AppKit
         // turn. Observe their receipt without drawing, updating, or sending input.
         try await wait { coordinator.hasDisplayedReview(planID: planID, in: terminal) }
-        guard coordinator.hasDisplayedReview(planID: planID, in: terminal) else {
-            store.cancel(); await fixture.complete(.cancelled)
-            return // the bounded wait already recorded the missing presentation
-        }
         XCTAssertEqual(store.plan?.id, planID)
         XCTAssertTrue(store.isReady)
         let beforeFreshEnter = await fixture.starts
         XCTAssertEqual(beforeFreshEnter, 0)
         XCTAssertTrue(coordinator.handleKeyEvent(try enterEvent(), terminal: terminal))
         XCTAssertEqual(store.phase, .running) // plan consumption is synchronous
-        for _ in 0..<600 {
-            if await fixture.isWaitingForCompletion { break }
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        try await fixture.waitForStart()
         let waitingForCompletion = await fixture.isWaitingForCompletion
         XCTAssertTrue(waitingForCompletion, "The accepted Return did not start the synthetic executor")
         let afterPresentation = await fixture.starts
@@ -253,8 +247,12 @@ final class OperationTerminalViewTests: XCTestCase {
     }
 
     @MainActor private func wait(_ predicate: () -> Bool) async throws {
-        for _ in 0..<600 { if predicate() { return }; try await Task.sleep(for: .milliseconds(10)) }
-        XCTFail("Synthetic terminal state did not settle")
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: .seconds(6))
+        while !predicate() {
+            guard clock.now < deadline else { throw OperationTerminalFixtureFailure.timedOut("UI state") }
+            try await Task.sleep(for: .milliseconds(10))
+        }
     }
     @MainActor private func findTerminal(in view: NSView) -> TerminalView? {
         if let view = view as? TerminalView { return view }
@@ -265,28 +263,4 @@ final class OperationTerminalViewTests: XCTestCase {
 
 @MainActor private final class OperationTerminalCaptureWindow: NSWindow {
     override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect { frameRect }
-}
-
-/// Explicit start/completion handshake for the late-attachment scheduling test.
-/// A completion requested before run() is remembered, never silently discarded.
-private actor OperationTerminalAttachmentFixture: MoleUpgradeExecuting {
-    private let planFactory = OperationTerminalFixture()
-    private(set) var starts = 0
-    private var completion: CheckedContinuation<OperationTerminalOutcome, Never>?
-    private var result: OperationTerminalOutcome?
-    var isWaitingForCompletion: Bool { completion != nil }
-
-    func prepare(source: MoleUpgradeSource, currentVersion: String?, recommendedVersion: String) async -> MoleUpgradePlan {
-        await planFactory.prepare(source: source, currentVersion: currentVersion, recommendedVersion: recommendedVersion)
-    }
-    func run(_ plan: MoleUpgradePlan, input: OperationTerminalInput,
-             onOutput: @escaping @Sendable (Data) async -> Void) async -> OperationTerminalOutcome {
-        starts += 1
-        if let result { return result }
-        return await withCheckedContinuation { completion = $0 }
-    }
-    func complete(_ result: OperationTerminalOutcome) {
-        self.result = result
-        completion?.resume(returning: result); completion = nil
-    }
 }

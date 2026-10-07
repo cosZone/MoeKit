@@ -457,6 +457,7 @@ jobs:
                         -only-testing:MoeKitTests/MoleHomebrewVerificationTests
                         -only-testing:MoeKitTests/MoleOnlineVerificationStoreTests
                         -only-testing:MoeKitTests/OperationTerminalTests
+                        -only-testing:MoeKitTests/OperationTerminalFixtureTests
                         -only-testing:MoeKitTests/OperationTerminalTransportTests
                         -only-testing:MoeKitTests/OperationTerminalFileTests
                         -only-testing:MoeKitTests/OperationTerminalViewTests
@@ -529,7 +530,7 @@ jobs:
                       "MoleAnalysisModelsTests", "MoleAnalysisFilesTests", "MoleAnalysisStoreTests",
                       "MoleInstallationDiscoveryTests", "MoleSetupStoreTests",
                       "MoleCompatibilityTests", "MoleHomebrewVerificationTests", "MoleOnlineVerificationStoreTests",
-                      "OperationTerminalTests", "OperationTerminalTransportTests", "OperationTerminalFileTests", "OperationTerminalViewTests",
+                      "OperationTerminalTests", "OperationTerminalFixtureTests", "OperationTerminalTransportTests", "OperationTerminalFileTests", "OperationTerminalViewTests",
                       "InstallerFileAccessTests", "InstallerTrashExecutorTests", "InstallerUseEvidenceTests", "InstallerTrashStoreTests",
                       "GitPlainIndexTests", "GitCleanupInspectionTests", "GitCleanupAuthorityTests", "GitCleanupStoreTests", "GitCleanupExecutorTests", "GitWorktreeFinishAuthorityTests", "GitWorktreeFinishExecutorTests", "GitWorktreeFinishStoreTests", "GitRemotePushStoreTests", "GitRemotePushValidationTests",
                       "DarwinDirectoryEntryTests", "ReadOnlyDiskInventoryTests", "CleanupExecutorTests", "CleanupStoreTests", "ProcessTerminationTests", "ProcessTerminationStoreTests", "NativeProcessTerminationTests",

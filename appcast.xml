@@ -1,20 +1,16 @@
 <?xml version='1.0' encoding='utf-8'?>
-<rss xmlns:moekit="https://github.com/cosZone/MoeKit/ns/update" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0"><channel><title>MoeKit updates</title><link>https://github.com/cosZone/MoeKit</link><item><title>MoeKit 0.1.0-preview.13</title><link>https://github.com/cosZone/MoeKit/releases/tag/v0.1.0-preview.13</link><sparkle:version>2.0.13</sparkle:version><sparkle:shortVersionString>0.1.0-preview.13</sparkle:shortVersionString><sparkle:minimumSystemVersion>15.0.0</sparkle:minimumSystemVersion><moekit:sourceCommit>2860c39bc5b170089c302ca4fed00853dd16d9bd</moekit:sourceCommit><moekit:runID>37527243263</moekit:runID><moekit:runNumber>18</moekit:runNumber><moekit:runAttempt>1</moekit:runAttempt><sparkle:channel>preview</sparkle:channel><description sparkle:format="plain-text">## 修复
+<rss xmlns:moekit="https://github.com/cosZone/MoeKit/ns/update" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0"><channel><title>MoeKit updates</title><link>https://github.com/cosZone/MoeKit</link><item><title>MoeKit 0.1.0-preview.14</title><link>https://github.com/cosZone/MoeKit/releases/tag/v0.1.0-preview.14</link><sparkle:version>2.0.14</sparkle:version><sparkle:shortVersionString>0.1.0-preview.14</sparkle:shortVersionString><sparkle:minimumSystemVersion>15.0.0</sparkle:minimumSystemVersion><moekit:sourceCommit>58ac58dc22ae362d5aaba17c87826dbab5161035</moekit:sourceCommit><moekit:runID>37722802006</moekit:runID><moekit:runNumber>19</moekit:runNumber><moekit:runAttempt>1</moekit:runAttempt><sparkle:channel>preview</sparkle:channel><description sparkle:format="plain-text">## Mole 安装与升级
 
-- **缓存扫描**：修复无关废纸篓的读取限制导致缓存扫描受阻的问题
-- **大小显示**：受保护或部分不可读的项目也能保留已读大小；完整、部分和未知状态分开显示
-- **进度与提示**：显示当前扫描阶段和路径，失败时提供更明确的原因
+- **版本提示更清楚**：显示已安装版本与已测试的 1.58.0，区分格式过旧、文件未验证与版本尚未测试。现有 Homebrew 安装优先，不再笼统提示“不兼容”
+- **复用现有安装**：支持经过核验的官方 1.57.0／1.58.0 分析器；其他符合要求的 Homebrew 官方构建可主动联网验证，每次分析另行确认，结果仅供查看
+- **终端内确认升级**：先展示实际的 Homebrew 更新与 Mole 升级命令，在终端中按回车才开始；支持交互输入、Ctrl-C 与停止，结束后重新检测安装
 
-- **扫描稳定性**：修复目录项较多时可能出现的读取崩溃
+Homebrew 会安装当前提供的版本，不保证恰好为 1.58.0。更新可能影响 Homebrew、Mole 与依赖；取消不会回滚已发生的更改。
 
-## 使用前
+macOS 15+，Apple Silicon / Intel。Apple Development 签名、未公证；preview.9 及更早需先手动安装一次。
 
-大小不代表可以删除，也不等于实际可回收空间。删除仍需复查确认；废纸篓列表不完整时不能整批清空，永久删除无法撤销。
-
-macOS 15+，Apple Silicon / Intel。发布时计划采用 Apple Development 签名，暂不公证；preview.9 及更早需先手动安装一次。
-
-[支持范围与验证边界](https://github.com/cosZone/MoeKit/blob/372d323ab14d755bfc4a91ba9c4c08a48c753ec1/Documentation/Scan-usability-review.md)</description><enclosure url="https://github.com/cosZone/MoeKit/releases/download/v0.1.0-preview.13/MoeKit-v0.1.0-preview.13-macOS.zip" length="6823848" type="application/octet-stream" sparkle:edSignature="KPW+3bwQNTxKn5uraE6yHoU9q5Dfh1MhEQ4XuxHB4tNX0j3Yt+euer10SMf2Yh+DLQdXlaOPZknaHGpgKPyIDw==" /></item></channel></rss>
+[Mole 支持范围与升级说明](https://github.com/cosZone/MoeKit/blob/aefaca1152765a93232f6e4f8fc3addaf73b9530/Documentation/Mole-compatibility-and-upgrade.md)</description><enclosure url="https://github.com/cosZone/MoeKit/releases/download/v0.1.0-preview.14/MoeKit-v0.1.0-preview.14-macOS.zip" length="8517205" type="application/octet-stream" sparkle:edSignature="fN71B6kD1w01xh9UDaYZ+1EMw6C5up9uaeJk1+5+8cqlp/111sPdjhpFjyGvJ3LmJZD5a5KPweGDvaAmZaRzDw==" /></item></channel></rss>
 <!-- sparkle-signatures:
-edSignature: TkA56P4TrvZZph0M6MFmbVGpbz/oYbzysPv81G+G9WIHU4atKaioS4EEB+kJlb3Pn9Axcnr81wscatp91oPiCQ==
-length: 2060
+edSignature: HED3K1ywNkKnHIt/GD8epFs8IJkLJwAwgZ4U1H34pIAtmYGJ1IPKN54AAIpJiCDGUTyN6FnE7DDLk1f2djvSDw==
+length: 2234
 -->
